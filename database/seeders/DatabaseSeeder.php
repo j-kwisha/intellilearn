@@ -17,7 +17,6 @@ use App\Models\SubmissionAnswer;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 
 class DatabaseSeeder extends Seeder
@@ -28,21 +27,23 @@ class DatabaseSeeder extends Seeder
     {
         // ── Users ────────────────────────────────────────────────────────────
         $admin = User::create([
-            'first_name' => 'Admin',
-            'last_name'  => 'User',
-            'email'      => 'admin@demo.com',
-            'password'   => Hash::make('password'),
-            'role'       => 'admin',
-            'is_active'  => true,
+            'first_name'        => 'Admin',
+            'last_name'         => 'User',
+            'email'             => 'admin@demo.com',
+            'password'          => 'Admin123!',
+            'role'              => 'admin',
+            'is_active'         => true,
+            'email_verified_at' => now(),
         ]);
 
         $instructor = User::create([
-            'first_name' => 'Jane',
-            'last_name'  => 'Santos',
-            'email'      => 'instructor@demo.com',
-            'password'   => Hash::make('password'),
-            'role'       => 'instructor',
-            'is_active'  => true,
+            'first_name'        => 'Jane',
+            'last_name'         => 'Santos',
+            'email'             => 'instructor@demo.com',
+            'password'          => 'Admin123!',
+            'role'              => 'instructor',
+            'is_active'         => true,
+            'email_verified_at' => now(),
         ]);
 
         $students = collect([
@@ -51,12 +52,13 @@ class DatabaseSeeder extends Seeder
             ['first_name' => 'Carlos', 'last_name' => 'Mendoza'],
             ['first_name' => 'Ana',    'last_name' => 'Garcia'],
         ])->map(fn ($s, $i) => User::create([
-            'first_name' => $s['first_name'],
-            'last_name'  => $s['last_name'],
-            'email'      => 'student' . ($i + 1) . '@demo.com',
-            'password'   => Hash::make('password'),
-            'role'       => 'student',
-            'is_active'  => true,
+            'first_name'        => $s['first_name'],
+            'last_name'         => $s['last_name'],
+            'email'             => 'student' . ($i + 1) . '@demo.com',
+            'password'          => 'Admin123!',
+            'role'              => 'student',
+            'is_active'         => true,
+            'email_verified_at' => now(),
         ]));
 
         // ── Course ───────────────────────────────────────────────────────────
