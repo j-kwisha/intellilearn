@@ -193,7 +193,7 @@ def chatbot(data: ChatRequest):
             )
 
         response = groq_client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": data.message}
@@ -206,4 +206,4 @@ def chatbot(data: ChatRequest):
 
     except Exception as e:
         print(f"Groq error: {str(e)}")
-        return {"response": f"AI error: {str(e)}", "in_scope": False}
+        return {"response": "I'm sorry, I couldn't process that request. Please try asking something else.", "in_scope": False}
