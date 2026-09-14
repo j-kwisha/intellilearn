@@ -27,10 +27,9 @@ class LessonMaterial extends Model
     public function getFileUrlAttribute(): ?string
     {
         if ($this->file_path) {
-            $disk = app()->environment('production') ? 'r2' : 'public';
-            return Storage::disk($disk)->url($this->file_path);
+            return Storage::disk('public')->url($this->file_path);
         }
-        return null;
+        return $this->url ?? null;
     }
 
     public function lesson()
