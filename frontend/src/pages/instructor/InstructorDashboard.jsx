@@ -15,63 +15,16 @@ import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 //  Once the API returns data, these are replaced.
 // ─────────────────────────────────────────────
 const DUMMY_STATS = {
-  my_courses:      1,
-  total_students:  4,
-  pending_grading: null,       // null = "—"
-  class_average:   84.1,
-  at_risk_students: 1,
+  my_courses:       0,
+  total_students:   0,
+  pending_grading:  null,
+  class_average:    null,
+  at_risk_students: 0,
 };
 
-const DUMMY_COURSES = [
-  {
-    id: 'dummy-c1',
-    name: 'Introduction to Web Development',
-    code: 'WEB101',
-    section: 'A',
-    students_count: 4,
-  },
-];
-
-const DUMMY_SUBMISSIONS = [
-  { id: 'ds1', student_name: 'Maria Santos',  score: 88, total: 100, status: 'Reviewed' },
-  { id: 'ds2', student_name: 'Roberto Lim',   score: 71, total: 100, status: 'Pending'  },
-  { id: 'ds3', student_name: 'Ana Reyes',     score: 67, total: 100, status: 'Pending'  },
-];
-
-const DUMMY_AT_RISK = [
-  {
-    id: 'ar1',
-    name: 'Maria Santos',
-    course: 'WEB101 - A',
-    risk_score: 80,
-    risk_level: 'High Risk',
-    avatar_initials: 'MS',
-  },
-  {
-    id: 'ar2',
-    name: 'Roberto Lim',
-    course: 'Roberto Lim',
-    risk_score: 65,
-    risk_level: 'Medium',
-    avatar_initials: 'RL',
-  },
-  {
-    id: 'ar3',
-    name: 'Ana Reyes',
-    course: 'Roberto 131',
-    risk_score: 60,
-    risk_level: 'Medium',
-    avatar_initials: 'AR',
-  },
-  {
-    id: 'ar4',
-    name: 'Ana Reyes',
-    course: 'Roberto 123',
-    risk_score: 60,
-    risk_level: 'Medium',
-    avatar_initials: 'AR',
-  },
-];
+const DUMMY_COURSES     = [];
+const DUMMY_SUBMISSIONS = [];
+const DUMMY_AT_RISK     = [];
 // ─────────────────────────────────────────────
 
 const courseColors = [
@@ -152,13 +105,18 @@ export default function InstructorDashboard() {
         const courseList = coursesRes.data.courses || [];
         if (courseList.length > 0) setCourses(courseList);
 
-        // ── Stats (optional) ──
+        // ── Stats — derive from real courses ──
         try {
           const statsRes = await api.get('/instructor/stats');
           if (statsRes.data) setStats(statsRes.data);
         } catch (_) {
-          // Stats endpoint not available — derive from courses
-          setStats(prev => ({ ...prev, my_courses: courseList.length }));
+          // Derive from courses
+          const totalStudents = courseList.reduce((sum, c) => sum + (c.students_count || 0), 0);
+          setStats(prev => ({
+            ...prev,
+            my_courses: courseList.length,
+            total_students: totalStudents,
+          }));
         }
 
         // ── Recent Submissions (optional) ──
@@ -167,10 +125,30 @@ export default function InstructorDashboard() {
           if (subRes.data?.submissions?.length > 0) setSubmissions(subRes.data.submissions);
         } catch (_) {}
 
-        // ── At-Risk Students (optional) ──
+        // ── At-Risk Students — load from real courses ──
         try {
-          const riskRes = await api.get('/instructor/at-risk');
-          if (riskRes.data?.students?.length > 0) setAtRisk(riskRes.data.students);
+          const riskStudents = [];
+          for (const course of courseList.slice(0, 3)) {
+            const riskRes = await api.get(`/ai/courses/${course.id}/student-risk`);
+            const results = riskRes.data?.results || [];
+            results.forEach((r) => {
+              if (r.at_risk) {
+                const name = `${r.student.first_name} ${r.student.last_name}`;
+                riskStudents.push({
+                  id: `${course.id}-${r.student.id}`,
+                  name,
+                  course: `${course.code}${course.section ? ' - ' + course.section : ''}`,
+                  risk_score: Math.round((r.risk_probability ?? 0) * 100),
+                  risk_level: (r.risk_probability ?? 0) >= 0.7 ? 'High Risk' : 'Medium',
+                  avatar_initials: name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
+                });
+              }
+            });
+          }
+          if (riskStudents.length > 0) setAtRisk(riskStudents);
+
+          // Update at-risk count in stats
+          setStats(prev => ({ ...prev, at_risk_students: riskStudents.length }));
         } catch (_) {}
 
       } catch (err) {
