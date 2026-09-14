@@ -11,7 +11,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -156,22 +155,107 @@ class AuthController extends Controller
     }
 
     /**
-     * FORGOT PASSWORD — RESET PASSWORD DIRECTLY
+     * FORGOT PASSWORD — SEND RESET EMAIL
      *
      * POST /api/forgot-password
-     * Body: { email, password, password_confirmation }
+     * Body: { email }
      *
-     * Simplified password reset: just provide email and new password.
-     * No email verification or token required.
+     * Sends a password reset link to the user's email via Resend.
+     * The link contains a signed token valid for 60 minutes.
      */
     public function forgotPassword(Request $request): JsonResponse
     {
         $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        // Find the user — always return success to prevent email enumeration
+        $user = User::where('email', $request->email)->first();
+
+        if ($user) {
+            // Delete any existing token for this email
+            \DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+
+            // Generate a secure random token
+            $token = \Str::random(64);
+
+            // Store hashed token in DB
+            \DB::table('password_reset_tokens')->insert([
+                'email'      => $request->email,
+                'token'      => \Hash::make($token),
+                'created_at' => now(),
+            ]);
+
+            // Build reset URL
+            $frontend = env('FRONTEND_URL', 'http://localhost:5173');
+            $resetUrl = "{$frontend}/reset-password?token={$token}&email=" . urlencode($request->email);
+
+            // Send email via Resend
+            \Resend::emails()->send([
+                'from'    => 'IntelliLearn <onboarding@resend.dev>',
+                'to'      => [$request->email],
+                'subject' => 'Reset your IntelliLearn password',
+                'html'    => "
+                    <div style='font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;'>
+                        <h2 style='color: #173861;'>Reset your password</h2>
+                        <p>Hi {$user->first_name},</p>
+                        <p>We received a request to reset your IntelliLearn password. Click the button below to set a new password. This link expires in <strong>60 minutes</strong>.</p>
+                        <a href='{$resetUrl}' style='display:inline-block; background:#173861; color:white; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:bold; margin: 16px 0;'>
+                            Reset Password
+                        </a>
+                        <p style='color:#64748b; font-size:13px;'>If you did not request a password reset, you can safely ignore this email.</p>
+                        <p style='color:#64748b; font-size:13px;'>Or copy this link: <a href='{$resetUrl}'>{$resetUrl}</a></p>
+                    </div>
+                ",
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'If an account with that email exists, a password reset link has been sent.',
+        ]);
+    }
+
+    /**
+     * RESET PASSWORD — VALIDATE TOKEN AND SET NEW PASSWORD
+     *
+     * POST /api/reset-password
+     * Body: { token, email, password, password_confirmation }
+     */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token'    => ['required', 'string'],
             'email'    => ['required', 'email'],
             'password' => ['required', 'string', 'min:8', 'confirmed', 'regex:/[A-Z]/', 'regex:/[0-9]/'],
         ]);
 
-        // Find the user by email
+        // Find the reset record
+        $record = \DB::table('password_reset_tokens')
+            ->where('email', $request->email)
+            ->first();
+
+        if (! $record) {
+            throw ValidationException::withMessages([
+                'email' => ['This password reset link is invalid.'],
+            ]);
+        }
+
+        // Check token expiry (60 minutes)
+        if (now()->diffInMinutes($record->created_at) > 60) {
+            \DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+            throw ValidationException::withMessages([
+                'email' => ['This password reset link has expired. Please request a new one.'],
+            ]);
+        }
+
+        // Validate token
+        if (! Hash::check($request->token, $record->token)) {
+            throw ValidationException::withMessages([
+                'email' => ['This password reset link is invalid.'],
+            ]);
+        }
+
+        // Find user
         $user = User::where('email', $request->email)->first();
 
         if (! $user) {
@@ -180,67 +264,20 @@ class AuthController extends Controller
             ]);
         }
 
-        // Check that new password is different from current
+        // Check new password is different from current
         if (Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'password' => ['New password must be different from your current password.'],
             ]);
         }
 
-        // Update password
+        // Update password and clean up
         $user->update(['password' => $request->password]);
-
-        // Delete all existing tokens — force re-login with new password
         $user->tokens()->delete();
+        \DB::table('password_reset_tokens')->where('email', $request->email)->delete();
 
         return response()->json([
             'message' => 'Password has been reset successfully. Please login with your new password.',
-        ]);
-    }
-
-    /**
-     * RESET PASSWORD — SET NEW PASSWORD
-     *
-     * POST /api/reset-password
-     * Body: { token, email, password, password_confirmation }
-     *
-     * The user clicks the link from their email, which contains
-     * the token. The frontend sends the token + new password here.
-     */
-    public function resetPassword(Request $request): JsonResponse
-    {
-        $request->validate([
-            'token'    => ['required'],
-            'email'    => ['required', 'email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed', 'regex:/[A-Z]/', 'regex:/[0-9]/'],
-        ]);
-
-        // Check that new password is different from current
-        $user = User::where('email', $request->email)->first();
-        if ($user && Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'password' => ['New password must be different from your current password.'],
-            ]);
-        }
-
-        $status = Password::reset(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
-            function (User $user, string $password) {
-                $user->update(['password' => $password]);
-
-                // Delete all existing tokens — force re-login with new password
-                $user->tokens()->delete();
-            }
-        );
-
-        if ($status === Password::PASSWORD_RESET) {
-            return response()->json([
-                'message' => 'Password has been reset successfully.',
-            ]);
-        }
-
-        throw ValidationException::withMessages([
-            'email' => [__($status)],
         ]);
     }
 
