@@ -278,15 +278,16 @@ class LessonController extends Controller
 
             $timestamp  = time();
             $folder     = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
-            $signature  = sha1("folder={$folder}&timestamp={$timestamp}{$apiSecret}");
+            $signature  = sha1("access_mode=public&folder={$folder}&timestamp={$timestamp}{$apiSecret}");
 
             $response = \Illuminate\Support\Facades\Http::attach(
                 'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
             )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
-                'api_key'   => $apiKey,
-                'timestamp' => $timestamp,
-                'folder'    => $folder,
-                'signature' => $signature,
+                'api_key'     => $apiKey,
+                'timestamp'   => $timestamp,
+                'folder'      => $folder,
+                'signature'   => $signature,
+                'access_mode' => 'public',
             ]);
 
             if ($response->failed()) {
