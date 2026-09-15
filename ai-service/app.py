@@ -193,7 +193,7 @@ def chatbot(data: ChatRequest):
             )
 
         response = groq_client.chat.completions.create(
-            model="gpt-oss-20b",
+            model="qwen/qwen3.6-27b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": data.message}
