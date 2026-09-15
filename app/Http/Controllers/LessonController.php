@@ -269,16 +269,37 @@ class LessonController extends Controller
 
         // Handle file upload
         if ($request->hasFile('file')) {
-            $filePath = $request->file('file')->store(
-                "materials/course_{$course->id}/lesson_{$lesson->id}",
-                'public'
-            );
+            $file = $request->file('file');
+
+            // Upload to Cloudinary via HTTP API
+            $cloudName  = env('CLOUDINARY_CLOUD_NAME');
+            $apiKey     = env('CLOUDINARY_API_KEY');
+            $apiSecret  = env('CLOUDINARY_API_SECRET');
+
+            $timestamp  = time();
+            $folder     = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
+            $signature  = sha1("folder={$folder}&timestamp={$timestamp}{$apiSecret}");
+
+            $response = \Illuminate\Support\Facades\Http::attach(
+                'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
+            )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
+                'api_key'   => $apiKey,
+                'timestamp' => $timestamp,
+                'folder'    => $folder,
+                'signature' => $signature,
+            ]);
+
+            if ($response->failed()) {
+                return response()->json(['message' => 'File upload failed. Please try again.'], 500);
+            }
+
+            $filePath = $response->json('secure_url');
 
             // Extract text from PDF for AI chatbot
             if ($validated['type'] === 'pdf') {
                 try {
                     $parser = new PdfParser();
-                    $pdf = $parser->parseFile($request->file('file')->getRealPath());
+                    $pdf = $parser->parseFile($file->getRealPath());
                     $extractedText = substr($pdf->getText(), 0, 8000);
                 } catch (\Exception $e) {
                     $extractedText = null;
