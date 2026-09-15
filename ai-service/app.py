@@ -193,7 +193,7 @@ def chatbot(data: ChatRequest):
             )
 
         response = groq_client.chat.completions.create(
-            model="qwen/qwen3.6-27b",
+            model="qwen/qwen3.8-27b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": data.message}
@@ -207,7 +207,4 @@ def chatbot(data: ChatRequest):
     except Exception as e:
         error_msg = str(e)
         print(f"Groq error: {error_msg}")
-        # Return specific error for debugging
-        if "model" in error_msg.lower() or "404" in error_msg or "400" in error_msg:
-            return {"response": f"Model error: {error_msg}", "in_scope": False}
         return {"response": "I'm sorry, I couldn't process that request. Please try asking something else.", "in_scope": False}
