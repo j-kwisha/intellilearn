@@ -3,6 +3,54 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import chatbotAvatar from '../../assets/chatbot_avatar.png';
 
+// Simple markdown renderer — handles bold, italic, bullets, numbered lists
+function MarkdownText({ text }) {
+  const lines = text.split('\n');
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {lines.map((line, i) => {
+        // Bullet point
+        if (/^[-*]\s/.test(line)) {
+          return (
+            <div key={i} style={{ display: 'flex', gap: 6 }}>
+              <span style={{ color: '#6366f1', fontWeight: 700, flexShrink: 0 }}>•</span>
+              <span>{renderInline(line.replace(/^[-*]\s/, ''))}</span>
+            </div>
+          );
+        }
+        // Numbered list
+        if (/^\d+\.\s/.test(line)) {
+          const num = line.match(/^(\d+)\./)[1];
+          return (
+            <div key={i} style={{ display: 'flex', gap: 6 }}>
+              <span style={{ color: '#6366f1', fontWeight: 700, flexShrink: 0 }}>{num}.</span>
+              <span>{renderInline(line.replace(/^\d+\.\s/, ''))}</span>
+            </div>
+          );
+        }
+        // Empty line = spacing
+        if (line.trim() === '') return <div key={i} style={{ height: 4 }} />;
+        // Normal line
+        return <div key={i}>{renderInline(line)}</div>;
+      })}
+    </div>
+  );
+}
+
+function renderInline(text) {
+  // Handle **bold** and *italic*
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return parts.map((part, i) => {
+    if (/^\*\*[^*]+\*\*$/.test(part)) {
+      return <strong key={i} style={{ fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+    }
+    if (/^\*[^*]+\*$/.test(part)) {
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
 export default function StudentMaterialViewerPage() {
   const { courseId, lessonId, materialId } = useParams();
   const navigate = useNavigate();
@@ -59,7 +107,9 @@ export default function StudentMaterialViewerPage() {
         lesson_context: lessonContext,
         material_title: material?.title,
       });
-      setMessages(prev => [...prev, { from: 'bot', text: res.data.response }]);
+      // Strip <think>...</think> tags from response
+      const cleaned = res.data.response.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      setMessages(prev => [...prev, { from: 'bot', text: cleaned }]);
     } catch {
       setMessages(prev => [...prev, { from: 'bot', text: 'Sorry, the assistant is unavailable right now.' }]);
     } finally {
@@ -191,8 +241,8 @@ export default function StudentMaterialViewerPage() {
                       <img src={chatbotAvatar} alt="Bot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
                   )}
-                  <div style={{ maxWidth: '78%', padding: '9px 13px', borderRadius: msg.from === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: 13, lineHeight: 1.5, background: msg.from === 'user' ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : '#f1f5f9', color: msg.from === 'user' ? '#fff' : '#334155', boxShadow: msg.from === 'user' ? '0 2px 8px rgba(79,70,229,0.25)' : 'none', whiteSpace: 'pre-wrap' }}>
-                    {msg.text}
+                  <div style={{ maxWidth: '78%', padding: '9px 13px', borderRadius: msg.from === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: 13, lineHeight: 1.6, background: msg.from === 'user' ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : '#f1f5f9', color: msg.from === 'user' ? '#fff' : '#334155', boxShadow: msg.from === 'user' ? '0 2px 8px rgba(79,70,229,0.25)' : 'none' }}>
+                    {msg.from === 'user' ? msg.text : <MarkdownText text={msg.text} />}
                   </div>
                 </div>
               ))}
