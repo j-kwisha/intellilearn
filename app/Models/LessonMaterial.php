@@ -27,6 +27,10 @@ class LessonMaterial extends Model
     public function getFileUrlAttribute(): ?string
     {
         if ($this->file_path) {
+            // If file_path is already a full URL (Cloudinary), return it directly
+            if (str_starts_with($this->file_path, 'http')) {
+                return $this->file_path;
+            }
             return Storage::disk('public')->url($this->file_path);
         }
         return $this->url ?? null;
