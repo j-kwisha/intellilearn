@@ -132,7 +132,7 @@ export default function InstructorDashboard() {
             const riskRes = await api.get(`/ai/courses/${course.id}/student-risk`);
             const results = riskRes.data?.results || [];
             results.forEach((r) => {
-              if (r.at_risk) {
+              if (r.at_risk && r.status === 'assessed') {
                 const name = `${r.student.first_name} ${r.student.last_name}`;
                 riskStudents.push({
                   id: `${course.id}-${r.student.id}`,

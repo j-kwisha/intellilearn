@@ -75,6 +75,19 @@ class AiController extends Controller
         foreach ($students as $student) {
             $metrics = $this->computeStudentMetrics($student->id, $course->id, $totalAssessments);
 
+            // Don't predict if student has no data yet
+            if ($this->hasInsufficientData($metrics, $totalAssessments)) {
+                $results[] = [
+                    'student'          => $student,
+                    'metrics'          => $metrics,
+                    'at_risk'          => null,
+                    'risk_probability' => null,
+                    'status'           => 'not_assessed',
+                    'reasons'          => [],
+                ];
+                continue;
+            }
+
             $aiResponse = Http::timeout(5)->post("{$this->aiServiceUrl}/predict", $metrics);
 
             $prediction = $aiResponse->successful()
@@ -86,6 +99,7 @@ class AiController extends Controller
                 'metrics'          => $metrics,
                 'at_risk'          => $prediction['at_risk'],
                 'risk_probability' => $prediction['risk_probability'],
+                'status'           => 'assessed',
                 'reasons'          => $prediction['reasons'] ?? [],
             ];
         }
@@ -120,6 +134,19 @@ class AiController extends Controller
 
             $metrics = $this->computeStudentMetrics($user->id, $course->id, $totalAssessments);
 
+            // Don't predict if student has no data yet
+            if ($this->hasInsufficientData($metrics, $totalAssessments)) {
+                $results[] = [
+                    'course'           => $course,
+                    'metrics'          => $metrics,
+                    'at_risk'          => null,
+                    'risk_probability' => null,
+                    'status'           => 'not_assessed',
+                    'reasons'          => [],
+                ];
+                continue;
+            }
+
             $aiResponse = Http::timeout(5)->post("{$this->aiServiceUrl}/predict", $metrics);
 
             $prediction = $aiResponse->successful()
@@ -131,6 +158,7 @@ class AiController extends Controller
                 'metrics'          => $metrics,
                 'at_risk'          => $prediction['at_risk'],
                 'risk_probability' => $prediction['risk_probability'],
+                'status'           => 'assessed',
                 'reasons'          => $prediction['reasons'] ?? [],
             ];
         }
@@ -276,6 +304,19 @@ class AiController extends Controller
     // ─────────────────────────────────────────────
     // HELPER
     // ─────────────────────────────────────────────
+
+    private function hasInsufficientData(array $metrics, int $totalAssessments): bool
+    {
+        // No assessments in the course yet — can't assess
+        if ($totalAssessments === 0) return true;
+
+        // Student has made no submissions at all
+        $hasNoSubmissions = $metrics['login_count'] === 0
+            && $metrics['submission_rate'] === 0
+            && $metrics['quiz_avg'] === 0;
+
+        return $hasNoSubmissions;
+    }
 
     private function computeStudentMetrics(int $studentId, int $courseId, int $totalAssessments): array
     {

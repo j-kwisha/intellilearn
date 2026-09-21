@@ -53,12 +53,21 @@ export default function StudentRiskCheckPage() {
                 <span className={`text-sm font-semibold px-4 py-1.5 rounded-full ${
                   item.at_risk === true ? 'bg-red-100 text-red-700' :
                   item.at_risk === false ? 'bg-emerald-100 text-emerald-700' :
+                  item.status === 'not_assessed' ? 'bg-slate-100 text-slate-500' :
                   'bg-slate-100 text-slate-500'
                 }`}>
                   {item.at_risk === true ? '⚠️ At Risk' :
-                   item.at_risk === false ? '✅ Not At Risk' : 'N/A'}
+                   item.at_risk === false ? '✅ Not At Risk' :
+                   item.status === 'not_assessed' ? '📊 Not Assessed Yet' : 'N/A'}
                 </span>
               </div>
+
+              {/* Not assessed message */}
+              {item.status === 'not_assessed' && (
+                <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500">
+                  📊 Risk assessment requires at least one quiz submission or activity. Complete some assessments for your risk status to be calculated.
+                </div>
+              )}
 
               {/* Metrics */}
               <div className="grid grid-cols-2 gap-3 mt-4 sm:grid-cols-4">
