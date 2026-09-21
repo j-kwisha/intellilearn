@@ -285,15 +285,13 @@ class SubmissionController extends Controller
                 ->with('assessment:id,type')
                 ->get();
 
-            $quizScores = []; $examScores = []; $activityScores = []; $recitationScores = [];
+            $quizScores = []; $examScores = []; $activityScores = [];
             foreach ($submissions as $sub) {
                 if ($sub->percentage === null) continue;
                 match($sub->assessment->type) {
                     'quiz'                => $quizScores[] = $sub->percentage,
                     'long_exam'           => $examScores[] = $sub->percentage,
-                    'individual_activity',
-                    'group_activity'      => $activityScores[] = $sub->percentage,
-                    'recitation'          => $recitationScores[] = $sub->percentage,
+                    'individual_activity' => $activityScores[] = $sub->percentage,
                     default               => null,
                 };
             }
@@ -302,13 +300,11 @@ class SubmissionController extends Controller
             $quizAvg       = $avg($quizScores);
             $examAvg       = $avg($examScores);
             $activityAvg   = $avg($activityScores);
-            $recitationAvg = $avg($recitationScores);
 
             $components = [];
-            if ($quizAvg !== null)       $components[] = ['avg' => $quizAvg,       'weight' => 0.30];
-            if ($examAvg !== null)       $components[] = ['avg' => $examAvg,       'weight' => 0.30];
-            if ($activityAvg !== null)   $components[] = ['avg' => $activityAvg,   'weight' => 0.25];
-            if ($recitationAvg !== null) $components[] = ['avg' => $recitationAvg, 'weight' => 0.15];
+            if ($quizAvg !== null)       $components[] = ['avg' => $quizAvg,       'weight' => 0.40];
+            if ($examAvg !== null)       $components[] = ['avg' => $examAvg,       'weight' => 0.40];
+            if ($activityAvg !== null)   $components[] = ['avg' => $activityAvg,   'weight' => 0.20];
 
             $overall = null;
             if (count($components) > 0) {
@@ -323,7 +319,6 @@ class SubmissionController extends Controller
                     'quiz_average'       => $quizAvg,
                     'exam_average'       => $examAvg,
                     'activity_average'   => $activityAvg,
-                    'recitation_average' => $recitationAvg,
                     'overall_grade'      => $overall,
                     'remarks'            => $overall !== null ? ($overall >= 75 ? 'Passed' : 'Failed') : null,
                 ]

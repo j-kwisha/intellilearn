@@ -481,7 +481,7 @@ function AssessmentForm({ courseId, onClose, onSuccess }) {
         <div className="grid grid-cols-2 gap-3">
           <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
             className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
-            <option value="quiz">Quiz</option><option value="long_exam">Long Exam</option><option value="individual_activity">Individual Activity</option><option value="group_activity">Group Activity</option><option value="recitation">Recitation</option>
+            <option value="quiz">Quiz</option><option value="long_exam">Long Exam</option><option value="individual_activity">Individual Activity</option>
           </select>
           <input type="text" placeholder="Topic tag" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}
             className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" />

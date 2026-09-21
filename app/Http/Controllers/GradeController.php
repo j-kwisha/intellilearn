@@ -75,7 +75,6 @@ class GradeController extends Controller
             $quizScores = [];
             $examScores = [];
             $activityScores = [];
-            $recitationScores = [];
 
             foreach ($submissions as $sub) {
                 if ($sub->percentage === null) continue;
@@ -88,11 +87,7 @@ class GradeController extends Controller
                         $examScores[] = $sub->percentage;
                         break;
                     case 'individual_activity':
-                    case 'group_activity':
                         $activityScores[] = $sub->percentage;
-                        break;
-                    case 'recitation':
-                        $recitationScores[] = $sub->percentage;
                         break;
                 }
             }
@@ -100,14 +95,12 @@ class GradeController extends Controller
             $quizAvg = count($quizScores) > 0 ? round(array_sum($quizScores) / count($quizScores), 2) : null;
             $examAvg = count($examScores) > 0 ? round(array_sum($examScores) / count($examScores), 2) : null;
             $activityAvg = count($activityScores) > 0 ? round(array_sum($activityScores) / count($activityScores), 2) : null;
-            $recitationAvg = count($recitationScores) > 0 ? round(array_sum($recitationScores) / count($recitationScores), 2) : null;
 
-            // Weighted average: quiz 30%, exam 30%, activity 25%, recitation 15%
+            // Weighted average: quiz 40%, exam 40%, activity 20%
             $components = [];
-            if ($quizAvg !== null) $components[] = ['avg' => $quizAvg, 'weight' => 0.30];
-            if ($examAvg !== null) $components[] = ['avg' => $examAvg, 'weight' => 0.30];
-            if ($activityAvg !== null) $components[] = ['avg' => $activityAvg, 'weight' => 0.25];
-            if ($recitationAvg !== null) $components[] = ['avg' => $recitationAvg, 'weight' => 0.15];
+            if ($quizAvg !== null) $components[] = ['avg' => $quizAvg, 'weight' => 0.40];
+            if ($examAvg !== null) $components[] = ['avg' => $examAvg, 'weight' => 0.40];
+            if ($activityAvg !== null) $components[] = ['avg' => $activityAvg, 'weight' => 0.20];
 
             $overall = null;
             if (count($components) > 0) {
@@ -130,7 +123,6 @@ class GradeController extends Controller
                     'quiz_average'       => $quizAvg,
                     'exam_average'       => $examAvg,
                     'activity_average'   => $activityAvg,
-                    'recitation_average' => $recitationAvg,
                     'overall_grade'      => $overall,
                     'remarks'            => $remarks,
                 ]

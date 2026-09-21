@@ -203,8 +203,6 @@ export default function InstructorCreateAssessmentPage() {
                   <option value="quiz">Quiz</option>
                   <option value="long_exam">Long Exam</option>
                   <option value="individual_activity">Individual Activity</option>
-                  <option value="group_activity">Group Activity</option>
-                  <option value="recitation">Recitation</option>
                 </select>
               </div>
               <div>

@@ -15,7 +15,6 @@ class Grade extends Model
         'quiz_average',
         'exam_average',
         'activity_average',
-        'recitation_average',
         'overall_grade',
         'remarks',
     ];
@@ -26,7 +25,6 @@ class Grade extends Model
             'quiz_average'       => 'decimal:2',
             'exam_average'       => 'decimal:2',
             'activity_average'   => 'decimal:2',
-            'recitation_average' => 'decimal:2',
             'overall_grade'      => 'decimal:2',
         ];
     }

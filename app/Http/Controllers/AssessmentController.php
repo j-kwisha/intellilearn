@@ -76,7 +76,7 @@ class AssessmentController extends Controller
         $validated = $request->validate([
             'title'              => ['required', 'string', 'max:255'],
             'description'        => ['nullable', 'string'],
-            'type'               => ['required', 'in:quiz,long_exam,individual_activity,group_activity,recitation'],
+            'type'               => ['required', 'in:quiz,long_exam,individual_activity'],
             'topic'              => ['nullable', 'string', 'max:255'],
             'lesson_id'          => ['nullable', 'exists:lessons,id'],
             'total_points'       => ['nullable', 'numeric', 'min:1'],
@@ -151,7 +151,7 @@ class AssessmentController extends Controller
         $validated = $request->validate([
             'title'              => ['sometimes', 'string', 'max:255'],
             'description'        => ['nullable', 'string'],
-            'type'               => ['sometimes', 'in:quiz,long_exam,individual_activity,group_activity,recitation'],
+            'type'               => ['sometimes', 'in:quiz,long_exam,individual_activity'],
             'topic'              => ['nullable', 'string', 'max:255'],
             'lesson_id'          => ['nullable', 'exists:lessons,id'],
             'total_points'       => ['sometimes', 'numeric', 'min:1'],
