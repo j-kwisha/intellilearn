@@ -126,12 +126,21 @@ export default function StudentQuizPage() {
                   <p className={`text-xs mt-1 font-medium ${
                     answer.is_correct ? 'text-emerald-600' : 'text-red-500'
                   }`}>
-                    {answer.is_correct ? '✓ Correct' : '✗ Incorrect'} — {answer.points_earned} pts
+                    {answer.is_correct ? '✓ Correct' : '✗ Incorrect'} — {answer.points_earned ?? 0} pts
+                  </p>
+                )}
+                {answer.points_earned === null && answer.question?.type === 'essay' && (
+                  <p className="text-xs mt-1 font-medium text-amber-600">
+                    ⏳ Pending instructor review
                   </p>
                 )}
                 {answer.ai_feedback && (
-                  <p className="text-xs text-indigo-600 mt-2 bg-indigo-50 p-2 rounded">
-                    Feedback: {answer.ai_feedback}
+                  <p className={`text-xs mt-2 p-2 rounded ${
+                    answer.ai_feedback.includes('Pending instructor') || answer.ai_feedback.includes('failed')
+                      ? 'text-amber-700 bg-amber-50 border border-amber-200'
+                      : 'text-indigo-600 bg-indigo-50'
+                  }`}>
+                    💬 {answer.ai_feedback}
                   </p>
                 )}
               </div>

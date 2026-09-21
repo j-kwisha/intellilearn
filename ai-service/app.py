@@ -159,25 +159,44 @@ def grade_essay(data: dict):
     question = data.get("question", "")
     answer = data.get("answer", "")
     max_points = data.get("max_points", 10)
+    reference_material = data.get("reference_material", "")
 
     if not answer or not answer.strip():
         return {
             "points_earned": 0,
             "feedback": "No answer was provided.",
             "score_percentage": 0,
+            "status": "graded",
         }
 
-    system_prompt = (
-        f"You are an academic essay grader. Grade the student's answer to the following question.\n\n"
-        f"Question: {question}\n"
-        f"Maximum points: {max_points}\n\n"
-        f"Evaluate the answer based on:\n"
-        f"1. Accuracy and correctness\n"
-        f"2. Completeness\n"
-        f"3. Clarity and coherence\n\n"
-        f"Respond ONLY in this exact JSON format (no markdown, no extra text):\n"
-        f'{{ "points_earned": <number from 0 to {max_points}>, "feedback": "<2-3 sentence feedback>" }}'
-    )
+    # Build system prompt — use reference material if available
+    if reference_material and reference_material.strip():
+        system_prompt = (
+            f"You are an academic essay grader. Grade the student's answer based on the reference material below.\n\n"
+            f"--- REFERENCE MATERIAL ---\n{reference_material[:5000]}\n--- END REFERENCE ---\n\n"
+            f"Question: {question}\n"
+            f"Maximum points: {max_points}\n\n"
+            f"Grading criteria:\n"
+            f"1. Relevance to the reference material and question\n"
+            f"2. Accuracy of concepts from the reference material\n"
+            f"3. Understanding shown (student does NOT need to copy word-for-word)\n"
+            f"4. Completeness and clarity\n\n"
+            f"Award full or near-full marks if the student correctly explains the concepts in their own words.\n"
+            f"Award partial marks for partially correct or incomplete answers.\n"
+            f"Award low marks only for clearly incorrect or irrelevant answers.\n\n"
+            f"Respond ONLY in this exact JSON format (no markdown, no extra text):\n"
+            f'{{ "points_earned": <number from 0 to {max_points}>, "feedback": "<2-3 sentence feedback>" }}'
+        )
+    else:
+        system_prompt = (
+            f"You are an academic essay grader. Grade the student's answer to the following question.\n\n"
+            f"Question: {question}\n"
+            f"Maximum points: {max_points}\n\n"
+            f"Evaluate based on accuracy, completeness, and clarity.\n"
+            f"Award credit when the student correctly explains concepts in their own words.\n\n"
+            f"Respond ONLY in this exact JSON format (no markdown, no extra text):\n"
+            f'{{ "points_earned": <number from 0 to {max_points}>, "feedback": "<2-3 sentence feedback>" }}'
+        )
 
     try:
         response = groq_client.chat.completions.create(
@@ -186,8 +205,8 @@ def grade_essay(data: dict):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Student answer: {answer}"}
             ],
-            max_tokens=200,
-            temperature=0.3,
+            max_tokens=300,
+            temperature=0.2,
         )
         import json, re
         raw = response.choices[0].message.content.strip()
@@ -202,15 +221,21 @@ def grade_essay(data: dict):
                 "points_earned": round(points, 1),
                 "feedback": result.get("feedback", "No feedback provided."),
                 "score_percentage": round((points / max_points) * 100, 1) if max_points > 0 else 0,
+                "status": "graded",
+                "used_reference": bool(reference_material and reference_material.strip()),
+            }
+        else:
+            print(f"Could not parse AI response: {raw}")
+            return {
+                "status": "ai_failed",
+                "feedback": "AI grading failed: could not parse response. Pending instructor review.",
             }
     except Exception as e:
         print(f"Essay grading error: {str(e)}")
-
-    return {
-        "points_earned": 0,
-        "feedback": "Could not auto-grade this answer. Please review manually.",
-        "score_percentage": 0,
-    }
+        return {
+            "status": "ai_failed",
+            "feedback": f"AI grading failed: {str(e)}. Pending instructor review.",
+        }
 
 
 def chatbot(data: ChatRequest):

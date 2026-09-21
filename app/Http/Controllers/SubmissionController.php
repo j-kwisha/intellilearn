@@ -149,30 +149,75 @@ class SubmissionController extends Controller
             }
             // Essay — auto-grade with AI
             else {
-                $allAutoGradable = false;
                 $answerText = $answerData['answer_text'] ?? null;
 
-                // Call AI service to grade the essay
-                $aiFeedback = null;
-                if ($answerText) {
+                // Fetch reference material (extracted text from lesson materials)
+                $referenceText = null;
+                if ($assessment->lesson_id) {
+                    $lessonMaterials = \App\Models\LessonMaterial::where('lesson_id', $assessment->lesson_id)
+                        ->whereNotNull('extracted_text')
+                        ->orderBy('order')
+                        ->get();
+
+                    if ($lessonMaterials->isNotEmpty()) {
+                        $referenceText = $lessonMaterials
+                            ->pluck('extracted_text')
+                            ->implode("\n\n---\n\n");
+                        $referenceText = substr($referenceText, 0, 6000); // limit context
+                    }
+                }
+
+                // Determine grading state
+                $gradingState = 'pending_manual'; // default
+
+                if (! $answerText || ! trim($answerText)) {
+                    // Empty answer — 0 points
+                    $pointsEarned = 0;
+                    $isCorrect    = false;
+                    $aiFeedback   = 'No answer was provided.';
+                    $gradingState = 'graded';
+                } else {
+                    // Call AI service to grade the essay
                     try {
-                        $aiResponse = \Illuminate\Support\Facades\Http::timeout(10)
-                            ->post(env('AI_SERVICE_URL', 'http://127.0.0.1:8001') . '/grade-essay', [
-                                'question'   => $question->question_text,
-                                'answer'     => $answerText,
-                                'max_points' => $question->points,
-                            ]);
+                        $payload = [
+                            'question'         => $question->question_text,
+                            'answer'           => $answerText,
+                            'max_points'       => $question->points,
+                            'reference_material' => $referenceText,
+                        ];
+
+                        $aiResponse = \Illuminate\Support\Facades\Http::timeout(15)
+                            ->post(env('AI_SERVICE_URL', 'http://127.0.0.1:8001') . '/grade-essay', $payload);
 
                         if ($aiResponse->successful()) {
-                            $aiResult    = $aiResponse->json();
-                            $pointsEarned = $aiResult['points_earned'] ?? 0;
-                            $aiFeedback   = $aiResult['feedback'] ?? null;
-                            $isCorrect    = $pointsEarned >= ($question->points * 0.5);
-                            $allAutoGradable = true; // AI graded it
+                            $aiResult = $aiResponse->json();
+
+                            // Check for explicit failure states from AI
+                            if (isset($aiResult['status']) && $aiResult['status'] === 'ai_failed') {
+                                $gradingState = 'ai_failed';
+                                $aiFeedback   = $aiResult['feedback'] ?? 'AI grading failed. Pending instructor review.';
+                            } else {
+                                $pointsEarned = $aiResult['points_earned'] ?? null;
+                                $aiFeedback   = $aiResult['feedback'] ?? null;
+                                $isCorrect    = $pointsEarned !== null && $pointsEarned >= ($question->points * 0.5);
+                                $gradingState = 'graded';
+                            }
+                        } else {
+                            $gradingState = 'ai_failed';
+                            $aiFeedback   = 'AI grading service returned an error. Pending instructor review.';
                         }
                     } catch (\Exception $e) {
-                        // AI unavailable — fall back to manual grading
+                        $gradingState = 'ai_failed';
+                        $aiFeedback   = 'AI grading service is unavailable. Pending instructor review.';
+                        \Log::warning("Essay grading AI failed: " . $e->getMessage());
                     }
+                }
+
+                // Only mark as auto-gradable if AI actually succeeded
+                if ($gradingState === 'graded' && $pointsEarned !== null) {
+                    $allAutoGradable = true;
+                } else {
+                    $allAutoGradable = false;
                 }
 
                 SubmissionAnswer::updateOrCreate(
