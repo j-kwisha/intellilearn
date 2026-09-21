@@ -147,9 +147,47 @@ class SubmissionController extends Controller
                           === strtolower(trim($question->correct_answer));
                 $pointsEarned = $isCorrect ? $question->points : 0;
             }
-            // Essay — needs manual/AI grading
+            // Essay — auto-grade with AI
             else {
                 $allAutoGradable = false;
+                $answerText = $answerData['answer_text'] ?? null;
+
+                // Call AI service to grade the essay
+                $aiFeedback = null;
+                if ($answerText) {
+                    try {
+                        $aiResponse = \Illuminate\Support\Facades\Http::timeout(10)
+                            ->post(env('AI_SERVICE_URL', 'http://127.0.0.1:8001') . '/grade-essay', [
+                                'question'   => $question->question_text,
+                                'answer'     => $answerText,
+                                'max_points' => $question->points,
+                            ]);
+
+                        if ($aiResponse->successful()) {
+                            $aiResult    = $aiResponse->json();
+                            $pointsEarned = $aiResult['points_earned'] ?? 0;
+                            $aiFeedback   = $aiResult['feedback'] ?? null;
+                            $isCorrect    = $pointsEarned >= ($question->points * 0.5);
+                            $allAutoGradable = true; // AI graded it
+                        }
+                    } catch (\Exception $e) {
+                        // AI unavailable — fall back to manual grading
+                    }
+                }
+
+                SubmissionAnswer::updateOrCreate(
+                    ['submission_id' => $submission->id, 'question_id' => $question->id],
+                    [
+                        'answer_text'   => $answerText,
+                        'is_correct'    => $isCorrect ?? null,
+                        'points_earned' => $pointsEarned ?? null,
+                        'ai_feedback'   => $aiFeedback,
+                    ]
+                );
+
+                if ($pointsEarned !== null) $totalScore += $pointsEarned;
+                $totalPoints += $question->points;
+                continue;
             }
 
             // Save the answer
@@ -255,7 +293,7 @@ class SubmissionController extends Controller
         return response()->json([
             'message'    => $allAutoGradable
                 ? 'Assessment submitted and graded!'
-                : 'Assessment submitted. Essay questions are pending review.',
+                : 'Assessment submitted. Some essay questions could not be auto-graded and are pending instructor review.',
             'submission' => $submission,
         ]);
     }

@@ -154,7 +154,65 @@ INTENTS = [
 ]
 
 
-@app.post("/chatbot")
+@app.post("/grade-essay")
+def grade_essay(data: dict):
+    question = data.get("question", "")
+    answer = data.get("answer", "")
+    max_points = data.get("max_points", 10)
+
+    if not answer or not answer.strip():
+        return {
+            "points_earned": 0,
+            "feedback": "No answer was provided.",
+            "score_percentage": 0,
+        }
+
+    system_prompt = (
+        f"You are an academic essay grader. Grade the student's answer to the following question.\n\n"
+        f"Question: {question}\n"
+        f"Maximum points: {max_points}\n\n"
+        f"Evaluate the answer based on:\n"
+        f"1. Accuracy and correctness\n"
+        f"2. Completeness\n"
+        f"3. Clarity and coherence\n\n"
+        f"Respond ONLY in this exact JSON format (no markdown, no extra text):\n"
+        f'{{ "points_earned": <number from 0 to {max_points}>, "feedback": "<2-3 sentence feedback>" }}'
+    )
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="qwen/qwen3.8-27b",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Student answer: {answer}"}
+            ],
+            max_tokens=200,
+            temperature=0.3,
+        )
+        import json, re
+        raw = response.choices[0].message.content.strip()
+        # Strip think tags
+        raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+        # Extract JSON
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            result = json.loads(match.group())
+            points = min(float(result.get("points_earned", 0)), max_points)
+            return {
+                "points_earned": round(points, 1),
+                "feedback": result.get("feedback", "No feedback provided."),
+                "score_percentage": round((points / max_points) * 100, 1) if max_points > 0 else 0,
+            }
+    except Exception as e:
+        print(f"Essay grading error: {str(e)}")
+
+    return {
+        "points_earned": 0,
+        "feedback": "Could not auto-grade this answer. Please review manually.",
+        "score_percentage": 0,
+    }
+
+
 def chatbot(data: ChatRequest):
     message_lower = data.message.lower().strip()
 
