@@ -238,6 +238,7 @@ def grade_essay(data: dict):
         }
 
 
+@app.post("/chatbot")
 def chatbot(data: ChatRequest):
     message_lower = data.message.lower().strip()
 
