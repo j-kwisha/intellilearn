@@ -158,7 +158,11 @@ INTENTS = [
 def grade_essay(data: dict):
     question = data.get("question", "")
     answer = data.get("answer", "")
-    max_points = data.get("max_points", 10)
+    # Ensure max_points is a number
+    try:
+        max_points = float(data.get("max_points", 10))
+    except (ValueError, TypeError):
+        max_points = 10.0
     reference_material = data.get("reference_material", "")
 
     if not answer or not answer.strip():
@@ -216,7 +220,12 @@ def grade_essay(data: dict):
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if match:
             result = json.loads(match.group())
-            points = min(float(result.get("points_earned", 0)), max_points)
+            # Safely convert points_earned to float
+            try:
+                points_earned = float(result.get("points_earned", 0))
+            except (ValueError, TypeError):
+                points_earned = 0.0
+            points = min(points_earned, max_points)
             return {
                 "points_earned": round(points, 1),
                 "feedback": result.get("feedback", "No feedback provided."),
