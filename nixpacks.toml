@@ -1,0 +1,16 @@
+[phases.setup]
+nixPkgs = ["php84", "php84Extensions.pdo", "php84Extensions.pdo_pgsql", "php84Extensions.mbstring", "php84Extensions.xml", "php84Extensions.curl", "php84Extensions.zip", "php84Extensions.gd"]
+
+[phases.install]
+cmds = [
+  "php -r \"copy('https://getcomposer.org/installer', 'composer-setup.php');\" && php composer-setup.php && php -r \"unlink('composer-setup.php');\"",
+  "php composer.phar install --no-dev --optimize-autoloader"
+]
+
+[phases.build]
+cmds = [
+  "php composer.phar dump-autoload --optimize"
+]
+
+[start]
+cmd = "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT"

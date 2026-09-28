@@ -1,0 +1,336 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Optional
+import joblib
+import numpy as np
+from groq import Groq
+import os
+from dotenv import load_dotenv
+import warnings
+
+# Suppress sklearn feature name warnings
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
+
+load_dotenv()
+
+app = FastAPI(title="IntelliLearn AI Service")
+model = joblib.load("model.pkl")
+
+# Configure Groq — key loaded from .env
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+
+class StudentData(BaseModel):
+    quiz_avg: float
+    login_count: int
+    submission_rate: float
+    missed_tasks: int
+
+
+class RecommendRequest(BaseModel):
+    quiz_avg: float
+    topic: Optional[str] = None
+
+
+class ChatRequest(BaseModel):
+    message: str
+    course_name: Optional[str] = None
+    history: Optional[list] = []
+    lesson_context: Optional[str] = None
+    material_title: Optional[str] = None
+
+
+@app.get("/")
+def root():
+    return {"message": "IntelliLearn AI Service is running"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
+@app.post("/predict")
+def predict(data: StudentData):
+    features = np.array([[data.quiz_avg, data.login_count, data.submission_rate, data.missed_tasks]])
+    prediction = model.predict(features)[0]
+    probability = model.predict_proba(features)[0]
+    reasons = []
+    if data.quiz_avg < 70:
+        reasons.append("Low quiz performance")
+    if data.missed_tasks > 2:
+        reasons.append("Missed multiple tasks")
+    if data.submission_rate < 0.8:
+        reasons.append("Low submission rate")
+    if data.login_count < 5:
+        reasons.append("Low platform activity")
+    return {
+        "at_risk": bool(prediction),
+        "risk_probability": float(probability[1]),
+        "safe_probability": float(probability[0]),
+        "reasons": reasons
+    }
+
+
+TOPIC_RESOURCES = {
+    "default": [
+        {"title": "Review your course materials", "type": "tip", "reason": "Go back to the lessons related to your weak areas."},
+        {"title": "Practice with past quizzes", "type": "tip", "reason": "Repetition helps reinforce concepts."},
+        {"title": "Ask your instructor for help", "type": "tip", "reason": "Your instructor can clarify difficult topics."},
+    ],
+    "data_privacy": [
+        {"title": "Data Privacy Act Overview", "type": "reading", "reason": "Covers the fundamentals of RA 10173."},
+        {"title": "Privacy Principles Summary", "type": "reading", "reason": "Key principles you need to know for the quiz."},
+    ],
+    "programming": [
+        {"title": "Review basic syntax", "type": "tip", "reason": "Make sure you understand variables, loops, and functions."},
+        {"title": "Practice coding exercises", "type": "tip", "reason": "Hands-on practice is the best way to learn programming."},
+    ],
+    "networking": [
+        {"title": "OSI Model Review", "type": "reading", "reason": "The OSI model is a common quiz topic."},
+        {"title": "TCP/IP Basics", "type": "reading", "reason": "Understanding TCP/IP is essential for networking."},
+    ],
+}
+
+
+@app.post("/recommend")
+def recommend(data: RecommendRequest):
+    if data.quiz_avg >= 70:
+        return {"needs_recommendation": False, "message": "Great performance! Keep it up.", "recommendations": []}
+    topic_key = (data.topic or "").lower().replace(" ", "_")
+    resources = TOPIC_RESOURCES.get(topic_key, TOPIC_RESOURCES["default"])
+    return {
+        "needs_recommendation": True,
+        "message": f"Your quiz average is {data.quiz_avg:.1f}%. Here are some resources to help you improve.",
+        "recommendations": resources
+    }
+
+
+INTENTS = [
+    {"keywords": ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "howdy"],
+     "response": "Hello! I am your IntelliLearn course assistant. I can help you with grades, lessons, assessments, deadlines, enrollment, and course topics. What do you need help with?"},
+    {"keywords": ["thank", "thanks", "thank you", "ty"],
+     "response": "You are welcome! Let me know if you have any other questions."},
+    {"keywords": ["bye", "goodbye", "see you"],
+     "response": "Goodbye! Good luck with your studies. Feel free to come back anytime!"},
+    {"keywords": ["what can you do", "how do you work", "what are you", "who are you", "ai help"],
+     "response": "I am the IntelliLearn course assistant! I can help you with grades, lessons, assessments, deadlines, enrollment codes, risk status, announcements, and academic topics."},
+    {"keywords": ["intellilearn", "platform", "lms", "what is this system", "about this app"],
+     "response": "IntelliLearn is an AI-powered Learning Management System. It helps students track progress, take assessments, view lesson materials, and get personalized feedback."},
+    {"keywords": ["grade", "score", "result", "mark", "gpa", "passing", "failed", "passed", "my grade"],
+     "response": "You can view your grades by going to your course page and checking the Grades section. Your instructor computes grades based on quizzes, exams, activities, and recitations."},
+    {"keywords": ["quiz", "assessment", "exam", "long exam", "recitation", "take a test", "take a quiz"],
+     "response": "Quizzes and assessments are listed under each course. Click on a course, then go to the Assessments tab to see available items."},
+    {"keywords": ["lesson", "module", "view lesson"],
+     "response": "Lesson materials are available inside each course under the Lessons tab. Click on the lesson title to open it."},
+    {"keywords": ["material", "file", "pdf", "download", "resource", "attachment"],
+     "response": "Files and materials are uploaded by your instructor under each lesson. Go to your course, open the Lessons tab, and click on a lesson to see its attached files."},
+    {"keywords": ["deadline", "due date", "late", "missing", "overdue"],
+     "response": "Check your course announcements and assessments for deadlines. If you missed a deadline, contact your instructor."},
+    {"keywords": ["submit", "submission", "how to submit", "submitted"],
+     "response": "To submit an assessment, open the course, go to Assessments, click on the assessment, and click Start. Answer all questions and click Submit when done."},
+    {"keywords": ["enroll", "join", "join code", "course code", "how to join"],
+     "response": "To join a course, go to My Courses and click Join with Code. Enter the 8-character code provided by your instructor or admin."},
+    {"keywords": ["forgot password", "change password", "reset password"],
+     "response": "To change your password, go to the Profile page in the sidebar. If you forgot your password, use the Forgot Password link on the login page."},
+    {"keywords": ["profile", "account", "update profile", "edit profile", "my account"],
+     "response": "You can update your profile information from the Profile page in the sidebar."},
+    {"keywords": ["at risk", "risk status", "am i at risk", "risk check", "struggling"],
+     "response": "Your risk status is based on your quiz average, login activity, submission rate, and missed tasks. Go to the Risk Check page in the sidebar to see your current status."},
+    {"keywords": ["announcement", "notice", "posted by instructor"],
+     "response": "Course announcements are posted by your instructor under the Announcements tab inside each course."},
+    {"keywords": ["what is python", "python language", "python programming", "learn python", "python basics"],
+     "response": "Python is a beginner-friendly, high-level programming language known for its simple syntax. Key concepts: variables, loops (for/while), functions (def), lists, dictionaries, and classes."},
+    {"keywords": ["what is html", "html language", "learn html", "html basics", "html introduction"],
+     "response": "HTML (HyperText Markup Language) is the standard language for creating web pages. It uses tags to structure content."},
+    {"keywords": ["what is css", "css basics", "learn css", "css introduction"],
+     "response": "CSS (Cascading Style Sheets) controls the visual appearance of HTML elements. Common properties: color, font-size, margin, padding, background, display."},
+    {"keywords": ["what is javascript", "javascript basics", "learn javascript", "js language"],
+     "response": "JavaScript is a programming language that adds interactivity to web pages. It runs in the browser and can manipulate HTML/CSS and handle user events."},
+    {"keywords": ["object oriented", "oop", "what is oop", "class and object", "inheritance", "encapsulation"],
+     "response": "OOP organizes code into classes and objects. Key concepts: Encapsulation, Inheritance, Polymorphism, Abstraction."},
+    {"keywords": ["what is sql", "sql basics", "learn sql", "sql query", "select statement"],
+     "response": "SQL manages relational databases. Key commands: SELECT, INSERT INTO, UPDATE, DELETE, JOIN."},
+    {"keywords": ["what is networking", "networking basics", "osi model", "tcp ip", "network layers"],
+     "response": "Networking connects computers to share data. The OSI model has 7 layers. TCP/IP is the internet foundation."},
+    {"keywords": ["data privacy", "privacy act", "ra 10173", "personal data", "data protection"],
+     "response": "The Data Privacy Act of 2012 (RA 10173) protects personal information. Key principles: transparency, legitimate purpose, and proportionality."},
+]
+
+
+@app.post("/grade-essay")
+def grade_essay(data: dict):
+    question = data.get("question", "")
+    answer = data.get("answer", "")
+    # Ensure max_points is a number
+    try:
+        max_points = float(data.get("max_points", 10))
+    except (ValueError, TypeError):
+        max_points = 10.0
+    reference_material = data.get("reference_material", "")
+    rubric_criteria = data.get("rubric_criteria", [])
+
+    if not answer or not answer.strip():
+        return {
+            "points_earned": 0,
+            "feedback": "No answer was provided.",
+            "score_percentage": 0,
+            "criterion_scores": {},
+            "status": "graded",
+        }
+
+    # Build system prompt with rubric criteria if available
+    if rubric_criteria:
+        # Build rubric section
+        rubric_section = "--- GRADING RUBRIC ---\n"
+        for idx, criterion in enumerate(rubric_criteria, 1):
+            criterion_name = criterion.get("criterion", f"Criterion {idx}")
+            criterion_desc = criterion.get("description", "")
+            criterion_max = criterion.get("max_points", 0)
+            rubric_section += f"\n{idx}. {criterion_name} (max {criterion_max} points)\n"
+            if criterion_desc:
+                rubric_section += f"   {criterion_desc}\n"
+        rubric_section += "\n--- END RUBRIC ---\n\n"
+    else:
+        rubric_section = ""
+
+    if reference_material and reference_material.strip():
+        system_prompt = (
+            f"You are an academic essay grader. Grade the student's answer based on the course materials and grading rubric below.\n\n"
+            f"--- COURSE MATERIALS ---\n{reference_material[:4000]}\n--- END MATERIALS ---\n\n"
+            f"{rubric_section}"
+            f"Question: {question}\n"
+            f"Maximum points: {max_points}\n\n"
+            f"Grading instructions:\n"
+            f"1. Evaluate based on the rubric criteria provided\n"
+            f"2. Award points per criterion based on accuracy and understanding\n"
+            f"3. Consider relevance to course materials\n"
+            f"4. Award full or near-full marks if student correctly explains concepts in their own words\n"
+            f"5. Award partial marks for partially correct or incomplete answers\n"
+            f"6. Award low marks only for clearly incorrect or irrelevant answers\n\n"
+            f"Respond ONLY in this exact JSON format (no markdown, no extra text):\n"
+            f'{{ "points_earned": <number from 0 to {max_points}>, "feedback": "<2-3 sentence feedback>", "criterion_scores": {{ "<criterion_name>": <points>, ... }} }}'
+        )
+    else:
+        system_prompt = (
+            f"You are an academic essay grader. Grade the student's answer to the following question.\n\n"
+            f"{rubric_section}"
+            f"Question: {question}\n"
+            f"Maximum points: {max_points}\n\n"
+            f"Grading instructions:\n"
+            f"1. Evaluate based on the rubric criteria provided\n"
+            f"2. Award points per criterion based on accuracy and understanding\n"
+            f"3. Evaluate based on accuracy, completeness, and clarity\n"
+            f"4. Award credit when the student correctly explains concepts in their own words\n\n"
+            f"Respond ONLY in this exact JSON format (no markdown, no extra text):\n"
+            f'{{ "points_earned": <number from 0 to {max_points}>, "feedback": "<2-3 sentence feedback>", "criterion_scores": {{ "<criterion_name>": <points>, ... }} }}'
+        )
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="qwen/qwen3.8-27b",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Student answer: {answer}"}
+            ],
+            max_tokens=400,
+            temperature=0.2,
+        )
+        import json, re
+        raw = response.choices[0].message.content.strip()
+        # Strip think tags
+        raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+        # Extract JSON
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            result = json.loads(match.group())
+            # Safely convert points_earned to float
+            try:
+                points_earned = float(result.get("points_earned", 0))
+            except (ValueError, TypeError):
+                points_earned = 0.0
+            points = min(points_earned, max_points)
+            
+            # Extract criterion scores
+            criterion_scores = result.get("criterion_scores", {})
+            if not isinstance(criterion_scores, dict):
+                criterion_scores = {}
+            
+            return {
+                "points_earned": round(points, 1),
+                "feedback": result.get("feedback", "No feedback provided."),
+                "score_percentage": round((points / max_points) * 100, 1) if max_points > 0 else 0,
+                "criterion_scores": criterion_scores,
+                "status": "graded",
+                "used_reference": bool(reference_material and reference_material.strip()),
+            }
+        else:
+            print(f"Could not parse AI response: {raw}")
+            return {
+                "status": "ai_failed",
+                "feedback": "AI grading failed: could not parse response. Pending instructor review.",
+                "criterion_scores": {},
+            }
+    except Exception as e:
+        print(f"Essay grading error: {str(e)}")
+        return {
+            "status": "ai_failed",
+            "feedback": f"AI grading failed: {str(e)}. Pending instructor review.",
+            "criterion_scores": {},
+        }
+
+
+@app.post("/chatbot")
+def chatbot(data: ChatRequest):
+    message_lower = data.message.lower().strip()
+
+    if not data.lesson_context:
+        for intent in INTENTS:
+            if any(kw in message_lower for kw in intent["keywords"]):
+                return {"response": intent["response"], "in_scope": True}
+
+    try:
+        if data.lesson_context:
+            system_prompt = (
+                f"You are an AI tutor helping a student understand a lesson titled '{data.material_title or 'this lesson'}'.\n"
+                f"Answer their questions directly based on the content below.\n"
+                f"FORMATTING RULES — always follow these:\n"
+                f"- Break your answer into short sections, never one long paragraph\n"
+                f"- Use numbered lists (1. 2. 3.) for steps, sequences, or ordered items\n"
+                f"- Use bullet points (- ) for features, facts, or unordered items\n"
+                f"- Keep each paragraph to 2-3 sentences max\n"
+                f"- Add a short bold label before each section when covering multiple topics (e.g. 'History:', 'Features:')\n"
+                f"- End with a one-line summary if the answer is long\n"
+                f"If the answer is not in the content, say: 'That topic is not covered in this lesson.'\n\n"
+                f"--- LESSON CONTENT ---\n{data.lesson_context[:6000]}\n--- END ---"
+            )
+        else:
+            system_prompt = (
+                "You are IntelliLearn's course assistant — an AI tutor for students. "
+                "You help with academic topics, course content, and learning questions. "
+                "FORMATTING RULES — always follow these:\n"
+                "- Never write one long paragraph\n"
+                "- Use bullet points or numbered lists when listing multiple items\n"
+                "- Keep each paragraph to 2-3 sentences max\n"
+                "- Use short bold labels to separate sections when needed\n"
+                "Do NOT ask clarifying questions — give direct answers. "
+                "If the question is completely unrelated to education, say it is outside your coverage. "
+                f"Course context: {data.course_name or 'General'}"
+            )
+
+        response = groq_client.chat.completions.create(
+            model="qwen/qwen3.8-27b",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": data.message}
+            ],
+            max_tokens=500,
+            temperature=0.7,
+        )
+        answer = response.choices[0].message.content.strip()
+        return {"response": answer, "in_scope": True}
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"Groq error: {error_msg}")
+        return {"response": "I'm sorry, I couldn't process that request. Please try asking something else.", "in_scope": False}

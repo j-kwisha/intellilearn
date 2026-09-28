@@ -1,0 +1,11 @@
+/* ============================================================
+   App.css — app-level style overrides
+   All core design tokens and component styles live in index.css
+   ============================================================ */
+
+/* Ensure the root fills the viewport */
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
