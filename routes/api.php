@@ -28,6 +28,10 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
+// Google OAuth Routes
+Route::get('/auth/google/redirect', [\App\Http\Controllers\SocialAuthController::class, 'redirectToGoogle']);
+Route::get('/auth/google/callback', [\App\Http\Controllers\SocialAuthController::class, 'handleGoogleCallback']);
+
 Route::get('/verify-email/{id}/{hash}', function (Request $request, $id, $hash) {
     $user = \App\Models\User::findOrFail($id);
     $frontend = env('FRONTEND_URL', 'http://localhost:5173');
@@ -65,6 +69,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- PROFILE ---
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::put('/profile/password', [ProfileController::class, 'changePassword']);
+
+    // --- GOOGLE OAUTH (Protected) ---
+    Route::post('/auth/google/link', [\App\Http\Controllers\SocialAuthController::class, 'linkGoogleAccount']);
+    Route::post('/auth/google/unlink', [\App\Http\Controllers\SocialAuthController::class, 'unlinkGoogleAccount']);
 
     // --- COURSES ---
     Route::get('/courses', [CourseController::class, 'index']);

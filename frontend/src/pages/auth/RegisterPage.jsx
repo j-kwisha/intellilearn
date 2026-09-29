@@ -27,6 +27,22 @@ export default function RegisterPage() {
     }
   };
 
+  const handleGoogleSignup = async () => {
+    try {
+      // Call backend to get Google OAuth URL
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google/redirect`);
+      const data = await response.json();
+      
+      if (data.url) {
+        // Redirect user to Google OAuth
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error('Google signup failed:', err);
+      setErrors({ general: ['Failed to initiate Google signup. Please try again.'] });
+    }
+  };
+
   const field = (key, label, type = 'text', placeholder = '') => (
     <div>
       <label className="form-label">{label}</label>
@@ -113,6 +129,54 @@ export default function RegisterPage() {
               {loading ? 'Creating account...' : 'Create account'}
             </button>
           </form>
+
+          {/* Divider */}
+          <div style={{ display:'flex', alignItems:'center', gap:12, margin:'20px 0' }}>
+            <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
+            <span style={{ fontSize:12, color:'#94a3b8', fontWeight:600 }}>OR</span>
+            <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
+          </div>
+
+          {/* Google Sign Up Button */}
+          <button
+            type="button"
+            onClick={handleGoogleSignup}
+            style={{
+              width:'100%',
+              background:'white',
+              border:'1.5px solid #E2E8F0',
+              borderRadius:12,
+              padding:'12px',
+              fontSize:14,
+              fontWeight:600,
+              cursor:'pointer',
+              display:'flex',
+              alignItems:'center',
+              justifyContent:'center',
+              gap:10,
+              transition:'all .2s',
+              boxShadow:'0 2px 8px rgba(0,0,0,.05)',
+              color:'#1F2937'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = '#F8FAFC';
+              e.currentTarget.style.borderColor = '#CBD5E1';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,.08)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'white';
+              e.currentTarget.style.borderColor = '#E2E8F0';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.05)';
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18">
+              <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+              <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+              <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
+              <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+            </svg>
+            <span>Sign up with Google</span>
+          </button>
 
           <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 24, marginBottom: 0 }}>
             Already have an account?{' '}

@@ -82,6 +82,22 @@ export default function LoginPage() {
     } finally { setRegLoading(false); }
   };
 
+  const handleGoogleLogin = async () => {
+    try {
+      // Call backend to get Google OAuth URL
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google/redirect`);
+      const data = await response.json();
+      
+      if (data.url) {
+        // Redirect user to Google OAuth
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error('Google login failed:', err);
+      setLoginError('Failed to initiate Google login. Please try again.');
+    }
+  };
+
   return (
     <div style={{ width:'100vw', height:'100vh', overflow:'hidden', fontFamily:"'Plus Jakarta Sans','DM Sans',sans-serif" }}>
       <style>{`
@@ -371,6 +387,55 @@ export default function LoginPage() {
                       {loginLoading?'Logging in...':<><span>Log in</span><ArrowForwardIcon sx={{fontSize:17}}/></>}
                     </button>
                   </form>
+                  
+                  {/* Divider */}
+                  <div style={{ display:'flex',alignItems:'center',gap:12,margin:'20px 0' }}>
+                    <div style={{ flex:1,height:1,background:'#E2E8F0' }} />
+                    <span style={{ fontSize:12,color:'#94a3b8',fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif" }}>OR</span>
+                    <div style={{ flex:1,height:1,background:'#E2E8F0' }} />
+                  </div>
+
+                  {/* Google Sign In Button */}
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    style={{
+                      width:'100%',
+                      background:'white',
+                      border:'1.5px solid #E2E8F0',
+                      borderRadius:999,
+                      padding:'14px',
+                      fontSize:14,
+                      fontWeight:600,
+                      cursor:'pointer',
+                      fontFamily:"'Plus Jakarta Sans',sans-serif",
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'center',
+                      gap:10,
+                      transition:'all .2s',
+                      boxShadow:'0 2px 8px rgba(0,0,0,.05)'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = '#F8FAFC';
+                      e.currentTarget.style.borderColor = '#CBD5E1';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,.08)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'white';
+                      e.currentTarget.style.borderColor = '#E2E8F0';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.05)';
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                      <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
+                      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                    </svg>
+                    <span style={{ color:'#1F2937' }}>Sign in with Google</span>
+                  </button>
+
                   <div style={{ marginTop:20,textAlign:'center' }}>
                     <p style={{ fontSize:13,color:'#94a3b8',margin:0,fontFamily:"'DM Sans',sans-serif" }}>
                       {"Don't have an account? "}<button onClick={()=>setAuthMode('signup')} style={{ background:'none',border:'none',color:'var(--blue-600)',fontWeight:700,cursor:'pointer',fontSize:13,textDecoration:'underline',fontFamily:"'Plus Jakarta Sans',sans-serif" }}>Sign up</button>
