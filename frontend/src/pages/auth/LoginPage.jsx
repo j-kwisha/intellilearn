@@ -85,7 +85,7 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     try {
       // Call backend to get Google OAuth URL
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google/redirect`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/google/redirect`);
       const data = await response.json();
       
       if (data.url) {

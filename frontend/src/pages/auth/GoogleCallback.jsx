@@ -14,7 +14,7 @@ export default function GoogleCallback() {
         
         // Call backend callback endpoint with the full URL
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/auth/google/callback${location.search}`,
+          `${import.meta.env.VITE_API_URL}/auth/google/callback${location.search}`,
           {
             method: 'GET',
             headers: {
