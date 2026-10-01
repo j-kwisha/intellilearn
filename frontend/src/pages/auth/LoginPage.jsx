@@ -310,30 +310,31 @@ export default function LoginPage() {
           {/* subtle blob top-right */}
           <div style={{ position:'absolute',top:-100,right:-80,width:380,height:380,borderRadius:'50%',background:'rgba(37,99,235,.06)',pointerEvents:'none' }} />
 
-          <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',padding:'28px 48px 16px' }}>
-            <h1 className={activeSlide===1?'ll-up':''} style={{ fontSize:50,fontWeight:800,color:'var(--navy)',lineHeight:1.1,margin:0,letterSpacing:'-.025em' }}>
+          <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',padding:'40px 48px 24px' }}>
+            <h1 className={activeSlide===1?'ll-up':''} style={{ fontSize:64,fontWeight:800,color:'var(--navy)',lineHeight:1.1,margin:0,letterSpacing:'-.03em' }}>
               Smart Features.<br />Real Impact.
             </h1>
-            <p className={activeSlide===1?'ll-up ll-d1':''} style={{ flex:'0 0 260px',fontSize:14,color:'var(--muted)',lineHeight:1.75,margin:0,textAlign:'right',paddingTop:10,fontFamily:"'DM Sans',sans-serif" }}>
+            <p className={activeSlide===1?'ll-up ll-d1':''} style={{ flex:'0 0 320px',fontSize:17,color:'var(--muted)',lineHeight:1.75,margin:0,textAlign:'right',paddingTop:16,fontFamily:"'DM Sans',sans-serif" }}>
               IntelliLearn integrates artificial intelligence to improve how students learn and how instructors teach.
             </p>
           </div>
 
           {/* cards row — fixed height, aligned */}
-          <div className={`feat-grid ${activeSlide===1?'ll-up ll-d2':''}`} style={{ display:'flex',gap:18,padding:'0 48px 36px',alignItems:'flex-start' }}>
+          <div className={`feat-grid ${activeSlide===1?'ll-up ll-d2':''}`} style={{ display:'flex',gap:22,padding:'0 48px 48px',alignItems:'flex-start' }}>
             {features.map((f,idx)=>(
               <div key={f.title} className="feat-card" style={{ animationDelay:`${idx*.06}s` }}>
                 {/* illustration panel — fixed height */}
-                <div style={{ background:'#E6F0FF',height:170,borderRadius:'24px 24px 0 0',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0 }}>
-                  <img src={f.img} alt={f.title} style={{ width:'90%',height:'90%',objectFit:'contain' }} onError={e=>{e.target.style.opacity='0'}} />
+                <div style={{ background:'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)',height:190,borderRadius:'24px 24px 0 0',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0,position:'relative' }}>
+                  <div style={{ position:'absolute',top:-20,right:-20,width:120,height:120,borderRadius:'50%',background:'rgba(59,130,246,.08)' }} />
+                  <img src={f.img} alt={f.title} style={{ width:'85%',height:'85%',objectFit:'contain',position:'relative',zIndex:1 }} onError={e=>{e.target.style.opacity='0'}} />
                 </div>
                 {/* navy icon badge — overlaps panel bottom */}
-                <div style={{ width:56,height:56,borderRadius:'50%',background:'linear-gradient(135deg,#1e3a8a,#0b2a6f)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 6px 18px rgba(11,42,111,.4)',margin:'-28px auto 0',position:'relative',zIndex:2,flexShrink:0 }}>
+                <div style={{ width:64,height:64,borderRadius:'50%',background:'linear-gradient(135deg,#1e40af,#1e3a8a)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 24px rgba(11,42,111,.45)',margin:'-32px auto 0',position:'relative',zIndex:2,flexShrink:0,border:'4px solid white' }}>
                   {f.icon}
                 </div>
-                <div style={{ padding:'14px 18px 22px',display:'flex',flexDirection:'column' }}>
-                  <p style={{ fontSize:14,fontWeight:800,color:'var(--navy)',margin:'0 0 10px',lineHeight:1.35 }}>{f.title}</p>
-                  <p style={{ fontSize:13,color:'var(--muted)',lineHeight:1.65,margin:0,fontFamily:"'DM Sans',sans-serif" }}>{f.desc}</p>
+                <div style={{ padding:'18px 22px 28px',display:'flex',flexDirection:'column' }}>
+                  <p style={{ fontSize:17,fontWeight:800,color:'var(--navy)',margin:'0 0 12px',lineHeight:1.3 }}>{f.title}</p>
+                  <p style={{ fontSize:14,color:'var(--muted)',lineHeight:1.7,margin:0,fontFamily:"'DM Sans',sans-serif" }}>{f.desc}</p>
                 </div>
               </div>
             ))}
@@ -527,21 +528,21 @@ export default function LoginPage() {
             ))}
 
             {/* brand — logo + text once */}
-            <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:20,position:'relative',zIndex:2 }}>
-              <img src={logo} alt="IntelliLearn" style={{ height:28,objectFit:'contain' }} />
-              <span style={{ fontWeight:800,fontSize:13,color:'var(--navy)',letterSpacing:'.02em' }}>INTELLILEARN</span>
+            <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:28,position:'relative',zIndex:2 }}>
+              <img src={logo} alt="IntelliLearn" style={{ height:32,objectFit:'contain' }} />
+              <span style={{ fontWeight:800,fontSize:15,color:'var(--navy)',letterSpacing:'.02em' }}>INTELLILEARN</span>
             </div>
 
-            <h2 style={{ fontSize:40,fontWeight:800,color:'var(--navy)',lineHeight:1.12,margin:'0 0 4px',letterSpacing:'-.025em',position:'relative',zIndex:2 }}>
+            <h2 style={{ fontSize:52,fontWeight:800,color:'var(--navy)',lineHeight:1.08,margin:'0 0 8px',letterSpacing:'-.03em',position:'relative',zIndex:2 }}>
               Smarter Learning.<br />
               <span style={{ color:'var(--blue-600)' }}>Better Results.</span>
             </h2>
-            <div style={{ width:40,height:4,background:'var(--blue-600)',borderRadius:2,margin:'14px 0 18px',position:'relative',zIndex:2 }} />
-            <p style={{ fontSize:15,color:'var(--muted)',lineHeight:1.75,maxWidth:340,fontFamily:"'DM Sans',sans-serif",marginBottom:28,position:'relative',zIndex:2 }}>
+            <div style={{ width:50,height:5,background:'linear-gradient(90deg, #2563EB, #3B82F6)',borderRadius:3,margin:'18px 0 22px',position:'relative',zIndex:2 }} />
+            <p style={{ fontSize:18,color:'var(--muted)',lineHeight:1.7,maxWidth:400,fontFamily:"'DM Sans',sans-serif",marginBottom:32,position:'relative',zIndex:2 }}>
               IntelliLearn uses AI to personalize your learning experience, giving you the right content, feedback, and support exactly when you need it.
             </p>
-            <button style={{ display:'inline-flex',alignItems:'center',gap:8,background:'linear-gradient(90deg,#0B2A6F,#1E3A8A)',color:'white',border:'none',borderRadius:999,padding:'13px 26px',fontSize:14,fontWeight:700,cursor:'pointer',width:'fit-content',fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:'0 4px 18px rgba(11,42,111,.25)',position:'relative',zIndex:2 }}>
-              Learn More <ArrowForwardIcon sx={{fontSize:16}}/>
+            <button style={{ display:'inline-flex',alignItems:'center',gap:10,background:'linear-gradient(135deg,#0B2A6F,#1E40AF)',color:'white',border:'none',borderRadius:999,padding:'16px 32px',fontSize:15,fontWeight:700,cursor:'pointer',width:'fit-content',fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:'0 6px 24px rgba(11,42,111,.35)',position:'relative',zIndex:2,transition:'all .2s' }}>
+              Learn More <ArrowForwardIcon sx={{fontSize:18}}/>
             </button>
           </div>
         </div>
