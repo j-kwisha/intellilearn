@@ -271,30 +271,37 @@ class LessonController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
 
-            // Upload to Cloudinary via HTTP API
-            $cloudName  = env('CLOUDINARY_CLOUD_NAME');
-            $apiKey     = env('CLOUDINARY_API_KEY');
-            $apiSecret  = env('CLOUDINARY_API_SECRET');
+            $cloudName = env('CLOUDINARY_CLOUD_NAME');
+            $apiKey    = env('CLOUDINARY_API_KEY');
+            $apiSecret = env('CLOUDINARY_API_SECRET');
 
-            $timestamp  = time();
-            $folder     = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
-            $signature  = sha1("access_mode=public&folder={$folder}&timestamp={$timestamp}{$apiSecret}");
+            if ($cloudName && $apiKey && $apiSecret) {
+                // Upload to Cloudinary
+                $timestamp = time();
+                $folder    = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
+                $signature = sha1("access_mode=public&folder={$folder}&timestamp={$timestamp}{$apiSecret}");
 
-            $response = \Illuminate\Support\Facades\Http::attach(
-                'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
-            )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
-                'api_key'     => $apiKey,
-                'timestamp'   => $timestamp,
-                'folder'      => $folder,
-                'signature'   => $signature,
-                'access_mode' => 'public',
-            ]);
+                $response = \Illuminate\Support\Facades\Http::attach(
+                    'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
+                )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
+                    'api_key'     => $apiKey,
+                    'timestamp'   => $timestamp,
+                    'folder'      => $folder,
+                    'signature'   => $signature,
+                    'access_mode' => 'public',
+                ]);
 
-            if ($response->failed()) {
-                return response()->json(['message' => 'File upload failed. Please try again.'], 500);
+                if ($response->failed()) {
+                    return response()->json(['message' => 'File upload to cloud failed. Please try again.'], 500);
+                }
+
+                $filePath = $response->json('secure_url');
+            } else {
+                // Fallback: store locally in public storage
+                $folder   = "materials/course_{$course->id}/lesson_{$lesson->id}";
+                $stored   = $file->store($folder, 'public');
+                $filePath = Storage::disk('public')->url($stored);
             }
-
-            $filePath = $response->json('secure_url');
 
             // Extract text from PDF for AI chatbot
             if ($validated['type'] === 'pdf') {
@@ -347,7 +354,13 @@ class LessonController extends Controller
 
         // Delete the actual file from storage if it exists
         if ($material->file_path) {
-            Storage::disk('public')->delete($material->file_path);
+            // If it's a Cloudinary URL, skip local delete (Cloudinary files persist)
+            if (!str_starts_with($material->file_path, 'http')) {
+                Storage::disk('public')->delete($material->file_path);
+            }
+            // For locally stored files (fallback path without full URL)
+            // The file_path stored is already the full URL from Storage::url(),
+            // so we reconstruct the relative path for deletion
         }
 
         $material->delete();

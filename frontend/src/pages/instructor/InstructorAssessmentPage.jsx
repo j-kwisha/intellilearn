@@ -207,6 +207,160 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
   );
 }
 
+// ── Add Question Form ────────────────────────────────────────────────────────
+function newBlankQ() {
+  return { question_text: '', type: 'multiple_choice', options: ['', '', '', ''], correct_answer: '', points: '',
+    matching_pairs: [{ left_item: '', right_item: '', correct_match: '' }, { left_item: '', right_item: '', correct_match: '' }] };
+}
+
+function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
+  const [questions, setQuestions] = useState([newBlankQ()]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const updateQ = (i, f, v) => setQuestions(p => p.map((q, idx) => idx === i ? { ...q, [f]: v } : q));
+  const updateOpt = (qi, oi, v) => setQuestions(p => p.map((q, i) => {
+    if (i !== qi) return q; const o = [...q.options]; o[oi] = v; return { ...q, options: o };
+  }));
+  const updatePair = (qi, pi, field, v) => setQuestions(p => p.map((q, i) => {
+    if (i !== qi) return q;
+    const pairs = [...q.matching_pairs]; pairs[pi] = { ...pairs[pi], [field]: v }; return { ...q, matching_pairs: pairs };
+  }));
+  const addPair = (qi) => setQuestions(p => p.map((q, i) => i === qi ? { ...q, matching_pairs: [...q.matching_pairs, { left_item: '', right_item: '', correct_match: '' }] } : q));
+  const removePair = (qi, pi) => setQuestions(p => p.map((q, i) => {
+    if (i !== qi || q.matching_pairs.length <= 2) return q;
+    return { ...q, matching_pairs: q.matching_pairs.filter((_, idx) => idx !== pi) };
+  }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault(); setSaving(true); setError('');
+    try {
+      const cleaned = questions.map(q => {
+        const out = { ...q, points: parseFloat(q.points) };
+        if (q.type === 'essay') { delete out.options; delete out.correct_answer; delete out.matching_pairs; }
+        else if (q.type === 'short_answer') { delete out.options; delete out.matching_pairs; }
+        else if (q.type === 'true_false') { out.options = ['True', 'False']; delete out.matching_pairs; }
+        else if (q.type === 'matching') { delete out.options; delete out.correct_answer; }
+        else { out.options = out.options.filter(o => o.trim() !== ''); delete out.matching_pairs; }
+        return out;
+      });
+      await api.post(`/courses/${courseId}/assessments/${assessmentId}/questions/bulk`, { questions: cleaned });
+      onSuccess();
+    } catch (err) { setError(err.response?.data?.message || 'Failed to save.'); }
+    finally { setSaving(false); }
+  };
+
+  const IS = { width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', background: 'white' };
+
+  return (
+    <div className="bg-white rounded-xl border border-teal-200 p-5 space-y-4">
+      <h3 className="font-bold text-slate-800 text-sm">Add New Question(s)</h3>
+      {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {questions.map((q, idx) => (
+          <div key={idx} className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold text-slate-500">Question {idx + 1}</span>
+              {questions.length > 1 && <button type="button" onClick={() => setQuestions(p => p.filter((_, i) => i !== idx))} className="text-xs text-red-400 hover:text-red-600">Remove</button>}
+            </div>
+            <textarea rows={2} placeholder="Question text" required value={q.question_text}
+              onChange={e => updateQ(idx, 'question_text', e.target.value)}
+              style={{ ...IS, resize: 'vertical' }} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Type</label>
+                <select style={IS} value={q.type} onChange={e => updateQ(idx, 'type', e.target.value)}>
+                  <option value="multiple_choice">Multiple Choice</option>
+                  <option value="true_false">True / False</option>
+                  <option value="short_answer">Short Answer</option>
+                  <option value="essay">Essay</option>
+                  <option value="matching">Matching</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Points</label>
+                <input type="number" min={0.01} step={0.5} required placeholder="e.g. 10" value={q.points}
+                  onChange={e => updateQ(idx, 'points', e.target.value)} style={IS} />
+              </div>
+            </div>
+
+            {q.type === 'multiple_choice' && (
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-600">Options (click radio = correct answer)</label>
+                {q.options.map((opt, oi) => (
+                  <div key={oi} className="flex items-center gap-2">
+                    <input type="radio" name={`correct-${idx}`} checked={q.correct_answer === opt && opt !== ''}
+                      onChange={() => { if (opt.trim()) updateQ(idx, 'correct_answer', opt); }}
+                      style={{ accentColor: '#0d9488', flexShrink: 0 }} />
+                    <input type="text" placeholder={`Option ${oi + 1}`} value={opt}
+                      onChange={e => updateOpt(idx, oi, e.target.value)} style={{ ...IS, flex: 1 }} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {q.type === 'true_false' && (
+              <div className="flex gap-3">
+                {['True', 'False'].map(v => (
+                  <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '7px 16px', border: `1.5px solid ${q.correct_answer === v ? '#0d9488' : '#e2e8f0'}`, borderRadius: 8, fontWeight: 600, fontSize: '0.85rem', color: q.correct_answer === v ? '#0d9488' : '#475569', background: q.correct_answer === v ? '#f0fdfa' : 'white' }}>
+                    <input type="radio" name={`tf-${idx}`} value={v} checked={q.correct_answer === v}
+                      onChange={() => updateQ(idx, 'correct_answer', v)} style={{ accentColor: '#0d9488' }} />
+                    {v}
+                  </label>
+                ))}
+              </div>
+            )}
+            {q.type === 'short_answer' && (
+              <input type="text" placeholder="Expected answer (leave blank to grade manually)"
+                value={q.correct_answer} onChange={e => updateQ(idx, 'correct_answer', e.target.value)} style={IS} />
+            )}
+            {q.type === 'essay' && (
+              <p className="text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-200">Essay questions are graded manually.</p>
+            )}
+            {q.type === 'matching' && (
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-600">Matching Pairs</label>
+                {q.matching_pairs.map((pair, pi) => (
+                  <div key={pi} className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-semibold text-slate-500">Pair {pi + 1}</span>
+                      {q.matching_pairs.length > 2 && <button type="button" onClick={() => removePair(idx, pi)} className="text-xs text-red-400 hover:text-red-600">Remove</button>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><label className="block text-xs text-slate-500 mb-1">Left Item</label><input type="text" placeholder="e.g. HTML" value={pair.left_item} onChange={e => updatePair(idx, pi, 'left_item', e.target.value)} style={IS} /></div>
+                      <div><label className="block text-xs text-slate-500 mb-1">Right Item</label><input type="text" placeholder="e.g. Markup Language" value={pair.right_item} onChange={e => updatePair(idx, pi, 'right_item', e.target.value)} style={IS} /></div>
+                    </div>
+                    <div><label className="block text-xs text-slate-500 mb-1">Correct Match</label><input type="text" placeholder="e.g. Markup Language" value={pair.correct_match} onChange={e => updatePair(idx, pi, 'correct_match', e.target.value)} style={IS} /></div>
+                  </div>
+                ))}
+                <button type="button" onClick={() => addPair(idx)}
+                  className="w-full border-2 border-dashed border-slate-300 rounded-xl p-2 text-sm text-slate-400 hover:text-slate-600 transition-colors">
+                  + Add Pair
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+
+        <button type="button" onClick={() => setQuestions(p => [...p, newBlankQ()])}
+          className="w-full border-2 border-dashed border-slate-300 rounded-xl py-2 text-sm text-slate-400 hover:text-slate-600 transition-colors">
+          + Add Another Question
+        </button>
+
+        <div className="flex gap-3">
+          <button type="submit" disabled={saving}
+            className="bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 transition-colors">
+            {saving ? 'Saving...' : `Save ${questions.length} Question${questions.length > 1 ? 's' : ''}`}
+          </button>
+          <button type="button" onClick={onClose}
+            className="bg-slate-100 text-slate-700 px-6 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function InstructorAssessmentPage() {
   const { courseId, assessmentId } = useParams();
   const navigate = useNavigate();
@@ -220,6 +374,7 @@ export default function InstructorAssessmentPage() {
   const [gradeSaving, setGradeSaving] = useState(false);
   const [gradeError, setGradeError] = useState('');
   const [editingQuestion, setEditingQuestion] = useState(null);
+  const [showAddQuestion, setShowAddQuestion] = useState(false);
 
   const fetchAll = () => {
     Promise.all([
@@ -384,9 +539,29 @@ export default function InstructorAssessmentPage() {
       {/* Questions tab */}
       {tab === 'questions' && (
         <div className="space-y-3">
+          {/* Add Question button */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => setShowAddQuestion(v => !v)}
+              className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors"
+            >
+              {showAddQuestion ? '✕ Cancel' : '+ Add Question'}
+            </button>
+          </div>
+
+          {/* Inline add question form */}
+          {showAddQuestion && (
+            <AddQuestionForm
+              courseId={courseId}
+              assessmentId={assessmentId}
+              onSuccess={() => { setShowAddQuestion(false); fetchAll(); }}
+              onClose={() => setShowAddQuestion(false)}
+            />
+          )}
+
           {(!assessment.questions || assessment.questions.length === 0) ? (
             <p className="text-slate-500 bg-white rounded-xl border border-slate-200 p-6 text-center">
-              No questions yet. Go back to the course and use "+ Add Questions".
+              No questions yet. Click "+ Add Question" above to get started.
             </p>
           ) : (
             assessment.questions.map((q, idx) => (

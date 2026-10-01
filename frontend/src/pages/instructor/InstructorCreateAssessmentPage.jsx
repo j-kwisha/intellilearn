@@ -45,13 +45,22 @@ export default function InstructorCreateAssessmentPage() {
       if (!data.time_limit_minutes) delete data.time_limit_minutes;
       if (!data.available_from) delete data.available_from;
       if (!data.due_date) delete data.due_date;
-      const res = await api.post(`/courses/${courseId}/assessments`, data);
-      const created = res.data.assessment;
-      setAssessmentId(created.id);
+
+      let created;
+      if (assessmentId) {
+        // Assessment already exists — update it instead of creating a new one
+        const res = await api.put(`/courses/${courseId}/assessments/${assessmentId}`, data);
+        created = res.data.assessment;
+      } else {
+        // First time — create new assessment
+        const res = await api.post(`/courses/${courseId}/assessments`, data);
+        created = res.data.assessment;
+        setAssessmentId(created.id);
+      }
       setAssessmentTitle(created.title);
 
-      // Add to student calendars if toggled
-      if (addToCalendar && form.due_date) {
+      // Add to student calendars if toggled (only on first create)
+      if (!assessmentId && addToCalendar && form.due_date) {
         await api.post(`/courses/${courseId}/calendar`, {
           title: `📝 ${created.title}`,
           event_type: form.type === 'long_exam' ? 'exam' : 'quiz',
@@ -63,7 +72,7 @@ export default function InstructorCreateAssessmentPage() {
 
       setStep('questions');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create assessment.');
+      setError(err.response?.data?.message || 'Failed to save assessment.');
     } finally {
       setSaving(false);
     }
@@ -360,7 +369,7 @@ export default function InstructorCreateAssessmentPage() {
             </div>
             <div style={{ display: 'flex', gap: 12, paddingTop: 8 }}>
               <button type="submit" disabled={saving} style={{ ...S.btn, opacity: saving ? 0.7 : 1 }}>
-                {saving ? 'Creating...' : 'Create & Add Questions →'}
+                {saving ? 'Saving...' : assessmentId ? 'Save Changes →' : 'Create & Add Questions →'}
               </button>
               <button type="button" onClick={() => navigate(`/instructor/courses/${courseId}`)} style={S.btnGhost}>Cancel</button>
             </div>

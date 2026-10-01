@@ -346,8 +346,8 @@ export default function InstructorCoursePage() {
           <div style={{ display:'flex', justifyContent:'flex-end' }}>
             <button onClick={() => navigate(`/instructor/courses/${courseId}/assessments/create`)} className="instr-pill-btn">+ New Assessment</button>
           </div>
-          {showQuestionForm && <QuestionForm courseId={courseId} assessmentId={showQuestionForm} onClose={() => setShowQuestionForm(null)} onSuccess={() => { setShowQuestionForm(null); fetchData(); }} />}
-          {(showAssessmentForm || editingAssessment) && <AssessmentForm courseId={courseId} editAssessment={editingAssessment} onClose={() => { setShowAssessmentForm(false); setEditingAssessment(null); }} onSuccess={() => { setShowAssessmentForm(false); setEditingAssessment(null); fetchData(); }} />}
+          {showAssessmentForm && <AssessmentForm courseId={courseId} editAssessment={null} onClose={() => { setShowAssessmentForm(false); }} onSuccess={() => { setShowAssessmentForm(false); fetchData(); }} />}
+          {editingAssessment && <AssessmentForm courseId={courseId} editAssessment={editingAssessment} onClose={() => { setEditingAssessment(null); }} onSuccess={() => { setEditingAssessment(null); fetchData(); }} />}
           {assessments.length === 0 ? <div className="instr-tab-empty">No assessments yet.</div> : assessments.map((a) => (
             <div key={a.id} className="instr-item-card instr-item-card--amber">
               <div className="instr-item-icon instr-item-icon--amber">
@@ -357,9 +357,8 @@ export default function InstructorCoursePage() {
                 <div className="instr-item-title-row">
                   <span className="instr-item-title" style={{ cursor:'pointer' }} onClick={() => navigate(`/instructor/courses/${courseId}/assessments/${a.id}`)}>{a.title}</span>
                   <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-                    <button onClick={() => setShowQuestionForm(a.id)} className="instr-link-action">+ Questions</button>
-                    <button onClick={() => { setEditingAssessment(a); setShowAssessmentForm(false); }} className="instr-link-action">Edit</button>
-                    <button onClick={() => navigate(`/instructor/courses/${courseId}/assessments/${a.id}`)} className="instr-link-action">Results</button>
+                    <button onClick={() => navigate(`/instructor/courses/${courseId}/assessments/${a.id}`)} className="instr-link-action">Questions / Results</button>
+                    <button onClick={() => { setEditingAssessment(a); }} className="instr-link-action">Edit</button>
                     <button onClick={async () => { if (!confirm('Delete this assessment?')) return; await api.delete(`/courses/${courseId}/assessments/${a.id}`); fetchData(); }} className="instr-link-action instr-link-action--danger">Delete</button>
                   </div>
                 </div>

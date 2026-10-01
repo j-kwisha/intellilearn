@@ -136,13 +136,17 @@ export default function StudentCoursePage() {
                       )}
                     </div>
                   </div>
-                  {assessment.my_best_score !== null && assessment.my_best_score !== undefined && (
+                  {assessment.my_best_score !== null && assessment.my_best_score !== undefined ? (
                     <span className={`text-sm font-bold ${
                       assessment.my_best_score >= 75 ? 'text-emerald-600' : 'text-red-500'
                     }`}>
                       {assessment.my_best_score}%
                     </span>
-                  )}
+                  ) : assessment.my_attempts > 0 ? (
+                    <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
+                      ⏳ Pending Grade
+                    </span>
+                  ) : null}
                 </div>
               </Link>
             ))

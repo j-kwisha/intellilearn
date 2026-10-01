@@ -65,15 +65,22 @@ export default function StudentQuizPage() {
 
   // Show results
   if (result) {
+    const scoreHidden = result.percentage === null;
+    const isPending = result.status === 'submitted' || result.status === 'in_progress';
+
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className={`rounded-2xl p-8 text-center ${
-          result.percentage !== null && result.percentage >= 75 ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'
+          scoreHidden || isPending
+            ? 'bg-slate-50 border border-slate-200'
+            : result.percentage >= 75
+              ? 'bg-emerald-50 border border-emerald-200'
+              : 'bg-red-50 border border-red-200'
         }`}>
           <h2 className="text-2xl font-bold text-slate-800">
-            {result.status === 'graded' ? 'Results' : 'Submitted!'}
+            {isPending ? 'Submitted!' : 'Results'}
           </h2>
-          {result.percentage !== null ? (
+          {!scoreHidden ? (
             <>
               <p className={`text-5xl font-bold mt-4 ${
                 result.percentage >= 75 ? 'text-emerald-600' : 'text-red-500'
@@ -88,13 +95,14 @@ export default function StudentQuizPage() {
               </p>
             </>
           ) : (
-            <>
-              <p className="text-slate-600 mt-4 text-lg">
-                {result.status === 'submitted' 
-                  ? 'Your essay answers are pending review by the instructor.'
-                  : 'Your score is not visible at this time. The instructor will release it when ready.'}
+            <div className="mt-4 space-y-2">
+              <p className="text-3xl font-bold text-slate-400">⏳ Pending Grade</p>
+              <p className="text-slate-500 text-sm mt-2">
+                {isPending
+                  ? 'Your answers are pending review by the instructor.'
+                  : 'Your score will be visible once the instructor releases the grades.'}
               </p>
-            </>
+            </div>
           )}
         </div>
 
