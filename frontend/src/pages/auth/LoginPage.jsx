@@ -248,19 +248,19 @@ export default function LoginPage() {
             </svg>
 
             {/* ── text block ── */}
-            <div className={activeSlide===0?'ll-up':''} style={{ position:'relative',zIndex:10,padding:'50px 0 50px 58px',maxWidth:560 }}>
+            <div className={activeSlide===0?'ll-up':''} style={{ position:'relative',zIndex:10,padding:'80px 0 50px 58px',maxWidth:680 }}>
               {/* eyebrow */}
-              <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:16 }}>
-                <div style={{ width:24,height:1.5,background:'rgba(141,184,255,.8)',borderRadius:2 }} />
-                <span style={{ fontSize:12,fontWeight:600,color:'#8DB8FF',letterSpacing:'3px',textTransform:'uppercase',fontFamily:"'Plus Jakarta Sans',sans-serif" }}>INTELLILEARN</span>
-                <div style={{ width:24,height:1.5,background:'rgba(141,184,255,.8)',borderRadius:2 }} />
+              <div style={{ display:'flex',alignItems:'center',gap:12,marginBottom:24 }}>
+                <div style={{ width:32,height:2,background:'rgba(141,184,255,.8)',borderRadius:2 }} />
+                <span style={{ fontSize:15,fontWeight:700,color:'#8DB8FF',letterSpacing:'4px',textTransform:'uppercase',fontFamily:"'Plus Jakarta Sans',sans-serif" }}>INTELLILEARN</span>
+                <div style={{ width:32,height:2,background:'rgba(141,184,255,.8)',borderRadius:2 }} />
               </div>
 
-              {/* headline — 54px so "Learning That ✦" fits on ONE line */}
-              <h1 style={{ fontSize:54,fontWeight:800,lineHeight:1.08,margin:'0 0 18px',letterSpacing:'-1px',fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:'nowrap' }}>
+              {/* headline — increased from 54px to 84px */}
+              <h1 style={{ fontSize:84,fontWeight:800,lineHeight:1.05,margin:'0 0 28px',letterSpacing:'-2px',fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:'nowrap' }}>
                 <span style={{ color:'white',display:'block' }}>
                   Learning That&nbsp;
-                  <svg style={{ display:'inline-block',verticalAlign:'-3px' }} width="26" height="26" viewBox="0 0 26 26" fill="none">
+                  <svg style={{ display:'inline-block',verticalAlign:'-8px' }} width="42" height="42" viewBox="0 0 26 26" fill="none">
                     <path d="M13 0 L14.6 11.4 L26 13 L14.6 14.6 L13 26 L11.4 14.6 L0 13 L11.4 11.4 Z" fill="#7FD0FF"/>
                   </svg>
                 </span>
@@ -269,18 +269,18 @@ export default function LoginPage() {
                 </span>
               </h1>
 
-              <p style={{ fontSize:15,color:'rgba(255,255,255,.85)',lineHeight:1.7,maxWidth:440,marginBottom:34,fontFamily:"'DM Sans',sans-serif" }}>
+              <p style={{ fontSize:19,color:'rgba(255,255,255,.88)',lineHeight:1.65,maxWidth:560,marginBottom:42,fontFamily:"'DM Sans',sans-serif" }}>
                 Traditional LMS platforms stop at content delivery. IntelliLearn goes further — using AI to personalize learning, provide instant feedback, and support students in real time.
               </p>
 
               {/* glassmorphism search bar — z:10, always above waves */}
-              <div style={{ display:'flex',alignItems:'center',background:'rgba(255,255,255,.15)',backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',border:'1px solid rgba(255,255,255,.38)',borderRadius:999,maxWidth:460,height:58,overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.15)',position:'relative',zIndex:10 }}>
-                <div style={{ padding:'0 16px',display:'flex',alignItems:'center',flexShrink:0 }}>
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <div style={{ display:'flex',alignItems:'center',background:'rgba(255,255,255,.15)',backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',border:'1px solid rgba(255,255,255,.38)',borderRadius:999,maxWidth:520,height:64,overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.15)',position:'relative',zIndex:10 }}>
+                <div style={{ padding:'0 20px',display:'flex',alignItems:'center',flexShrink:0 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 </div>
-                <input type="text" placeholder="Search Courses" style={{ flex:1,border:'none',outline:'none',fontSize:14,color:'white',background:'transparent',height:'100%',fontFamily:"'Plus Jakarta Sans',sans-serif" }} />
-                <div style={{ display:'flex',alignItems:'center',gap:6,borderLeft:'1px solid rgba(255,255,255,.3)',padding:'0 18px',height:'100%',fontSize:13.5,fontWeight:700,color:'white',cursor:'pointer',whiteSpace:'nowrap',flexShrink:0 }}>
-                  Courses <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+                <input type="text" placeholder="Search Courses" style={{ flex:1,border:'none',outline:'none',fontSize:16,color:'white',background:'transparent',height:'100%',fontFamily:"'Plus Jakarta Sans',sans-serif" }} />
+                <div style={{ display:'flex',alignItems:'center',gap:8,borderLeft:'1px solid rgba(255,255,255,.3)',padding:'0 22px',height:'100%',fontSize:15,fontWeight:700,color:'white',cursor:'pointer',whiteSpace:'nowrap',flexShrink:0 }}>
+                  Courses <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
               </div>
             </div>
