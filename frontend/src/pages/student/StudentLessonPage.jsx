@@ -13,6 +13,7 @@ export default function StudentLessonPage() {
   const [lesson, setLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
+  const [markError, setMarkError] = useState('');
   const startTime = useRef(Date.now());
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function StudentLessonPage() {
 
   const markAsDone = async () => {
     setMarking(true);
+    setMarkError('');
     const secondsSpent = Math.round((Date.now() - startTime.current) / 1000);
 
     try {
@@ -34,6 +36,7 @@ export default function StudentLessonPage() {
       setLesson((prev) => ({ ...prev, my_progress: 'done' }));
     } catch (err) {
       console.error(err);
+      setMarkError(err.response?.data?.message || 'Could not mark lesson as done. Please try again.');
     } finally {
       setMarking(false);
     }
@@ -145,15 +148,22 @@ export default function StudentLessonPage() {
 
       {/* Mark as done button */}
       {lesson.my_progress !== 'done' && (
-        <button
-          onClick={markAsDone}
-          disabled={marking}
-          className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-semibold
-            hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2
-            disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {marking ? 'Saving...' : '✓ Mark as Done'}
-        </button>
+        <>
+          {markError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+              <p className="text-red-600 text-sm font-medium">{markError}</p>
+            </div>
+          )}
+          <button
+            onClick={markAsDone}
+            disabled={marking}
+            className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-semibold
+              hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2
+              disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {marking ? 'Saving...' : '✓ Mark as Done'}
+          </button>
+        </>
       )}
 
       {lesson.my_progress === 'done' && (

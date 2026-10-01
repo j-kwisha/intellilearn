@@ -13,7 +13,7 @@ export default function InstructorCreateAssessmentPage() {
   // Assessment form
   const [form, setForm] = useState({
     title: '', type: 'quiz', topic: '',
-    total_points: 100, time_limit_minutes: '', max_attempts: 1, is_published: true,
+    total_points: 100, time_limit_minutes: '', max_attempts: 1, is_published: false,
     available_from: '', due_date: '', score_visibility: 'immediate',
   });
   const [addToCalendar, setAddToCalendar] = useState(false);

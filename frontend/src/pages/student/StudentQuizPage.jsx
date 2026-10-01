@@ -23,9 +23,6 @@ export default function StudentQuizPage() {
   const startQuiz = async () => {
     try {
       const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/start`);
-      // Reload assessment to ensure questions are fresh
-      const assessmentRes = await api.get(`/courses/${courseId}/assessments/${assessmentId}`);
-      setAssessment(assessmentRes.data.assessment);
       setSubmission(res.data.submission);
     } catch (err) {
       setError(err.response?.data?.message || 'Could not start assessment.');

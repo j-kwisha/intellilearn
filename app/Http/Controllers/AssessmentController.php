@@ -49,9 +49,13 @@ class AssessmentController extends Controller
                     ->where('user_id', $user->id)
                     ->get();
 
-                $assessment->my_attempts = $submissions->count();
-                $assessment->my_best_score = $submissions->max('percentage');
-                $assessment->can_retake = $submissions->count() < $assessment->max_attempts;
+                $visibility = $assessment->score_visibility ?? 'immediate';
+                $scoresVisible = $visibility === 'immediate' ||
+                    ($visibility === 'instructor_release' && $assessment->scores_released_at !== null);
+
+                $assessment->my_attempts   = $submissions->count();
+                $assessment->my_best_score = $scoresVisible ? $submissions->max('percentage') : null;
+                $assessment->can_retake    = $submissions->count() < $assessment->max_attempts;
             });
         }
 

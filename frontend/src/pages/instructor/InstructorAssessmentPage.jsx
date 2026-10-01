@@ -2,6 +2,211 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
+// ── Inline question editor (for published assessments) ──────────────────────
+function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    question_text: question.question_text || '',
+    type: question.type || 'multiple_choice',
+    points: question.points || '',
+    correct_answer: question.correct_answer || '',
+    options: Array.isArray(question.options)
+      ? [...question.options]
+      : question.options
+        ? Object.values(question.options)
+        : ['', '', '', ''],
+    matching_pairs: question.matching_pairs?.length
+      ? question.matching_pairs.map(p => ({ left_item: p.left_item, right_item: p.right_item, correct_match: p.correct_match }))
+      : [{ left_item: '', right_item: '', correct_match: '' }, { left_item: '', right_item: '', correct_match: '' }],
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const updatePair = (pi, field, val) => {
+    const pairs = [...form.matching_pairs];
+    pairs[pi] = { ...pairs[pi], [field]: val };
+    setForm(f => ({ ...f, matching_pairs: pairs }));
+  };
+  const addPair = () => setForm(f => ({ ...f, matching_pairs: [...f.matching_pairs, { left_item: '', right_item: '', correct_match: '' }] }));
+  const removePair = (pi) => {
+    if (form.matching_pairs.length <= 2) return;
+    setForm(f => ({ ...f, matching_pairs: f.matching_pairs.filter((_, i) => i !== pi) }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true); setError('');
+    try {
+      const payload = {
+        question_text: form.question_text,
+        type: form.type,
+        points: parseFloat(form.points),
+      };
+      if (form.type === 'multiple_choice') {
+        payload.options = form.options.filter(o => o.trim() !== '');
+        payload.correct_answer = form.correct_answer;
+      } else if (form.type === 'true_false') {
+        payload.options = ['True', 'False'];
+        payload.correct_answer = form.correct_answer;
+      } else if (form.type === 'short_answer') {
+        payload.correct_answer = form.correct_answer;
+      } else if (form.type === 'matching') {
+        payload.matching_pairs = form.matching_pairs;
+      }
+      await api.put(`/courses/${courseId}/assessments/${assessmentId}/questions/${question.id}`, payload);
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save question.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle = { width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl"
+        onClick={e => e.stopPropagation()}>
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 text-base">Edit Question</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
+        </div>
+        <div className="p-5 space-y-4">
+          {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Question Text</label>
+            <textarea rows={3} style={{ ...inputStyle, resize: 'vertical' }}
+              value={form.question_text} onChange={e => setForm(f => ({ ...f, question_text: e.target.value }))} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Type</label>
+              <select style={{ ...inputStyle, background: 'white' }} value={form.type}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                <option value="multiple_choice">Multiple Choice</option>
+                <option value="true_false">True / False</option>
+                <option value="short_answer">Short Answer</option>
+                <option value="essay">Essay</option>
+                <option value="matching">Matching</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Points</label>
+              <input type="number" min={0.01} step={0.5} style={inputStyle}
+                value={form.points} onChange={e => setForm(f => ({ ...f, points: e.target.value }))} />
+            </div>
+          </div>
+
+          {/* Multiple choice */}
+          {form.type === 'multiple_choice' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Options (select correct)</label>
+              <div className="space-y-2">
+                {form.options.map((opt, oi) => (
+                  <div key={oi} className="flex items-center gap-2">
+                    <input type="radio" name="edit-correct" checked={form.correct_answer === opt && opt !== ''}
+                      onChange={() => { if (opt.trim()) setForm(f => ({ ...f, correct_answer: opt })); }}
+                      style={{ accentColor: '#0d9488', flexShrink: 0 }} />
+                    <input type="text" style={{ ...inputStyle, flex: 1 }} value={opt}
+                      onChange={e => {
+                        const opts = [...form.options]; opts[oi] = e.target.value;
+                        setForm(f => ({ ...f, options: opts }));
+                      }} />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-400 mt-1.5">Click the radio button to mark the correct answer.</p>
+            </div>
+          )}
+
+          {/* True/False */}
+          {form.type === 'true_false' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Correct Answer</label>
+              <div className="flex gap-3">
+                {['True', 'False'].map(v => (
+                  <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 18px', border: `1.5px solid ${form.correct_answer === v ? '#0d9488' : '#e2e8f0'}`, borderRadius: 8, fontWeight: 600, fontSize: '0.875rem', color: form.correct_answer === v ? '#0d9488' : '#475569', background: form.correct_answer === v ? '#f0fdfa' : 'white' }}>
+                    <input type="radio" name="edit-tf" value={v} checked={form.correct_answer === v}
+                      onChange={() => setForm(f => ({ ...f, correct_answer: v }))}
+                      style={{ accentColor: '#0d9488' }} />
+                    {v}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Short answer */}
+          {form.type === 'short_answer' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Expected Answer</label>
+              <input type="text" style={inputStyle} placeholder="Leave blank to grade manually"
+                value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))} />
+            </div>
+          )}
+
+          {/* Essay */}
+          {form.type === 'essay' && (
+            <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">Essay questions are graded manually.</p>
+          )}
+
+          {/* Matching pairs */}
+          {form.type === 'matching' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">Matching Pairs</label>
+              <div className="space-y-3">
+                {form.matching_pairs.map((pair, pi) => (
+                  <div key={pi} className="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-semibold text-slate-500">Pair {pi + 1}</span>
+                      {form.matching_pairs.length > 2 && (
+                        <button type="button" onClick={() => removePair(pi)}
+                          className="text-xs text-red-400 hover:text-red-600 font-medium">Remove</button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Left Item</label>
+                        <input type="text" style={inputStyle} value={pair.left_item}
+                          onChange={e => updatePair(pi, 'left_item', e.target.value)} placeholder="e.g. HTML" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Right Item</label>
+                        <input type="text" style={inputStyle} value={pair.right_item}
+                          onChange={e => updatePair(pi, 'right_item', e.target.value)} placeholder="e.g. Markup Language" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Correct Match (from right side)</label>
+                      <input type="text" style={inputStyle} value={pair.correct_match}
+                        onChange={e => updatePair(pi, 'correct_match', e.target.value)} placeholder="e.g. Markup Language" />
+                    </div>
+                  </div>
+                ))}
+                <button type="button" onClick={addPair}
+                  className="w-full border-2 border-dashed border-slate-300 rounded-xl p-2 text-sm text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors">
+                  + Add Pair
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="p-5 border-t border-slate-200 flex gap-3">
+          <button onClick={handleSave} disabled={saving}
+            className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 transition-colors">
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+          <button onClick={onClose}
+            className="bg-slate-100 text-slate-700 px-5 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InstructorAssessmentPage() {
   const { courseId, assessmentId } = useParams();
   const navigate = useNavigate();
@@ -14,6 +219,7 @@ export default function InstructorAssessmentPage() {
   const [grades, setGrades] = useState({});
   const [gradeSaving, setGradeSaving] = useState(false);
   const [gradeError, setGradeError] = useState('');
+  const [editingQuestion, setEditingQuestion] = useState(null);
 
   const fetchAll = () => {
     Promise.all([
@@ -216,6 +422,8 @@ export default function InstructorAssessmentPage() {
                   </div>
                   <button onClick={() => deleteQuestion(q.id)}
                     className="text-xs text-red-400 hover:text-red-600 shrink-0">Delete</button>
+                  <button onClick={() => setEditingQuestion(q)}
+                    className="text-xs text-teal-500 hover:text-teal-700 shrink-0">Edit</button>
                 </div>
               </div>
             ))
@@ -282,6 +490,17 @@ export default function InstructorAssessmentPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Edit Question Modal */}
+      {editingQuestion && (
+        <EditQuestionModal
+          question={editingQuestion}
+          courseId={courseId}
+          assessmentId={assessmentId}
+          onClose={() => setEditingQuestion(null)}
+          onSaved={() => { setEditingQuestion(null); fetchAll(); }}
+        />
       )}
 
       {/* Grading Modal */}

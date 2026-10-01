@@ -127,6 +127,7 @@ export default function InstructorCoursePage() {
 
   const [showLessonForm, setShowLessonForm] = useState(false);
   const [showAssessmentForm, setShowAssessmentForm] = useState(false);
+  const [editingAssessment, setEditingAssessment] = useState(null);
   const [showQuestionForm, setShowQuestionForm] = useState(null);
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -346,6 +347,7 @@ export default function InstructorCoursePage() {
             <button onClick={() => navigate(`/instructor/courses/${courseId}/assessments/create`)} className="instr-pill-btn">+ New Assessment</button>
           </div>
           {showQuestionForm && <QuestionForm courseId={courseId} assessmentId={showQuestionForm} onClose={() => setShowQuestionForm(null)} onSuccess={() => { setShowQuestionForm(null); fetchData(); }} />}
+          {(showAssessmentForm || editingAssessment) && <AssessmentForm courseId={courseId} editAssessment={editingAssessment} onClose={() => { setShowAssessmentForm(false); setEditingAssessment(null); }} onSuccess={() => { setShowAssessmentForm(false); setEditingAssessment(null); fetchData(); }} />}
           {assessments.length === 0 ? <div className="instr-tab-empty">No assessments yet.</div> : assessments.map((a) => (
             <div key={a.id} className="instr-item-card instr-item-card--amber">
               <div className="instr-item-icon instr-item-icon--amber">
@@ -356,6 +358,7 @@ export default function InstructorCoursePage() {
                   <span className="instr-item-title" style={{ cursor:'pointer' }} onClick={() => navigate(`/instructor/courses/${courseId}/assessments/${a.id}`)}>{a.title}</span>
                   <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
                     <button onClick={() => setShowQuestionForm(a.id)} className="instr-link-action">+ Questions</button>
+                    <button onClick={() => { setEditingAssessment(a); setShowAssessmentForm(false); }} className="instr-link-action">Edit</button>
                     <button onClick={() => navigate(`/instructor/courses/${courseId}/assessments/${a.id}`)} className="instr-link-action">Results</button>
                     <button onClick={async () => { if (!confirm('Delete this assessment?')) return; await api.delete(`/courses/${courseId}/assessments/${a.id}`); fetchData(); }} className="instr-link-action instr-link-action--danger">Delete</button>
                   </div>
@@ -520,17 +523,35 @@ function BtnRow({ children }) {
   return <div style={{ display:'flex', gap:'10px', paddingTop:'4px' }}>{children}</div>;
 }
 
-function AssessmentForm({ courseId, onClose, onSuccess }) {
-  const [form, setForm] = useState({ title: '', type: 'quiz', topic: '', total_points: 100, time_limit_minutes: '', max_attempts: 1, is_published: true });
+function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
+  const isEdit = !!editAssessment;
+  const [form, setForm] = useState(isEdit ? {
+    title: editAssessment.title || '',
+    type: editAssessment.type || 'quiz',
+    topic: editAssessment.topic || '',
+    total_points: editAssessment.total_points || 100,
+    time_limit_minutes: editAssessment.time_limit_minutes || '',
+    max_attempts: editAssessment.max_attempts || 1,
+    is_published: editAssessment.is_published || false,
+  } : { title: '', type: 'quiz', topic: '', total_points: 100, time_limit_minutes: '', max_attempts: 1, is_published: false });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true); setError('');
-    try { const data = { ...form }; if (!data.time_limit_minutes) delete data.time_limit_minutes; await api.post(`/courses/${courseId}/assessments`, data); onSuccess(); }
+    try {
+      const data = { ...form };
+      if (!data.time_limit_minutes) delete data.time_limit_minutes;
+      if (isEdit) {
+        await api.put(`/courses/${courseId}/assessments/${editAssessment.id}`, data);
+      } else {
+        await api.post(`/courses/${courseId}/assessments`, data);
+      }
+      onSuccess();
+    }
     catch (err) { setError(err.response?.data?.message || 'Failed.'); } finally { setSaving(false); }
   };
   return (
-    <FormCard title="Create New Assessment" error={error}>
+    <FormCard title={isEdit ? 'Edit Assessment' : 'Create New Assessment'} error={error}>
       <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
         <input type="text" placeholder="Assessment title" value={form.title} required onChange={e => setForm({...form, title:e.target.value})} className={FI} />
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
@@ -546,7 +567,7 @@ function AssessmentForm({ courseId, onClose, onSuccess }) {
         </div>
         <label className="instr-form-check"><input type="checkbox" checked={form.is_published} onChange={e => setForm({...form, is_published:e.target.checked})} /> Publish immediately</label>
         <BtnRow>
-          <button type="submit" disabled={saving} className="instr-pill-btn" style={{opacity:saving?.6:1}}>{saving ? 'Creating...' : 'Create Assessment'}</button>
+          <button type="submit" disabled={saving} className="instr-pill-btn" style={{opacity:saving?0.6:1}}>{saving ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Assessment')}</button>
           <button type="button" onClick={onClose} className="instr-outline-btn">Cancel</button>
         </BtnRow>
       </form>
@@ -594,19 +615,60 @@ function AnnouncementForm({ courseId, onClose, onSuccess }) {
   );
 }
 
+function newBlankQuestion() {
+  return { question_text:'', type:'multiple_choice', options:['','','',''], correct_answer:'', points:10,
+    matching_pairs:[{left_item:'',right_item:'',correct_match:''},{left_item:'',right_item:'',correct_match:''}] };
+}
+
 function QuestionForm({ courseId, assessmentId, onClose, onSuccess }) {
-  const [questions, setQuestions] = useState([{ question_text:'', type:'multiple_choice', options:['','','',''], correct_answer:'', points:10 }]);
+  const [questions, setQuestions] = useState([newBlankQuestion()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
   const updateQ = (i, f, v) => setQuestions(p => p.map((q, idx) => idx===i ? {...q, [f]:v} : q));
-  const updateOpt = (qi, oi, v) => setQuestions(p => p.map((q, i) => { if(i!==qi) return q; const o=[...q.options]; o[oi]=v; return {...q, options:o}; }));
+  const updateOpt = (qi, oi, v) => setQuestions(p => p.map((q, i) => {
+    if(i!==qi) return q; const o=[...q.options]; o[oi]=v; return {...q, options:o};
+  }));
+  const updatePair = (qi, pi, field, v) => setQuestions(p => p.map((q, i) => {
+    if(i!==qi) return q;
+    const pairs=[...q.matching_pairs]; pairs[pi]={...pairs[pi],[field]:v}; return {...q, matching_pairs:pairs};
+  }));
+  const addPair = (qi) => setQuestions(p => p.map((q,i) => i===qi ? {...q, matching_pairs:[...q.matching_pairs,{left_item:'',right_item:'',correct_match:''}]} : q));
+  const removePair = (qi, pi) => setQuestions(p => p.map((q,i) => {
+    if(i!==qi || q.matching_pairs.length<=2) return q;
+    return {...q, matching_pairs:q.matching_pairs.filter((_,idx)=>idx!==pi)};
+  }));
+
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true); setError('');
+    // Validate
+    for (let i=0; i<questions.length; i++) {
+      const q = questions[i];
+      if (!q.question_text.trim()) { setError(`Question ${i+1}: missing question text.`); setSaving(false); return; }
+      if (q.type==='matching') {
+        for (let j=0; j<q.matching_pairs.length; j++) {
+          const p=q.matching_pairs[j];
+          if (!p.left_item.trim()||!p.right_item.trim()||!p.correct_match.trim()) {
+            setError(`Question ${i+1}, Pair ${j+1}: all fields required.`); setSaving(false); return;
+          }
+        }
+      }
+    }
     try {
-      const cleaned = questions.map(q => { const out={...q}; if(q.type==='essay'){delete out.options; delete out.correct_answer;} else if(q.type==='short_answer'){delete out.options;} else{out.options=out.options.filter(o=>o.trim()!=='');} return out; });
-      await api.post(`/courses/${courseId}/assessments/${assessmentId}/questions/bulk`, { questions:cleaned }); onSuccess();
+      const cleaned = questions.map(q => {
+        const out={...q};
+        if(q.type==='essay'){ delete out.options; delete out.correct_answer; delete out.matching_pairs; }
+        else if(q.type==='short_answer'){ delete out.options; delete out.matching_pairs; }
+        else if(q.type==='true_false'){ out.options=['True','False']; delete out.matching_pairs; }
+        else if(q.type==='matching'){ delete out.options; delete out.correct_answer; }
+        else { out.options=out.options.filter(o=>o.trim()!==''); delete out.matching_pairs; }
+        return out;
+      });
+      await api.post(`/courses/${courseId}/assessments/${assessmentId}/questions/bulk`, { questions:cleaned });
+      onSuccess();
     } catch (err) { setError(err.response?.data?.message || 'Failed.'); } finally { setSaving(false); }
   };
+
   return (
     <FormCard title="Add Questions" error={error}>
       <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
@@ -620,17 +682,88 @@ function QuestionForm({ courseId, assessmentId, onClose, onSuccess }) {
               <textarea placeholder="Question text" value={q.question_text} rows={2} required onChange={e=>updateQ(idx,'question_text',e.target.value)} className={FI} style={{resize:'vertical'}} />
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' }}>
                 <select value={q.type} onChange={e=>updateQ(idx,'type',e.target.value)} className={FI}>
-                  <option value="multiple_choice">Multiple Choice</option><option value="true_false">True / False</option><option value="short_answer">Short Answer</option><option value="essay">Essay</option>
+                  <option value="multiple_choice">Multiple Choice</option>
+                  <option value="true_false">True / False</option>
+                  <option value="short_answer">Short Answer</option>
+                  <option value="essay">Essay</option>
+                  <option value="matching">Matching</option>
                 </select>
                 <input type="number" value={q.points} min={1} placeholder="Points" onChange={e=>updateQ(idx,'points',parseInt(e.target.value))} className={FI} />
               </div>
-              {q.type==='multiple_choice' && q.options.map((opt,oi) => <input key={oi} type="text" value={opt} placeholder={`Option ${oi+1}`} onChange={e=>updateOpt(idx,oi,e.target.value)} className={FI} />)}
-              {q.type==='true_false' && <p style={{ fontSize:'12px', color:'var(--instr-muted)' }}>Options will be True / False automatically.</p>}
-              {q.type!=='essay' && <input type="text" placeholder="Correct answer" value={q.correct_answer} onChange={e=>updateQ(idx,'correct_answer',e.target.value)} className={FI} />}
+
+              {/* Multiple choice */}
+              {q.type==='multiple_choice' && (
+                <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                  {q.options.map((opt,oi) => (
+                    <div key={oi} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                      <input type="radio" name={`correct-${idx}`} checked={q.correct_answer===opt && opt!==''}
+                        onChange={() => { if(opt.trim()) updateQ(idx,'correct_answer',opt); }}
+                        title="Mark as correct" style={{flexShrink:0, accentColor:'#2e7d52'}} />
+                      <input type="text" value={opt} placeholder={`Option ${oi+1}`} onChange={e=>updateOpt(idx,oi,e.target.value)} className={FI} style={{flex:1}} />
+                    </div>
+                  ))}
+                  <p style={{ fontSize:'12px', color:'var(--instr-muted)' }}>Click the radio button next to the correct answer.</p>
+                </div>
+              )}
+
+              {/* True / False */}
+              {q.type==='true_false' && (
+                <div style={{ display:'flex', gap:'10px' }}>
+                  {['True','False'].map(v => (
+                    <label key={v} style={{ display:'flex', alignItems:'center', gap:'6px', cursor:'pointer', padding:'8px 16px', border:`1.5px solid ${q.correct_answer===v?'var(--instr-green-600)':'var(--instr-line)'}`, borderRadius:'8px', fontWeight:600, fontSize:'13.5px', color:q.correct_answer===v?'var(--instr-green-600)':'var(--instr-ink-soft)', background:q.correct_answer===v?'var(--instr-green-50, #f0fdf4)':'transparent' }}>
+                      <input type="radio" name={`tf-${idx}`} value={v} checked={q.correct_answer===v} onChange={()=>updateQ(idx,'correct_answer',v)} style={{accentColor:'#2e7d52'}} />
+                      {v}
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {/* Short answer */}
+              {q.type==='short_answer' && (
+                <input type="text" placeholder="Expected answer (leave blank to grade manually)" value={q.correct_answer} onChange={e=>updateQ(idx,'correct_answer',e.target.value)} className={FI} />
+              )}
+
+              {/* Essay */}
+              {q.type==='essay' && (
+                <p style={{ fontSize:'12px', color:'var(--instr-muted)', background:'var(--instr-bg)', padding:'10px 12px', borderRadius:'8px' }}>Essay questions are graded manually.</p>
+              )}
+
+              {/* Matching pairs */}
+              {q.type==='matching' && (
+                <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                  <span style={{ fontSize:'12.5px', fontWeight:600, color:'var(--instr-ink-soft)' }}>Matching Pairs</span>
+                  {q.matching_pairs.map((pair, pi) => (
+                    <div key={pi} style={{ border:'1px solid var(--instr-line)', borderRadius:'10px', padding:'12px', background:'var(--instr-bg)' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'8px' }}>
+                        <span style={{ fontSize:'12px', fontWeight:600, color:'var(--instr-muted)' }}>Pair {pi+1}</span>
+                        {q.matching_pairs.length>2 && <button type="button" onClick={()=>removePair(idx,pi)} className="instr-link-action instr-link-action--danger" style={{fontSize:'12px'}}>Remove</button>}
+                      </div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', marginBottom:'8px' }}>
+                        <div>
+                          <label className="instr-form-label" style={{fontSize:'11px'}}>Left Item</label>
+                          <input type="text" placeholder="e.g. HTML" value={pair.left_item} onChange={e=>updatePair(idx,pi,'left_item',e.target.value)} className={FI} />
+                        </div>
+                        <div>
+                          <label className="instr-form-label" style={{fontSize:'11px'}}>Right Item</label>
+                          <input type="text" placeholder="e.g. Markup Language" value={pair.right_item} onChange={e=>updatePair(idx,pi,'right_item',e.target.value)} className={FI} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="instr-form-label" style={{fontSize:'11px'}}>Correct Match (from right side)</label>
+                        <input type="text" placeholder="e.g. Markup Language" value={pair.correct_match} onChange={e=>updatePair(idx,pi,'correct_match',e.target.value)} className={FI} />
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" onClick={()=>addPair(idx)}
+                    style={{ border:'2px dashed var(--instr-line)', borderRadius:'8px', padding:'8px', fontSize:'13px', fontWeight:600, color:'var(--instr-muted)', cursor:'pointer', background:'none', fontFamily:'Inter,sans-serif' }}>
+                    + Add Pair
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
-        <button type="button" onClick={() => setQuestions(p=>[...p,{question_text:'',type:'multiple_choice',options:['','','',''],correct_answer:'',points:10}])}
+        <button type="button" onClick={() => setQuestions(p=>[...p,newBlankQuestion()])}
           style={{ width:'100%', border:'2px dashed var(--instr-line)', borderRadius:'10px', padding:'10px', fontSize:'13.5px', fontWeight:600, color:'var(--instr-muted)', cursor:'pointer', background:'none', fontFamily:'Inter,sans-serif' }}>
           + Add Another Question
         </button>
