@@ -235,10 +235,10 @@ class AssessmentController extends Controller
             'correct_answer' => ['nullable', 'string'],
             'points'         => ['nullable', 'numeric', 'min:0.01'],
             'order'          => ['nullable', 'integer', 'min:0'],
-            'matching_pairs' => ['nullable', 'array', 'min:2'],
-            'matching_pairs.*.left_item'     => ['required_with:matching_pairs', 'string'],
-            'matching_pairs.*.right_item'    => ['required_with:matching_pairs', 'string'],
-            'matching_pairs.*.correct_match' => ['required_with:matching_pairs', 'string'],
+            'matching_pairs'                 => ['nullable', 'array', 'min:2'],
+            'matching_pairs.*.left_item'     => ['nullable', 'string'],
+            'matching_pairs.*.right_item'    => ['nullable', 'string'],
+            'matching_pairs.*.correct_match' => ['nullable', 'string'],
         ]);
 
         // Require options for multiple choice
@@ -312,10 +312,10 @@ class AssessmentController extends Controller
             'questions.*.options'        => ['nullable', 'array'],
             'questions.*.correct_answer' => ['nullable', 'string'],
             'questions.*.points'         => ['nullable', 'numeric', 'min:0.01'],
-            'questions.*.matching_pairs' => ['nullable', 'array', 'min:2'],
-            'questions.*.matching_pairs.*.left_item'     => ['required_with:questions.*.matching_pairs', 'string'],
-            'questions.*.matching_pairs.*.right_item'    => ['required_with:questions.*.matching_pairs', 'string'],
-            'questions.*.matching_pairs.*.correct_match' => ['required_with:questions.*.matching_pairs', 'string'],
+            'questions.*.matching_pairs'             => ['nullable', 'array', 'min:2'],
+            'questions.*.matching_pairs.*.left_item'     => ['nullable', 'string'],
+            'questions.*.matching_pairs.*.right_item'    => ['nullable', 'string'],
+            'questions.*.matching_pairs.*.correct_match' => ['nullable', 'string'],
         ]);
 
         $startOrder = $assessment->questions()->count();
@@ -377,10 +377,10 @@ class AssessmentController extends Controller
             'correct_answer' => ['nullable', 'string'],
             'points'         => ['sometimes', 'numeric', 'min:0.01'],
             'order'          => ['sometimes', 'integer', 'min:0'],
-            'matching_pairs' => ['nullable', 'array', 'min:2'],
-            'matching_pairs.*.left_item'     => ['required_with:matching_pairs', 'string'],
-            'matching_pairs.*.right_item'    => ['required_with:matching_pairs', 'string'],
-            'matching_pairs.*.correct_match' => ['required_with:matching_pairs', 'string'],
+            'matching_pairs'                 => ['nullable', 'array', 'min:2'],
+            'matching_pairs.*.left_item'     => ['nullable', 'string'],
+            'matching_pairs.*.right_item'    => ['nullable', 'string'],
+            'matching_pairs.*.correct_match' => ['nullable', 'string'],
         ]);
 
         $question->update($validated);
