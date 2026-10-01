@@ -34,14 +34,15 @@ export default function GoogleCallback() {
           localStorage.setItem('token', data.token);
           localStorage.setItem('user', JSON.stringify(data.user));
 
-          // Redirect based on user role
-          if (data.user.role === 'admin') {
-            navigate('/admin');
-          } else if (data.user.role === 'instructor') {
-            navigate('/instructor');
-          } else {
-            navigate('/student');
-          }
+          // Small delay to ensure localStorage is written
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Force reload to ensure auth context picks up the new token
+          window.location.href = data.user.role === 'admin' 
+            ? '/admin' 
+            : data.user.role === 'instructor' 
+            ? '/instructor' 
+            : '/student';
         } else {
           throw new Error('No token received from server');
         }
