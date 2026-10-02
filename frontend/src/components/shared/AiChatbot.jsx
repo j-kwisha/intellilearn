@@ -4,6 +4,10 @@ import api from '../../services/api';
 import chatbotAvatar from '../../assets/chatbot_avatar.png';
 const AVATAR_URL = chatbotAvatar;
 
+// Video paths - place your video files in frontend/public/videos/
+const PEEKING_VIDEO = '/videos/chatbot-peeking.mp4';  // 2-3 second intro animation
+const IDLE_VIDEO = '/videos/chatbot-idle.mp4';        // Looping idle animation
+
 // Simple markdown renderer
 function MarkdownText({ text }) {
   const lines = text.split('\n');
@@ -77,6 +81,7 @@ export default function AiChatbot() {
   const [showGreeting, setShowGreeting] = useState(false);
   const [greetingDismissed, setGreetingDismissed] = useState(false);
   const [bouncing, setBouncing] = useState(false);
+  const [videoState, setVideoState] = useState('peeking'); // 'peeking', 'idle', or 'static'
   const [messages, setMessages] = useState([
     { from: 'bot', text: "Hi! I'm your course assistant. Ask me anything about your courses, grades, or assessments." }
   ]);
@@ -85,6 +90,8 @@ export default function AiChatbot() {
   const bottomRef = useRef(null);
   const greetingTimer = useRef(null);
   const dismissTimer = useRef(null);
+  const peekingVideoRef = useRef(null);
+  const idleVideoRef = useRef(null);
 
   // Show greeting bubble after 3s, auto-dismiss after 5s
   useEffect(() => {
@@ -103,6 +110,30 @@ export default function AiChatbot() {
     }
     return () => clearTimeout(dismissTimer.current);
   }, [showGreeting]);
+
+  // Handle video transitions: peeking → idle
+  useEffect(() => {
+    const peekingVid = peekingVideoRef.current;
+    const idleVid = idleVideoRef.current;
+
+    if (peekingVid && videoState === 'peeking') {
+      // When peeking video ends, switch to idle
+      const handlePeekingEnd = () => {
+        setVideoState('idle');
+        if (idleVid) {
+          idleVid.play();
+        }
+      };
+      peekingVid.addEventListener('ended', handlePeekingEnd);
+      peekingVid.play();
+
+      return () => peekingVid.removeEventListener('ended', handlePeekingEnd);
+    }
+
+    if (idleVid && videoState === 'idle') {
+      idleVid.play();
+    }
+  }, [videoState]);
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -335,7 +366,7 @@ export default function AiChatbot() {
             title="Course Assistant"
             style={{
               width: 58, height: 58, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+              background: open ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : 'transparent',
               border: '3px solid white',
               cursor: 'pointer', padding: 0, overflow: 'hidden',
               boxShadow: '0 4px 20px rgba(79,70,229,0.45)',
@@ -344,12 +375,57 @@ export default function AiChatbot() {
               position: 'relative', zIndex: 1,
             }}
           >
-            {open
-              ? <span style={{ color: 'white', fontSize: 20, fontWeight: 700 }}>✕</span>
-              : AVATAR_URL
-                ? <img src={AVATAR_URL} alt="Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <span style={{ fontSize: 26 }}>🤖</span>
-            }
+            {open ? (
+              <span style={{ color: 'white', fontSize: 20, fontWeight: 700 }}>✕</span>
+            ) : (
+              <>
+                {/* Peeking video (intro animation) */}
+                <video
+                  ref={peekingVideoRef}
+                  src={PEEKING_VIDEO}
+                  muted
+                  playsInline
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: videoState === 'peeking' ? 'block' : 'none',
+                  }}
+                  onError={(e) => {
+                    console.warn('Peeking video failed to load, using fallback');
+                    setVideoState('static');
+                  }}
+                />
+
+                {/* Idle video (looping animation) */}
+                <video
+                  ref={idleVideoRef}
+                  src={IDLE_VIDEO}
+                  muted
+                  loop
+                  playsInline
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: videoState === 'idle' ? 'block' : 'none',
+                  }}
+                  onError={(e) => {
+                    console.warn('Idle video failed to load, using fallback');
+                    setVideoState('static');
+                  }}
+                />
+
+                {/* Fallback static image */}
+                {videoState === 'static' && (
+                  AVATAR_URL ? (
+                    <img src={AVATAR_URL} alt="Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: 26 }}>🤖</span>
+                  )
+                )}
+              </>
+            )}
           </button>
         </div>
       </div>
