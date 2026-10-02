@@ -131,17 +131,18 @@ export default function AiChatbot() {
     }
 
     if (idleVid && videoState === 'idle') {
-      // Restart idle video when it ends (so waving animation replays)
-      const handleIdleEnd = () => {
-        idleVid.currentTime = 0; // Reset to start
-        idleVid.play();           // Play again from beginning
-      };
-      idleVid.addEventListener('ended', handleIdleEnd);
       idleVid.play();
-
-      return () => idleVid.removeEventListener('ended', handleIdleEnd);
     }
   }, [videoState]);
+
+  // Restart idle video on hover
+  const handleMouseEnter = () => {
+    const idleVid = idleVideoRef.current;
+    if (idleVid && videoState === 'idle' && !open) {
+      idleVid.currentTime = 0; // Reset to start
+      idleVid.play();           // Replay from beginning
+    }
+  };
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -371,6 +372,7 @@ export default function AiChatbot() {
           <button
             className="chat-avatar-btn"
             onClick={handleToggle}
+            onMouseEnter={handleMouseEnter}
             title="Course Assistant"
             style={{
               width: 100, 
@@ -430,6 +432,7 @@ export default function AiChatbot() {
                   ref={idleVideoRef}
                   src={IDLE_VIDEO}
                   muted
+                  loop
                   playsInline
                   style={{
                     width: '100%',
