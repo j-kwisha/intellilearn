@@ -365,21 +365,40 @@ export default function AiChatbot() {
             onClick={handleToggle}
             title="Course Assistant"
             style={{
-              width: 58, height: 58, borderRadius: '50%',
-              background: open ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : 'transparent',
-              border: '3px solid white',
-              cursor: 'pointer', padding: 0, overflow: 'hidden',
-              boxShadow: '0 4px 20px rgba(79,70,229,0.45)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 100, 
+              height: 100, 
+              borderRadius: 0,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer', 
+              padding: 0, 
+              overflow: 'visible',
+              boxShadow: 'none',
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
               animation: bouncing ? 'chatBounce 0.5s ease both' : 'none',
-              position: 'relative', zIndex: 1,
+              position: 'relative', 
+              zIndex: 1,
             }}
           >
             {open ? (
-              <span style={{ color: 'white', fontSize: 20, fontWeight: 700 }}>✕</span>
+              <div style={{
+                width: 58,
+                height: 58,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                border: '3px solid white',
+                boxShadow: '0 4px 20px rgba(79,70,229,0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <span style={{ color: 'white', fontSize: 20, fontWeight: 700 }}>✕</span>
+              </div>
             ) : (
               <>
-                {/* Peeking video (intro animation) */}
+                {/* Peeking video (intro animation) - NO circular mask */}
                 <video
                   ref={peekingVideoRef}
                   src={PEEKING_VIDEO}
@@ -388,8 +407,9 @@ export default function AiChatbot() {
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',
+                    objectFit: 'contain',
                     display: videoState === 'peeking' ? 'block' : 'none',
+                    filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.2))',
                   }}
                   onError={(e) => {
                     console.warn('Peeking video failed to load, using fallback');
@@ -397,7 +417,7 @@ export default function AiChatbot() {
                   }}
                 />
 
-                {/* Idle video (looping animation) */}
+                {/* Idle video (looping animation) - NO circular mask */}
                 <video
                   ref={idleVideoRef}
                   src={IDLE_VIDEO}
@@ -407,8 +427,9 @@ export default function AiChatbot() {
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',
+                    objectFit: 'contain',
                     display: videoState === 'idle' ? 'block' : 'none',
+                    filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.2))',
                   }}
                   onError={(e) => {
                     console.warn('Idle video failed to load, using fallback');
@@ -416,13 +437,26 @@ export default function AiChatbot() {
                   }}
                 />
 
-                {/* Fallback static image */}
+                {/* Fallback static image in circle */}
                 {videoState === 'static' && (
-                  AVATAR_URL ? (
-                    <img src={AVATAR_URL} alt="Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ fontSize: 26 }}>🤖</span>
-                  )
+                  <div style={{
+                    width: 58,
+                    height: 58,
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                    border: '3px solid white',
+                    boxShadow: '0 4px 20px rgba(79,70,229,0.45)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                  }}>
+                    {AVATAR_URL ? (
+                      <img src={AVATAR_URL} alt="Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontSize: 26 }}>🤖</span>
+                    )}
+                  </div>
                 )}
               </>
             )}
