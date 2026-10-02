@@ -536,18 +536,38 @@ function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
     title: editAssessment.title || '',
     type: editAssessment.type || 'quiz',
     topic: editAssessment.topic || '',
-    total_points: editAssessment.total_points || 100,
     time_limit_minutes: editAssessment.time_limit_minutes || '',
     max_attempts: editAssessment.max_attempts || 1,
     is_published: editAssessment.is_published || false,
-  } : { title: '', type: 'quiz', topic: '', total_points: 100, time_limit_minutes: '', max_attempts: 1, is_published: false });
+  } : { title: '', type: 'quiz', topic: '', time_limit_minutes: '', max_attempts: 1, is_published: false });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  
   const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true); setError('');
+    e.preventDefault(); 
+    
+    // Validation
+    if (!form.title.trim()) {
+      setError('Assessment title is required.');
+      return;
+    }
+    if (!form.type) {
+      setError('Assessment type is required.');
+      return;
+    }
+    if (!form.max_attempts || form.max_attempts < 1) {
+      setError('Max attempts must be at least 1.');
+      return;
+    }
+    
+    setSaving(true); 
+    setError('');
     try {
       const data = { ...form };
       if (!data.time_limit_minutes) delete data.time_limit_minutes;
+      // Remove total_points - will be calculated from questions
+      delete data.total_points;
+      
       if (isEdit) {
         await api.put(`/courses/${courseId}/assessments/${editAssessment.id}`, data);
       } else {
@@ -557,22 +577,25 @@ function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
     }
     catch (err) { setError(err.response?.data?.message || 'Failed.'); } finally { setSaving(false); }
   };
+  
   return (
     <FormCard title={isEdit ? 'Edit Assessment' : 'Create New Assessment'} error={error}>
       <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-        <input type="text" placeholder="Assessment title" value={form.title} required onChange={e => setForm({...form, title:e.target.value})} className={FI} />
+        <input type="text" placeholder="Assessment title *" value={form.title} required onChange={e => setForm({...form, title:e.target.value})} className={FI} />
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
-          <select value={form.type} onChange={e => setForm({...form, type:e.target.value})} className={FI}>
+          <select value={form.type} onChange={e => setForm({...form, type:e.target.value})} className={FI} required>
             <option value="quiz">Quiz</option><option value="long_exam">Long Exam</option><option value="individual_activity">Individual Activity</option>
           </select>
-          <input type="text" placeholder="Topic tag" value={form.topic} onChange={e => setForm({...form, topic:e.target.value})} className={FI} />
+          <input type="text" placeholder="Topic tag (optional)" value={form.topic} onChange={e => setForm({...form, topic:e.target.value})} className={FI} />
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px' }}>
-          <div><label className="instr-form-label">Total points</label><input type="number" value={form.total_points} min={1} onChange={e => setForm({...form, total_points:parseInt(e.target.value)})} className={FI} /></div>
-          <div><label className="instr-form-label">Time limit (min)</label><input type="number" value={form.time_limit_minutes} placeholder="No limit" onChange={e => setForm({...form, time_limit_minutes:e.target.value})} className={FI} /></div>
-          <div><label className="instr-form-label">Max attempts</label><input type="number" value={form.max_attempts} min={1} onChange={e => setForm({...form, max_attempts:parseInt(e.target.value)})} className={FI} /></div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+          <div><label className="instr-form-label">Time limit (minutes)</label><input type="number" value={form.time_limit_minutes} placeholder="No limit" min={1} onChange={e => setForm({...form, time_limit_minutes:e.target.value})} className={FI} /></div>
+          <div><label className="instr-form-label">Max attempts *</label><input type="number" value={form.max_attempts} min={1} required onChange={e => setForm({...form, max_attempts:parseInt(e.target.value)||1})} className={FI} /></div>
         </div>
         <label className="instr-form-check"><input type="checkbox" checked={form.is_published} onChange={e => setForm({...form, is_published:e.target.checked})} /> Publish immediately</label>
+        <p style={{ fontSize:'12px', color:'var(--instr-muted)', background:'var(--instr-bg)', padding:'8px 12px', borderRadius:'6px', margin:0 }}>
+          ℹ️ Total points will be calculated based on the questions you add.
+        </p>
         <BtnRow>
           <button type="submit" disabled={saving} className="instr-pill-btn" style={{opacity:saving?0.6:1}}>{saving ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Assessment')}</button>
           <button type="button" onClick={onClose} className="instr-outline-btn">Cancel</button>
@@ -623,8 +646,12 @@ function AnnouncementForm({ courseId, onClose, onSuccess }) {
 }
 
 function newBlankQuestion() {
-  return { question_text:'', type:'multiple_choice', options:['','','',''], correct_answer:'', points:10,
-    matching_pairs:[{left_item:'',right_item:'',correct_match:''},{left_item:'',right_item:'',correct_match:''}] };
+  return { question_text:'', type:'multiple_choice', options:['','','',''], correct_answer:'', points:1,
+    matching_pairs:[
+      {left_item:'',right_item:'',correct_match:''},
+      {left_item:'',right_item:'',correct_match:''}
+    ] 
+  };
 }
 
 function QuestionForm({ courseId, assessmentId, onClose, onSuccess }) {
@@ -738,26 +765,27 @@ function QuestionForm({ courseId, assessmentId, onClose, onSuccess }) {
               {/* Matching pairs */}
               {q.type==='matching' && (
                 <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
-                  <span style={{ fontSize:'12.5px', fontWeight:600, color:'var(--instr-ink-soft)' }}>Matching Pairs</span>
+                  <span style={{ fontSize:'12.5px', fontWeight:600, color:'var(--instr-ink-soft)' }}>Matching Pairs (Term → Definition)</span>
+                  <p style={{ fontSize:'11px', color:'var(--instr-muted)', margin:0 }}>Enter the term and its correct definition side by side</p>
                   {q.matching_pairs.map((pair, pi) => (
                     <div key={pi} style={{ border:'1px solid var(--instr-line)', borderRadius:'10px', padding:'12px', background:'var(--instr-bg)' }}>
                       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'8px' }}>
                         <span style={{ fontSize:'12px', fontWeight:600, color:'var(--instr-muted)' }}>Pair {pi+1}</span>
                         {q.matching_pairs.length>2 && <button type="button" onClick={()=>removePair(idx,pi)} className="instr-link-action instr-link-action--danger" style={{fontSize:'12px'}}>Remove</button>}
                       </div>
-                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', marginBottom:'8px' }}>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
                         <div>
-                          <label className="instr-form-label" style={{fontSize:'11px'}}>Left Item</label>
+                          <label className="instr-form-label" style={{fontSize:'11px'}}>Term</label>
                           <input type="text" placeholder="e.g. HTML" value={pair.left_item} onChange={e=>updatePair(idx,pi,'left_item',e.target.value)} className={FI} />
                         </div>
                         <div>
-                          <label className="instr-form-label" style={{fontSize:'11px'}}>Right Item</label>
-                          <input type="text" placeholder="e.g. Markup Language" value={pair.right_item} onChange={e=>updatePair(idx,pi,'right_item',e.target.value)} className={FI} />
+                          <label className="instr-form-label" style={{fontSize:'11px'}}>Definition</label>
+                          <input type="text" placeholder="e.g. Markup Language" value={pair.right_item} onChange={e=>{
+                            updatePair(idx,pi,'right_item',e.target.value);
+                            // Auto-set correct_match to match right_item
+                            updatePair(idx,pi,'correct_match',e.target.value);
+                          }} className={FI} />
                         </div>
-                      </div>
-                      <div>
-                        <label className="instr-form-label" style={{fontSize:'11px'}}>Correct Match (from right side)</label>
-                        <input type="text" placeholder="e.g. Markup Language" value={pair.correct_match} onChange={e=>updatePair(idx,pi,'correct_match',e.target.value)} className={FI} />
                       </div>
                     </div>
                   ))}

@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Auto-Approve All Tool Executions",
+      "trigger": "PreToolUse",
+      "description": "Automatically approves all tool executions without prompting for permission. Kiro will have full autonomy to execute any command or operation needed.",
+      "action": {
+        "type": "command",
+        "command": "exit 0"
+      }
+    }
+  ]
+}

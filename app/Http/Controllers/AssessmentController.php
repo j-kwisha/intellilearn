@@ -84,14 +84,16 @@ class AssessmentController extends Controller
             'type'               => ['required', 'in:quiz,long_exam,individual_activity'],
             'topic'              => ['nullable', 'string', 'max:255'],
             'lesson_id'          => ['nullable', 'exists:lessons,id'],
-            'total_points'       => ['nullable', 'numeric', 'min:1'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
-            'max_attempts'       => ['nullable', 'integer', 'min:1'],
+            'max_attempts'       => ['required', 'integer', 'min:1'],
             'available_from'     => ['nullable', 'date'],
             'due_date'           => ['nullable', 'date', 'after:available_from'],
             'is_published'       => ['nullable', 'boolean'],
             'score_visibility'   => ['nullable', 'in:immediate,instructor_release,hidden'],
         ]);
+
+        // Total points will be calculated from questions, set to 0 initially
+        $validated['total_points'] = 0;
 
         $assessment = $course->assessments()->create($validated);
 
@@ -166,7 +168,6 @@ class AssessmentController extends Controller
             'type'               => ['sometimes', 'in:quiz,long_exam,individual_activity'],
             'topic'              => ['nullable', 'string', 'max:255'],
             'lesson_id'          => ['nullable', 'exists:lessons,id'],
-            'total_points'       => ['sometimes', 'numeric', 'min:1'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
             'max_attempts'       => ['sometimes', 'integer', 'min:1'],
             'available_from'     => ['nullable', 'date'],
@@ -176,6 +177,10 @@ class AssessmentController extends Controller
         ]);
 
         $assessment->update($validated);
+        
+        // Recalculate total_points from questions
+        $totalPoints = $assessment->questions()->sum('points');
+        $assessment->update(['total_points' => $totalPoints]);
 
         return response()->json([
             'message'    => 'Assessment updated successfully.',
@@ -279,6 +284,9 @@ class AssessmentController extends Controller
             $question->load('matchingPairs');
         }
 
+        // Recalculate assessment total_points
+        $assessment->update(['total_points' => $assessment->questions()->sum('points')]);
+
         return response()->json([
             'message'  => 'Question added successfully.',
             'question' => $question,
@@ -347,6 +355,9 @@ class AssessmentController extends Controller
             $created[] = $question;
         }
 
+        // Recalculate assessment total_points
+        $assessment->update(['total_points' => $assessment->questions()->sum('points')]);
+
         return response()->json([
             'message'   => count($created) . ' questions added successfully.',
             'questions' => $created,
@@ -404,6 +415,9 @@ class AssessmentController extends Controller
             $question->load('matchingPairs');
         }
 
+        // Recalculate assessment total_points
+        $question->assessment->update(['total_points' => $question->assessment->questions()->sum('points')]);
+
         return response()->json([
             'message'  => 'Question updated successfully.',
             'question' => $question,
@@ -427,7 +441,14 @@ class AssessmentController extends Controller
             return response()->json(['message' => 'Question not found in this assessment.'], 404);
         }
 
+        $assessmentId = $question->assessment_id;
         $question->delete();
+
+        // Recalculate assessment total_points
+        $assessment = Assessment::find($assessmentId);
+        if ($assessment) {
+            $assessment->update(['total_points' => $assessment->questions()->sum('points')]);
+        }
 
         return response()->json(['message' => 'Question deleted successfully.']);
     }

@@ -20,6 +20,23 @@ export default function StudentQuizPage() {
       .finally(() => setLoading(false));
   }, [courseId, assessmentId]);
 
+  // Add warning when user tries to leave page during assessment
+  useEffect(() => {
+    if (submission && !result) {
+      const handleBeforeUnload = (e) => {
+        e.preventDefault();
+        e.returnValue = 'You have an assessment in progress. If you leave now, your current answers will be saved but you may not be able to continue this attempt.';
+        return e.returnValue;
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
+    }
+  }, [submission, result]);
+
   const startQuiz = async () => {
     try {
       const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/start`);
@@ -245,6 +262,17 @@ export default function StudentQuizPage() {
   // Show questions
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Warning banner */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+        <span className="text-amber-600 text-xl flex-shrink-0">⚠️</span>
+        <div>
+          <p className="text-sm font-semibold text-amber-800">Assessment in Progress</p>
+          <p className="text-xs text-amber-700 mt-1">
+            If you leave this page, your current answers will be saved but you may not be able to continue this attempt. Make sure to submit your answers before leaving.
+          </p>
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h2 className="text-lg font-bold text-slate-800">{assessment.title}</h2>
         <p className="text-sm text-slate-500 mt-1">
