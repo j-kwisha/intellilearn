@@ -228,9 +228,17 @@ export default function InstructorCoursePage() {
 
     try {
       await api.delete(`/courses/${courseId}/lessons/${lessonId}`);
-      setLessons(lessons.filter(l => l.id !== lessonId));
+      // Update lessons state
+      setLessons(prevLessons => prevLessons.filter(l => l.id !== lessonId));
+      // Hide material form if it was open for this lesson
+      if (showMaterialForm === lessonId) {
+        setShowMaterialForm(null);
+      }
+      // Show success message
+      alert(`Lesson "${lessonTitle}" deleted successfully.`);
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to delete lesson.');
+      console.error('Delete lesson error:', err);
+      alert(err.response?.data?.message || 'Failed to delete lesson. Please try again.');
     }
   };
 
@@ -802,7 +810,7 @@ function MaterialUploadForm({ courseId, lessonId, onClose, onSuccess }) {
         <div style={{ border:'2px dashed var(--instr-line)', borderRadius:'10px', padding:'20px', textAlign:'center' }}>
           <input type="file" accept=".pdf,.doc,.docx" onChange={e=>setFile(e.target.files[0])} className="hidden" id="file-upload" />
           <label htmlFor="file-upload" style={{ cursor:'pointer', fontSize:'13.5px', color: file ? 'var(--instr-green-600)' : 'var(--instr-muted)', fontFamily:'Inter,sans-serif' }}>
-            {file ? `📎 ${file.name}` : 'Click to select a PDF or DOCX file (max 50MB)'}
+            {file ? `📎 ${file.name}` : 'Click to select a PDF or DOCX file (max 100MB)'}
           </label>
         </div>
         {saving && progress > 0 && (

@@ -221,11 +221,24 @@ class LessonController extends Controller
             ], 404);
         }
 
-        $lesson->delete();
+        try {
+            // Delete lesson (materials and progress will cascade)
+            $lesson->delete();
 
-        return response()->json([
-            'message' => 'Lesson deleted successfully.',
-        ]);
+            return response()->json([
+                'message' => 'Lesson deleted successfully.',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete lesson', [
+                'lesson_id' => $lesson->id,
+                'course_id' => $course->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to delete lesson. Please try again.',
+            ], 500);
+        }
     }
 
     // =============================================================
@@ -259,7 +272,7 @@ class LessonController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'type'  => ['required', 'in:pdf,docx,video,ppt,link,other'],
-            'file'  => ['nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx,mp4,mov', 'max:102400'],
+            'file'  => ['nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx,mp4,mov,avi', 'max:512000'], // 500MB max
             'url'   => ['nullable', 'url'],
             'order' => ['nullable', 'integer', 'min:0'],
         ]);
