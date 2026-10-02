@@ -213,13 +213,7 @@ export default function AiChatbot() {
         .chat-greeting {
           animation: chatGreeting 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
         }
-        .chat-avatar-btn {
-          transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-        .chat-avatar-btn:hover {
-          transform: scale(1.08);
-          box-shadow: 0 6px 24px rgba(79,70,229,0.55) !important;
-        }
+
         .chat-send-btn:hover:not(:disabled) {
           background: #4338ca !important;
         }
@@ -355,8 +349,8 @@ export default function AiChatbot() {
           onMouseEnter={handleMouseEnter}
           title="Course Assistant"
           style={{
-            width: 100, 
-            height: 100, 
+            width: 140, 
+            height: 140, 
             background: 'transparent',
             border: 'none',
             cursor: 'pointer', 
