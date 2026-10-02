@@ -131,7 +131,15 @@ export default function AiChatbot() {
     }
 
     if (idleVid && videoState === 'idle') {
+      // Restart idle video when it ends (so waving animation replays)
+      const handleIdleEnd = () => {
+        idleVid.currentTime = 0; // Reset to start
+        idleVid.play();           // Play again from beginning
+      };
+      idleVid.addEventListener('ended', handleIdleEnd);
       idleVid.play();
+
+      return () => idleVid.removeEventListener('ended', handleIdleEnd);
     }
   }, [videoState]);
 
@@ -422,7 +430,6 @@ export default function AiChatbot() {
                   ref={idleVideoRef}
                   src={IDLE_VIDEO}
                   muted
-                  loop
                   playsInline
                   style={{
                     width: '100%',
