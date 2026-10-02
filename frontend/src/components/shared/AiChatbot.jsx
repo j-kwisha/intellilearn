@@ -349,129 +349,101 @@ export default function AiChatbot() {
         )}
 
         {/* Avatar toggle button */}
-        <div style={{ position: 'relative' }}>
-          {/* Pulse ring — only when closed */}
-          {!open && (
+        <button
+          className="chat-avatar-btn"
+          onClick={handleToggle}
+          onMouseEnter={handleMouseEnter}
+          title="Course Assistant"
+          style={{
+            width: 100, 
+            height: 100, 
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer', 
+            padding: 0,
+            display: 'block',
+            animation: bouncing ? 'chatBounce 0.5s ease both' : 'none',
+          }}
+        >
+          {open ? (
+            <div style={{
+              width: 58,
+              height: 58,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+              border: '3px solid white',
+              boxShadow: '0 4px 20px rgba(79,70,229,0.45)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: 'auto',
+            }}>
+              <span style={{ color: 'white', fontSize: 20, fontWeight: 700 }}>✕</span>
+            </div>
+          ) : (
             <>
-              <div style={{
-                position: 'absolute', inset: 0, borderRadius: '50%',
-                background: 'rgba(79,70,229,0.35)',
-                animation: 'chatPulse 2s ease-out infinite',
-                pointerEvents: 'none',
-              }} />
-              <div style={{
-                position: 'absolute', inset: 0, borderRadius: '50%',
-                background: 'rgba(79,70,229,0.2)',
-                animation: 'chatPulse 2s ease-out infinite',
-                animationDelay: '0.6s',
-                pointerEvents: 'none',
-              }} />
+              {/* Peeking video (intro animation) - pure video only */}
+              <video
+                ref={peekingVideoRef}
+                src={PEEKING_VIDEO}
+                muted
+                playsInline
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  display: videoState === 'peeking' ? 'block' : 'none',
+                }}
+                onError={(e) => {
+                  console.warn('Peeking video failed to load, using fallback');
+                  setVideoState('static');
+                }}
+              />
+
+              {/* Idle video (looping animation) - pure video only */}
+              <video
+                ref={idleVideoRef}
+                src={IDLE_VIDEO}
+                muted
+                loop
+                playsInline
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  display: videoState === 'idle' ? 'block' : 'none',
+                }}
+                onError={(e) => {
+                  console.warn('Idle video failed to load, using fallback');
+                  setVideoState('static');
+                }}
+              />
+
+              {/* Fallback static image in circle */}
+              {videoState === 'static' && (
+                <div style={{
+                  width: 58,
+                  height: 58,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  border: '3px solid white',
+                  boxShadow: '0 4px 20px rgba(79,70,229,0.45)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  margin: 'auto',
+                }}>
+                  {AVATAR_URL ? (
+                    <img src={AVATAR_URL} alt="Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: 26 }}>🤖</span>
+                  )}
+                </div>
+              )}
             </>
           )}
-
-          <button
-            className="chat-avatar-btn"
-            onClick={handleToggle}
-            onMouseEnter={handleMouseEnter}
-            title="Course Assistant"
-            style={{
-              width: 100, 
-              height: 100, 
-              borderRadius: 0,
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer', 
-              padding: 0, 
-              overflow: 'visible',
-              boxShadow: 'none',
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              animation: bouncing ? 'chatBounce 0.5s ease both' : 'none',
-              position: 'relative', 
-              zIndex: 1,
-            }}
-          >
-            {open ? (
-              <div style={{
-                width: 58,
-                height: 58,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                border: '3px solid white',
-                boxShadow: '0 4px 20px rgba(79,70,229,0.45)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <span style={{ color: 'white', fontSize: 20, fontWeight: 700 }}>✕</span>
-              </div>
-            ) : (
-              <>
-                {/* Peeking video (intro animation) - NO circular mask */}
-                <video
-                  ref={peekingVideoRef}
-                  src={PEEKING_VIDEO}
-                  muted
-                  playsInline
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    display: videoState === 'peeking' ? 'block' : 'none',
-                    filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.2))',
-                  }}
-                  onError={(e) => {
-                    console.warn('Peeking video failed to load, using fallback');
-                    setVideoState('static');
-                  }}
-                />
-
-                {/* Idle video (looping animation) - NO circular mask */}
-                <video
-                  ref={idleVideoRef}
-                  src={IDLE_VIDEO}
-                  muted
-                  loop
-                  playsInline
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    display: videoState === 'idle' ? 'block' : 'none',
-                    filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.2))',
-                  }}
-                  onError={(e) => {
-                    console.warn('Idle video failed to load, using fallback');
-                    setVideoState('static');
-                  }}
-                />
-
-                {/* Fallback static image in circle */}
-                {videoState === 'static' && (
-                  <div style={{
-                    width: 58,
-                    height: 58,
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                    border: '3px solid white',
-                    boxShadow: '0 4px 20px rgba(79,70,229,0.45)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                  }}>
-                    {AVATAR_URL ? (
-                      <img src={AVATAR_URL} alt="Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <span style={{ fontSize: 26 }}>🤖</span>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </button>
-        </div>
+        </button>
       </div>
     </>
   );
