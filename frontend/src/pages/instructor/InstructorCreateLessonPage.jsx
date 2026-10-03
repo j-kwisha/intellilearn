@@ -51,7 +51,8 @@ export default function InstructorCreateLessonPage() {
 
     try {
       const res = await api.post(`/courses/${courseId}/lessons/${lessonId}/materials`, data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        // Do NOT set Content-Type manually — let the browser set it with the correct multipart boundary
+        headers: { 'Content-Type': undefined },
         onUploadProgress: (e) => setUploadProgress(Math.round((e.loaded / e.total) * 100)),
       });
       setMaterials(prev => [...prev, res.data.material]);

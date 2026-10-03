@@ -820,28 +820,57 @@ function MaterialUploadForm({ courseId, lessonId, onClose, onSuccess }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
+  // Use a unique id per lessonId to avoid id collisions when multiple forms render
+  const fileInputId = `file-upload-lesson-${lessonId}`;
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.title.trim()) { setError('Please enter a file title.'); return; }
     if (!file) { setError('Please select a file.'); return; }
-    setSaving(true); setError('');
+    setSaving(true); setError(''); setProgress(0);
     const data = new FormData();
-    data.append('title', form.title); data.append('type', form.type); data.append('file', file);
+    data.append('title', form.title);
+    data.append('type', form.type);
+    data.append('file', file);
     try {
-      await api.post(`/courses/${courseId}/lessons/${lessonId}/materials`, data, { headers:{'Content-Type':'multipart/form-data'}, onUploadProgress:e=>setProgress(Math.round((e.loaded/e.total)*100)) });
+      await api.post(`/courses/${courseId}/lessons/${lessonId}/materials`, data, {
+        // Do NOT set Content-Type manually — let the browser set multipart/form-data with the correct boundary
+        headers: { 'Content-Type': undefined },
+        onUploadProgress: ev => setProgress(Math.round((ev.loaded / ev.total) * 100)),
+      });
       onSuccess();
-    } catch (err) { setError(err.response?.data?.message || 'Upload failed.'); } finally { setSaving(false); }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Upload failed. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
   return (
     <FormCard title="Upload Module File" error={error}>
       <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-        <input type="text" placeholder="File title (e.g. Week 1 Module)" value={form.title} required onChange={e=>setForm({...form, title:e.target.value})} className={FI} />
-        <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})} className={FI}>
-          <option value="pdf">PDF</option><option value="docx">Word Document (DOCX)</option>
+        <input
+          type="text"
+          placeholder="File title (e.g. Week 1 Module)"
+          value={form.title}
+          required
+          onChange={e => setForm({...form, title: e.target.value})}
+          className={FI}
+        />
+        <select value={form.type} onChange={e => setForm({...form, type: e.target.value})} className={FI}>
+          <option value="pdf">PDF</option>
+          <option value="docx">Word Document (DOCX)</option>
+          <option value="ppt">PowerPoint (PPT)</option>
         </select>
         <div style={{ border:'2px dashed var(--instr-line)', borderRadius:'10px', padding:'20px', textAlign:'center' }}>
-          <input type="file" accept=".pdf,.doc,.docx" onChange={e=>setFile(e.target.files[0])} className="hidden" id="file-upload" />
-          <label htmlFor="file-upload" style={{ cursor:'pointer', fontSize:'13.5px', color: file ? 'var(--instr-green-600)' : 'var(--instr-muted)', fontFamily:'Inter,sans-serif' }}>
-            {file ? `📎 ${file.name}` : 'Click to select a PDF or DOCX file (max 100MB)'}
+          {/* Unique id per lesson prevents click-target collisions when multiple forms are on the page */}
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.ppt,.pptx"
+            onChange={e => setFile(e.target.files[0])}
+            style={{ display:'none' }}
+            id={fileInputId}
+          />
+          <label htmlFor={fileInputId} style={{ cursor:'pointer', fontSize:'13.5px', color: file ? 'var(--instr-green-600)' : 'var(--instr-muted)', fontFamily:'Inter,sans-serif' }}>
+            {file ? `📎 ${file.name}` : 'Click to select a PDF, DOCX, or PPT file (max 100MB)'}
           </label>
         </div>
         {saving && progress > 0 && (
@@ -850,7 +879,9 @@ function MaterialUploadForm({ courseId, lessonId, onClose, onSuccess }) {
           </div>
         )}
         <BtnRow>
-          <button type="submit" disabled={saving} className="instr-pill-btn">{saving ? `Uploading ${progress}%...` : 'Upload File'}</button>
+          <button type="submit" disabled={saving} className="instr-pill-btn">
+            {saving ? `Uploading ${progress}%...` : 'Upload File'}
+          </button>
           <button type="button" onClick={onClose} className="instr-outline-btn">Cancel</button>
         </BtnRow>
       </form>

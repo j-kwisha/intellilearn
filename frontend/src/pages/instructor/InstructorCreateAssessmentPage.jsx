@@ -10,10 +10,10 @@ export default function InstructorCreateAssessmentPage() {
   const [assessmentId, setAssessmentId] = useState(null);
   const [assessmentTitle, setAssessmentTitle] = useState('');
 
-  // Assessment form
+  // Assessment form — total_points removed (auto-calculated from questions)
   const [form, setForm] = useState({
     title: '', type: 'quiz', topic: '',
-    total_points: 100, time_limit_minutes: '', max_attempts: 1, is_published: false,
+    time_limit_minutes: '', max_attempts: 1, is_published: false,
     available_from: '', due_date: '', score_visibility: 'immediate',
   });
   const [addToCalendar, setAddToCalendar] = useState(false);
@@ -32,13 +32,25 @@ export default function InstructorCreateAssessmentPage() {
       type: 'multiple_choice', 
       options: ['', '', '', ''], 
       correct_answer: '', 
-      points: '',
-      matching_pairs: [{ left_item: '', right_item: '', correct_match: '' }, { left_item: '', right_item: '', correct_match: '' }]
+      points: 1,  // default 1 point
+      matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }]
     };
   }
 
+  // ── Assessment form validation ──────────────────────────────
+  const validateAssessmentForm = () => {
+    if (!form.title.trim()) return 'Assessment title is required.';
+    if (!form.type) return 'Please select an assessment type.';
+    if (!form.max_attempts || parseInt(form.max_attempts) < 1) return 'Max attempts must be at least 1.';
+    if (!form.score_visibility) return 'Please select a score visibility option.';
+    return null;
+  };
+
   const handleCreateAssessment = async (e) => {
     e.preventDefault();
+    const validationError = validateAssessmentForm();
+    if (validationError) { setError(validationError); return; }
+
     setSaving(true); setError('');
     try {
       const data = { ...form };
@@ -65,7 +77,7 @@ export default function InstructorCreateAssessmentPage() {
           title: `📝 ${created.title}`,
           event_type: form.type === 'long_exam' ? 'exam' : 'quiz',
           start_date: form.due_date,
-          description: `${form.type.replace(/_/g, ' ')} — ${form.total_points} pts`,
+          description: `${form.type.replace(/_/g, ' ')}`,
           color: form.type === 'long_exam' ? '#ef4444' : '#f59e0b',
         });
       }
@@ -104,7 +116,7 @@ export default function InstructorCreateAssessmentPage() {
 
   const addMatchingPair = (qIdx) => {
     setQuestions(prev => prev.map((q, i) => 
-      i === qIdx ? { ...q, matching_pairs: [...q.matching_pairs, { left_item: '', right_item: '', correct_match: '' }] } : q
+      i === qIdx ? { ...q, matching_pairs: [...q.matching_pairs, { left_item: '', right_item: '' }] } : q
     ));
   };
 
@@ -116,6 +128,7 @@ export default function InstructorCreateAssessmentPage() {
     }));
   };
 
+  // For matching, right_item IS the correct_match — update both together
   const updateMatchingPair = (qIdx, pairIdx, field, value) => {
     setQuestions(prev => prev.map((q, i) => {
       if (i !== qIdx) return q;
@@ -147,8 +160,8 @@ export default function InstructorCreateAssessmentPage() {
         }
         for (let j = 0; j < q.matching_pairs.length; j++) {
           const pair = q.matching_pairs[j];
-          if (!pair.left_item.trim() || !pair.right_item.trim() || !pair.correct_match.trim()) {
-            setQError(`Question ${i + 1}, Pair ${j + 1}: All fields must be filled.`); setQSaving(false); return;
+          if (!pair.left_item.trim() || !pair.right_item.trim()) {
+            setQError(`Question ${i + 1}, Pair ${j + 1}: Term and Definition must be filled.`); setQSaving(false); return;
           }
         }
       }
@@ -173,7 +186,12 @@ export default function InstructorCreateAssessmentPage() {
         else if (q.type === 'matching') {
           delete out.options;
           delete out.correct_answer;
-          // Keep matching_pairs as is
+          // Set correct_match = right_item for each pair automatically
+          out.matching_pairs = q.matching_pairs.map(p => ({
+            left_item: p.left_item,
+            right_item: p.right_item,
+            correct_match: p.right_item,  // correct match is always the right column value
+          }));
         }
         else { 
           out.options = q.options.filter(o => o.trim() !== ''); 
@@ -195,6 +213,12 @@ export default function InstructorCreateAssessmentPage() {
     input: {
       width: '100%', padding: '11px 14px',
       border: '1.5px solid #e2e8f0', borderRadius: '10px',
+      fontSize: '0.9rem', outline: 'none', fontFamily: "'DM Sans', sans-serif",
+      color: '#0f172a', background: 'white', boxSizing: 'border-box',
+    },
+    inputError: {
+      width: '100%', padding: '11px 14px',
+      border: '1.5px solid #f87171', borderRadius: '10px',
       fontSize: '0.9rem', outline: 'none', fontFamily: "'DM Sans', sans-serif",
       color: '#0f172a', background: 'white', boxSizing: 'border-box',
     },
@@ -267,8 +291,14 @@ export default function InstructorCreateAssessmentPage() {
           <form onSubmit={handleCreateAssessment} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div>
               <label style={S.label}>Assessment Title *</label>
-              <input style={S.input} type="text" placeholder="e.g. Quiz 1 — HTML Basics" value={form.title} required
-                onChange={e => setForm({ ...form, title: e.target.value })} />
+              <input
+                style={!form.title.trim() && error ? S.inputError : S.input}
+                type="text"
+                placeholder="e.g. Quiz 1 — HTML Basics"
+                value={form.title}
+                required
+                onChange={e => setForm({ ...form, title: e.target.value })}
+              />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
@@ -285,23 +315,32 @@ export default function InstructorCreateAssessmentPage() {
                   onChange={e => setForm({ ...form, topic: e.target.value })} />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-              <div>
-                <label style={S.label}>Total Points</label>
-                <input style={S.input} type="number" min={1} value={form.total_points}
-                  onChange={e => setForm({ ...form, total_points: parseInt(e.target.value) })} />
-              </div>
+
+            {/* Total Points removed — auto-calculated from question points */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
                 <label style={S.label}>Time Limit (min)</label>
                 <input style={S.input} type="number" min={1} placeholder="No limit" value={form.time_limit_minutes}
                   onChange={e => setForm({ ...form, time_limit_minutes: e.target.value })} />
+                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>Leave blank for no time limit.</p>
               </div>
               <div>
-                <label style={S.label}>Max Attempts</label>
-                <input style={S.input} type="number" min={1} value={form.max_attempts}
-                  onChange={e => setForm({ ...form, max_attempts: parseInt(e.target.value) })} />
+                <label style={S.label}>Max Attempts *</label>
+                <input
+                  style={!form.max_attempts && error ? S.inputError : S.input}
+                  type="number"
+                  min={1}
+                  value={form.max_attempts}
+                  required
+                  onChange={e => setForm({ ...form, max_attempts: parseInt(e.target.value) })}
+                />
               </div>
             </div>
+
+            <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: '10px 14px', fontSize: '0.83rem', color: '#0f766e' }}>
+              💡 Total points will be automatically calculated based on the points assigned to each question.
+            </div>
+
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
               <input type="checkbox" checked={form.is_published} onChange={e => setForm({ ...form, is_published: e.target.checked })}
                 style={{ width: 16, height: 16, accentColor: '#0d9488' }} />
@@ -311,7 +350,7 @@ export default function InstructorCreateAssessmentPage() {
             {/* Score Visibility */}
             <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, padding: 20, background: '#f8fafc' }}>
               <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#334155', marginBottom: 14, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                👁️ Score Visibility
+                👁️ Score Visibility *
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[
@@ -386,6 +425,9 @@ export default function InstructorCreateAssessmentPage() {
             <div style={{ background: '#f0fdf4', borderRadius: 16, border: '1px solid #bbf7d0', padding: 20 }}>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#14532d', marginBottom: 12, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                 ✓ {savedQuestions.length} Question{savedQuestions.length > 1 ? 's' : ''} Saved
+                <span style={{ fontWeight: 500, color: '#166534', marginLeft: 10, fontSize: '0.85rem' }}>
+                  · {savedQuestions.reduce((sum, q) => sum + parseFloat(q.points || 0), 0)} pts total
+                </span>
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {savedQuestions.map((q, i) => (
@@ -438,7 +480,7 @@ export default function InstructorCreateAssessmentPage() {
                       </div>
                       <div>
                         <label style={S.label}>Points</label>
-                        <input style={S.input} type="number" min={0.01} step={0.5} placeholder="e.g. 10"
+                        <input style={S.input} type="number" min={0.5} step={0.5}
                           value={q.points} onChange={e => updateQuestion(idx, 'points', e.target.value)} />
                       </div>
                     </div>
@@ -502,78 +544,54 @@ export default function InstructorCreateAssessmentPage() {
                       </p>
                     )}
 
-                    {/* Matching pairs */}
+                    {/* Matching pairs — simplified Term | Definition two-column layout */}
                     {q.type === 'matching' && (
                       <div>
-                        <label style={S.label}>Matching Pairs</label>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, marginBottom: 8, borderRadius: '8px 8px 0 0', overflow: 'hidden', border: '1.5px solid #e2e8f0' }}>
+                          <div style={{ padding: '8px 14px', background: '#f1f5f9', borderRight: '1px solid #e2e8f0' }}>
+                            <label style={{ ...S.label, margin: 0, fontSize: '0.8rem', color: '#475569' }}>Term</label>
+                          </div>
+                          <div style={{ padding: '8px 14px', background: '#f1f5f9' }}>
+                            <label style={{ ...S.label, margin: 0, fontSize: '0.8rem', color: '#475569' }}>Definition</label>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, border: '1.5px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
                           {q.matching_pairs && q.matching_pairs.map((pair, pi) => (
-                            <div key={pi} style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, padding: 14, background: 'white' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b' }}>Pair {pi + 1}</span>
-                                {q.matching_pairs.length > 2 && (
-                                  <button type="button" onClick={() => removeMatchingPair(idx, pi)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.75rem', fontWeight: 600 }}>
-                                    Remove
-                                  </button>
-                                )}
-                              </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
-                                <div>
-                                  <label style={{ ...S.label, fontSize: '0.75rem', marginBottom: 4 }}>Left Item</label>
-                                  <input 
-                                    style={S.input} 
-                                    type="text" 
-                                    placeholder="e.g. HTML"
-                                    value={pair.left_item}
-                                    onChange={e => updateMatchingPair(idx, pi, 'left_item', e.target.value)}
-                                  />
-                                </div>
-                                <div>
-                                  <label style={{ ...S.label, fontSize: '0.75rem', marginBottom: 4 }}>Right Item</label>
-                                  <input 
-                                    style={S.input} 
-                                    type="text" 
-                                    placeholder="e.g. Markup Language"
-                                    value={pair.right_item}
-                                    onChange={e => updateMatchingPair(idx, pi, 'right_item', e.target.value)}
-                                  />
-                                </div>
-                              </div>
-                              <div>
-                                <label style={{ ...S.label, fontSize: '0.75rem', marginBottom: 4 }}>Correct Match (from right side)</label>
-                                <input 
-                                  style={S.input} 
-                                  type="text" 
-                                  placeholder="e.g. Markup Language"
-                                  value={pair.correct_match}
-                                  onChange={e => updateMatchingPair(idx, pi, 'correct_match', e.target.value)}
-                                />
-                                <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 4 }}>
-                                  Enter the exact text from the right item that matches this left item.
-                                </p>
-                              </div>
+                            <div key={pi} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 0, borderTop: pi === 0 ? 'none' : '1px solid #e2e8f0', background: pi % 2 === 0 ? 'white' : '#fafafa' }}>
+                              <input
+                                style={{ ...S.input, borderRadius: 0, border: 'none', borderRight: '1px solid #e2e8f0', background: 'transparent' }}
+                                type="text"
+                                placeholder={`Term ${pi + 1}`}
+                                value={pair.left_item}
+                                onChange={e => updateMatchingPair(idx, pi, 'left_item', e.target.value)}
+                              />
+                              <input
+                                style={{ ...S.input, borderRadius: 0, border: 'none', background: 'transparent' }}
+                                type="text"
+                                placeholder={`Definition ${pi + 1}`}
+                                value={pair.right_item}
+                                onChange={e => updateMatchingPair(idx, pi, 'right_item', e.target.value)}
+                              />
+                              {q.matching_pairs.length > 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeMatchingPair(idx, pi)}
+                                  style={{ background: 'none', border: 'none', borderLeft: '1px solid #e2e8f0', cursor: 'pointer', color: '#94a3b8', padding: '0 12px', fontSize: '1rem' }}
+                                  title="Remove pair"
+                                >✕</button>
+                              )}
                             </div>
                           ))}
-                          <button 
-                            type="button" 
-                            onClick={() => addMatchingPair(idx)}
-                            style={{ 
-                              background: 'none', 
-                              border: '1.5px dashed #cbd5e1', 
-                              borderRadius: 8, 
-                              padding: '8px', 
-                              color: '#64748b', 
-                              cursor: 'pointer', 
-                              fontSize: '0.85rem', 
-                              fontWeight: 600 
-                            }}
-                          >
-                            + Add Pair
-                          </button>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => addMatchingPair(idx)}
+                          style={{ marginTop: 8, background: 'none', border: '1.5px dashed #cbd5e1', borderRadius: 8, padding: '8px', color: '#64748b', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, width: '100%' }}
+                        >
+                          + Add Row
+                        </button>
                         <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 6, background: '#f8fafc', padding: '8px 12px', borderRadius: 6 }}>
-                          💡 Tip: Students will see left items and select matching right items from a dropdown. Grading is automatic.
+                          💡 Students will match each term to its correct definition. Grading is automatic.
                         </p>
                       </div>
                     )}
