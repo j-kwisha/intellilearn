@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "commit": "f7b85e5-fixes",
+  "timestamp": "2026-10-02",
+  "changes": [
+    "Assessment form validation",
+    "Simplified matching UI",
+    "Default points = 1",
+    "Auto-calculate total points",
+    "Student leave warning"
+  ]
+}
