@@ -10,11 +10,12 @@ return [
         'http://localhost:5175',
         'http://localhost:5176',
         'https://intellilearn-ten.vercel.app',
-        'https://luxury-cassata-840094.netlify.app',
+        'https://luxury-cassata-84094e.netlify.app',
         env('FRONTEND_URL', 'http://localhost:5173'),
     ],
     'allowed_origins_patterns' => [
         '#^https://.*\.vercel\.app$#',
+        '#^https://.*\.netlify\.app$#',
     ],
     'allowed_headers' => ['*'],
     'exposed_headers' => [],
