@@ -292,20 +292,34 @@ class LessonController extends Controller
                 // Upload to Cloudinary
                 $timestamp = time();
                 $folder    = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
-                $signature = sha1("access_mode=public&folder={$folder}&timestamp={$timestamp}{$apiSecret}");
+
+                // Signature: alphabetically sorted params (excluding api_key, file, resource_type)
+                // joined as key=value&... then appended with the api_secret
+                $paramsToSign = [
+                    'folder'    => $folder,
+                    'timestamp' => $timestamp,
+                ];
+                ksort($paramsToSign);
+                $signatureString = http_build_query($paramsToSign) . $apiSecret;
+                $signature = sha1($signatureString);
 
                 $response = \Illuminate\Support\Facades\Http::attach(
                     'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
                 )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
-                    'api_key'     => $apiKey,
-                    'timestamp'   => $timestamp,
-                    'folder'      => $folder,
-                    'signature'   => $signature,
-                    'access_mode' => 'public',
+                    'api_key'   => $apiKey,
+                    'timestamp' => $timestamp,
+                    'folder'    => $folder,
+                    'signature' => $signature,
                 ]);
 
                 if ($response->failed()) {
-                    return response()->json(['message' => 'File upload to cloud failed. Please try again.'], 500);
+                    \Log::error('Cloudinary upload failed', [
+                        'status' => $response->status(),
+                        'body'   => $response->body(),
+                    ]);
+                    return response()->json([
+                        'message' => 'File upload to cloud failed: ' . ($response->json('error.message') ?? 'Unknown error'),
+                    ], 500);
                 }
 
                 $filePath = $response->json('secure_url');
