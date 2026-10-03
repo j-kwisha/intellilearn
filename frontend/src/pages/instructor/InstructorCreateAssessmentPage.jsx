@@ -480,7 +480,7 @@ export default function InstructorCreateAssessmentPage() {
                       </div>
                       <div>
                         <label style={S.label}>Points</label>
-                        <input style={S.input} type="number" min={0.5} step={0.5}
+                        <input style={S.input} type="number" min={1} step={1}
                           value={q.points} onChange={e => updateQuestion(idx, 'points', e.target.value)} />
                       </div>
                     </div>
