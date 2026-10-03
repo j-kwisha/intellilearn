@@ -579,8 +579,11 @@ function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
   };
   
   return (
-    <FormCard title={isEdit ? 'Edit Assessment' : 'Create New Assessment'} error={error}>
+    <FormCard title={isEdit ? 'Edit Assessment' : '🆕 CREATE NEW ASSESSMENT - UPDATED VERSION 2.0'} error={error}>
       <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+        <div style={{ background:'#10b981', color:'white', padding:'12px', borderRadius:'8px', fontWeight:'bold', marginBottom:'8px' }}>
+          ✅ NEW VERSION DEPLOYED - If you see this, the update is working!
+        </div>
         <input type="text" placeholder="Assessment title *" value={form.title} required onChange={e => setForm({...form, title:e.target.value})} className={FI} />
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
           <select value={form.type} onChange={e => setForm({...form, type:e.target.value})} className={FI} required>
