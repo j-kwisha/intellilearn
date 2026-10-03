@@ -82,15 +82,20 @@ function HeroActionMenu({ onDelete }) {
 
 /* ── Per-lesson 3-dot action menu (Upload / Delete) ── */
 function LessonActionMenu({ onUpload, onDelete, uploadLabel }) {
+function LessonActionMenu({ onUpload, onDelete, uploadLabel }) {
   const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e) => { setOpen(false); };
+    const h = (e) => {
+      if (menuRef.current && menuRef.current.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [open]);
   return (
-    <div style={{ position:'relative' }} onClick={e => e.stopPropagation()}>
+    <div ref={menuRef} style={{ position:'relative' }} onClick={e => e.stopPropagation()}>
       <button onClick={() => setOpen(v => !v)} className="instr-row-menu" style={{ width:30, height:30, borderRadius:8 }}>
         <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
           <circle cx="12" cy="5" r="1.5" fill="currentColor"/>
