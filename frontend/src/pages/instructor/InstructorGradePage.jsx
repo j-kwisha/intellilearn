@@ -239,7 +239,7 @@ function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded })
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
               <div>
                 <label className="instr-form-label">Points (max {answer.question?.points})</label>
-                <input type="number" min={0} max={answer.question?.points} step={0.5}
+                <input type="number" min={0} max={answer.question?.points} step={1}
                   value={grades[answer.question_id]?.points_earned ?? ''}
                   onChange={e => updateGrade(answer.question_id, 'points_earned', e.target.value)}
                   className="instr-form-input" />

@@ -93,7 +93,7 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Points</label>
-              <input type="number" min={0.01} step={0.5} style={inputStyle}
+              <input type="number" min={1} step={1} style={inputStyle}
                 value={form.points} onChange={e => setForm(f => ({ ...f, points: e.target.value }))} />
             </div>
           </div>
@@ -279,7 +279,7 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Points</label>
-                <input type="number" min={0.01} step={0.5} required placeholder="e.g. 10" value={q.points}
+                <input type="number" min={1} step={1} required placeholder="e.g. 10" value={q.points}
                   onChange={e => updateQ(idx, 'points', e.target.value)} style={IS} />
               </div>
             </div>
