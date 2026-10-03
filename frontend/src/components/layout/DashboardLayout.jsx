@@ -20,6 +20,7 @@ import EngineeringIcon from '@mui/icons-material/Engineering';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import ScienceIcon from '@mui/icons-material/Science';
 import logo from '../../assets/logo copy.png';
+import { useNavigationGuard } from '../../context/NavigationGuardContext';
 
 const navItems = {
   student: [
@@ -199,6 +200,7 @@ export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { checkGuard } = useNavigationGuard();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -434,7 +436,10 @@ export default function DashboardLayout({ children }) {
             <Link
               key={item.path}
               to={item.path}
-              onClick={() => setSidebarOpen(false)}
+              onClick={(e) => {
+                if (checkGuard()) { e.preventDefault(); return; }
+                setSidebarOpen(false);
+              }}
               className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
             >
               <span className="nav-icon">{item.icon}</span>

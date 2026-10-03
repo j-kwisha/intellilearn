@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NavigationGuardProvider } from './context/NavigationGuardContext';
 import ProtectedRoute from './components/shared/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 import AdminLayout from './components/layout/AdminLayout';
@@ -56,6 +57,7 @@ function RoleRedirect() {
 export default function App() {
   return (
     <BrowserRouter>
+      <NavigationGuardProvider>
       <AuthProvider>
         <Routes>
           {/* Public */}
@@ -204,6 +206,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </AuthProvider>
+      </NavigationGuardProvider>
     </BrowserRouter>
   );
 }

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { useNavigationGuard } from '../../context/NavigationGuardContext';
 
 export default function StudentQuizPage() {
   const { courseId, assessmentId } = useParams();
   const navigate = useNavigate();
+  const { registerGuard, clearGuard } = useNavigationGuard();
   const [assessment, setAssessment] = useState(null);
   const [submission, setSubmission] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -53,6 +55,19 @@ export default function StudentQuizPage() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, [submission, result, courseId, navigate]);
+
+  // Register nav guard so sidebar/menu links also trigger warning
+  useEffect(() => {
+    if (submission && !result) {
+      registerGuard(() => ({
+        blocked: true,
+        message: 'Leave Assessment?\n\nYour current answers have been saved, but you will not be able to retake this assessment once you leave — unless the instructor allows multiple attempts.\n\nClick "Cancel" to stay, or "OK" to leave.',
+      }));
+    } else {
+      clearGuard();
+    }
+    return () => clearGuard();
+  }, [submission, result, registerGuard, clearGuard]);
 
   const startQuiz = async () => {
     try {
