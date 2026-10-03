@@ -82,7 +82,6 @@ function HeroActionMenu({ onDelete }) {
 
 /* ── Per-lesson 3-dot action menu (Upload / Delete) ── */
 function LessonActionMenu({ onUpload, onDelete, uploadLabel }) {
-function LessonActionMenu({ onUpload, onDelete, uploadLabel }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   useEffect(() => {
