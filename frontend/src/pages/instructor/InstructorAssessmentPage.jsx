@@ -15,8 +15,8 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
         ? Object.values(question.options)
         : ['', '', '', ''],
     matching_pairs: question.matching_pairs?.length
-      ? question.matching_pairs.map(p => ({ left_item: p.left_item, right_item: p.right_item, correct_match: p.correct_match }))
-      : [{ left_item: '', right_item: '', correct_match: '' }, { left_item: '', right_item: '', correct_match: '' }],
+      ? question.matching_pairs.map(p => ({ left_item: p.left_item, right_item: p.right_item }))
+      : [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }],
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +26,7 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
     pairs[pi] = { ...pairs[pi], [field]: val };
     setForm(f => ({ ...f, matching_pairs: pairs }));
   };
-  const addPair = () => setForm(f => ({ ...f, matching_pairs: [...f.matching_pairs, { left_item: '', right_item: '', correct_match: '' }] }));
+  const addPair = () => setForm(f => ({ ...f, matching_pairs: [...f.matching_pairs, { left_item: '', right_item: '' }] }));
   const removePair = (pi) => {
     if (form.matching_pairs.length <= 2) return;
     setForm(f => ({ ...f, matching_pairs: f.matching_pairs.filter((_, i) => i !== pi) }));
@@ -49,7 +49,11 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
       } else if (form.type === 'short_answer') {
         payload.correct_answer = form.correct_answer;
       } else if (form.type === 'matching') {
-        payload.matching_pairs = form.matching_pairs;
+        payload.matching_pairs = form.matching_pairs.map(p => ({
+          left_item: p.left_item,
+          right_item: p.right_item,
+          correct_match: p.right_item,
+        }));
       }
       await api.put(`/courses/${courseId}/assessments/${assessmentId}/questions/${question.id}`, payload);
       onSaved();
@@ -155,40 +159,32 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
           {form.type === 'matching' && (
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-2">Matching Pairs</label>
-              <div className="space-y-3">
+              {/* Column headers */}
+              <div className="grid grid-cols-2 gap-0 rounded-t-lg overflow-hidden border border-slate-200">
+                <div className="px-3 py-2 bg-slate-100 text-xs font-semibold text-slate-500 border-r border-slate-200">Term</div>
+                <div className="px-3 py-2 bg-slate-100 text-xs font-semibold text-slate-500">Definition</div>
+              </div>
+              <div className="border border-t-0 border-slate-200 rounded-b-lg overflow-hidden">
                 {form.matching_pairs.map((pair, pi) => (
-                  <div key={pi} className="border border-slate-200 rounded-xl p-3 bg-slate-50">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-semibold text-slate-500">Pair {pi + 1}</span>
-                      {form.matching_pairs.length > 2 && (
-                        <button type="button" onClick={() => removePair(pi)}
-                          className="text-xs text-red-400 hover:text-red-600 font-medium">Remove</button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 mb-2">
-                      <div>
-                        <label className="block text-xs text-slate-500 mb-1">Left Item</label>
-                        <input type="text" style={inputStyle} value={pair.left_item}
-                          onChange={e => updatePair(pi, 'left_item', e.target.value)} placeholder="e.g. HTML" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-500 mb-1">Right Item</label>
-                        <input type="text" style={inputStyle} value={pair.right_item}
-                          onChange={e => updatePair(pi, 'right_item', e.target.value)} placeholder="e.g. Markup Language" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Correct Match (from right side)</label>
-                      <input type="text" style={inputStyle} value={pair.correct_match}
-                        onChange={e => updatePair(pi, 'correct_match', e.target.value)} placeholder="e.g. Markup Language" />
-                    </div>
+                  <div key={pi} className={`grid gap-0 ${form.matching_pairs.length > 2 ? 'grid-cols-[1fr_1fr_auto]' : 'grid-cols-2'} ${pi > 0 ? 'border-t border-slate-100' : ''}`}>
+                    <input type="text" style={{ ...inputStyle, borderRadius: 0, border: 'none', borderRight: '1px solid #e2e8f0' }}
+                      placeholder={`Term ${pi + 1}`} value={pair.left_item}
+                      onChange={e => updatePair(pi, 'left_item', e.target.value)} />
+                    <input type="text" style={{ ...inputStyle, borderRadius: 0, border: 'none' }}
+                      placeholder={`Definition ${pi + 1}`} value={pair.right_item}
+                      onChange={e => updatePair(pi, 'right_item', e.target.value)} />
+                    {form.matching_pairs.length > 2 && (
+                      <button type="button" onClick={() => removePair(pi)}
+                        style={{ border: 'none', borderLeft: '1px solid #e2e8f0', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0 10px' }}>✕</button>
+                    )}
                   </div>
                 ))}
-                <button type="button" onClick={addPair}
-                  className="w-full border-2 border-dashed border-slate-300 rounded-xl p-2 text-sm text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors">
-                  + Add Pair
-                </button>
               </div>
+              <button type="button" onClick={addPair}
+                className="w-full mt-2 border-2 border-dashed border-slate-300 rounded-xl p-2 text-sm text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors">
+                + Add Row
+              </button>
+              <p className="text-xs text-slate-400 mt-1.5 bg-slate-50 p-2 rounded-lg">💡 Students will match each term to its definition. Grading is automatic.</p>
             </div>
           )}
         </div>
@@ -209,8 +205,8 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
 
 // ── Add Question Form ────────────────────────────────────────────────────────
 function newBlankQ() {
-  return { question_text: '', type: 'multiple_choice', options: ['', '', '', ''], correct_answer: '', points: '',
-    matching_pairs: [{ left_item: '', right_item: '', correct_match: '' }, { left_item: '', right_item: '', correct_match: '' }] };
+  return { question_text: '', type: 'multiple_choice', options: ['', '', '', ''], correct_answer: '', points: 1,
+    matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }] };
 }
 
 function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
@@ -226,7 +222,7 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
     if (i !== qi) return q;
     const pairs = [...q.matching_pairs]; pairs[pi] = { ...pairs[pi], [field]: v }; return { ...q, matching_pairs: pairs };
   }));
-  const addPair = (qi) => setQuestions(p => p.map((q, i) => i === qi ? { ...q, matching_pairs: [...q.matching_pairs, { left_item: '', right_item: '', correct_match: '' }] } : q));
+  const addPair = (qi) => setQuestions(p => p.map((q, i) => i === qi ? { ...q, matching_pairs: [...q.matching_pairs, { left_item: '', right_item: '' }] } : q));
   const removePair = (qi, pi) => setQuestions(p => p.map((q, i) => {
     if (i !== qi || q.matching_pairs.length <= 2) return q;
     return { ...q, matching_pairs: q.matching_pairs.filter((_, idx) => idx !== pi) };
@@ -240,7 +236,15 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
         if (q.type === 'essay') { delete out.options; delete out.correct_answer; delete out.matching_pairs; }
         else if (q.type === 'short_answer') { delete out.options; delete out.matching_pairs; }
         else if (q.type === 'true_false') { out.options = ['True', 'False']; delete out.matching_pairs; }
-        else if (q.type === 'matching') { delete out.options; delete out.correct_answer; }
+        else if (q.type === 'matching') { 
+          delete out.options; 
+          delete out.correct_answer;
+          out.matching_pairs = q.matching_pairs.map(p => ({
+            left_item: p.left_item,
+            right_item: p.right_item,
+            correct_match: p.right_item,
+          }));
+        }
         else { out.options = out.options.filter(o => o.trim() !== ''); delete out.matching_pairs; }
         return out;
       });
@@ -317,25 +321,33 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
               <p className="text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-200">Essay questions are graded manually.</p>
             )}
             {q.type === 'matching' && (
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-600">Matching Pairs</label>
-                {q.matching_pairs.map((pair, pi) => (
-                  <div key={pi} className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-semibold text-slate-500">Pair {pi + 1}</span>
-                      {q.matching_pairs.length > 2 && <button type="button" onClick={() => removePair(idx, pi)} className="text-xs text-red-400 hover:text-red-600">Remove</button>}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Matching Pairs</label>
+                <div className="grid grid-cols-2 gap-0 rounded-t-lg overflow-hidden border border-slate-200">
+                  <div className="px-3 py-2 bg-slate-100 text-xs font-semibold text-slate-500 border-r border-slate-200">Term</div>
+                  <div className="px-3 py-2 bg-slate-100 text-xs font-semibold text-slate-500">Definition</div>
+                </div>
+                <div className="border border-t-0 border-slate-200 rounded-b-lg overflow-hidden">
+                  {q.matching_pairs.map((pair, pi) => (
+                    <div key={pi} className={`grid gap-0 ${q.matching_pairs.length > 2 ? 'grid-cols-[1fr_1fr_auto]' : 'grid-cols-2'} ${pi > 0 ? 'border-t border-slate-100' : ''}`}>
+                      <input type="text" style={{ ...IS, borderRadius: 0, border: 'none', borderRight: '1px solid #e2e8f0' }}
+                        placeholder={`Term ${pi + 1}`} value={pair.left_item}
+                        onChange={e => updatePair(idx, pi, 'left_item', e.target.value)} />
+                      <input type="text" style={{ ...IS, borderRadius: 0, border: 'none' }}
+                        placeholder={`Definition ${pi + 1}`} value={pair.right_item}
+                        onChange={e => updatePair(idx, pi, 'right_item', e.target.value)} />
+                      {q.matching_pairs.length > 2 && (
+                        <button type="button" onClick={() => removePair(idx, pi)}
+                          style={{ border: 'none', borderLeft: '1px solid #e2e8f0', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0 10px' }}>✕</button>
+                      )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div><label className="block text-xs text-slate-500 mb-1">Left Item</label><input type="text" placeholder="e.g. HTML" value={pair.left_item} onChange={e => updatePair(idx, pi, 'left_item', e.target.value)} style={IS} /></div>
-                      <div><label className="block text-xs text-slate-500 mb-1">Right Item</label><input type="text" placeholder="e.g. Markup Language" value={pair.right_item} onChange={e => updatePair(idx, pi, 'right_item', e.target.value)} style={IS} /></div>
-                    </div>
-                    <div><label className="block text-xs text-slate-500 mb-1">Correct Match</label><input type="text" placeholder="e.g. Markup Language" value={pair.correct_match} onChange={e => updatePair(idx, pi, 'correct_match', e.target.value)} style={IS} /></div>
-                  </div>
-                ))}
+                  ))}
+                </div>
                 <button type="button" onClick={() => addPair(idx)}
-                  className="w-full border-2 border-dashed border-slate-300 rounded-xl p-2 text-sm text-slate-400 hover:text-slate-600 transition-colors">
-                  + Add Pair
+                  className="w-full mt-2 border-2 border-dashed border-slate-300 rounded-xl p-2 text-sm text-slate-400 hover:text-slate-600 transition-colors">
+                  + Add Row
                 </button>
+                <p className="text-xs text-slate-400 mt-1 bg-slate-50 p-2 rounded-lg">💡 Students match each term to its definition. Grading is automatic.</p>
               </div>
             )}
           </div>
