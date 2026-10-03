@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
 export default function StudentQuizPage() {
@@ -20,28 +20,39 @@ export default function StudentQuizPage() {
       .finally(() => setLoading(false));
   }, [courseId, assessmentId]);
 
-  // Add warning when user tries to leave page during assessment
+  // Warn on browser close/refresh AND intercept back button
   useEffect(() => {
-    if (submission && !result) {
-      const handleBeforeUnload = (e) => {
-        e.preventDefault();
-        e.returnValue = 'You have an assessment in progress. If you leave now, your current answers will be saved but you may not be able to continue this attempt.';
-        return e.returnValue;
-      };
+    if (!submission || result) return;
 
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      
-      return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-      };
-    }
-  }, [submission, result]);
+    // Browser close / tab refresh
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = 'You have an assessment in progress. If you leave now, your answers will be saved but you may not be able to retake this assessment.';
+      return e.returnValue;
+    };
 
-  // Block in-app React Router navigation while assessment is in progress
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      !!submission && !result && currentLocation.pathname !== nextLocation.pathname
-  );
+    // Browser back button — push a dummy state so back button triggers popstate
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      const confirmed = window.confirm(
+        'Leave Assessment?\n\nYour current answers have been saved, but you will not be able to retake this assessment once you leave — unless the instructor allows multiple attempts.\n\nClick "Cancel" to stay, or "OK" to leave.'
+      );
+      if (confirmed) {
+        navigate(`/student/courses/${courseId}`);
+      } else {
+        // Re-push state so back button can be intercepted again
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [submission, result, courseId, navigate]);
 
   const startQuiz = async () => {
     try {
@@ -268,37 +279,6 @@ export default function StudentQuizPage() {
   // Show questions
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* React Router navigation blocker modal */}
-      {blocker.state === 'blocked' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
-            <div className="text-center">
-              <div className="text-4xl mb-4">⚠️</div>
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Leave Assessment?</h3>
-              <p className="text-sm text-slate-600 mb-6">
-                Your current answers have been saved, but you <strong>will not be able to retake</strong> this assessment
-                once you leave — unless the instructor allows multiple attempts.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => blocker.reset()}
-                  className="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg text-sm font-semibold
-                    hover:bg-indigo-700 transition-colors"
-                >
-                  Stay &amp; Continue
-                </button>
-                <button
-                  onClick={() => blocker.proceed()}
-                  className="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-lg text-sm font-medium
-                    hover:bg-slate-200 transition-colors"
-                >
-                  Leave anyway
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Warning banner */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
         <span className="text-amber-600 text-xl flex-shrink-0">⚠️</span>
