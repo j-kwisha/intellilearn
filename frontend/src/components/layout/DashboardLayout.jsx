@@ -413,14 +413,16 @@ export default function DashboardLayout({ children }) {
     );
   }
 
-  /* ── Non-admin layout (student / instructor) — unchanged ── */
+  /* ── Non-admin layout (student / instructor) ── */
   return (
     <div className="dashboard-shell">
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
 
       <aside className={`sidebar role-${user?.role || 'student'} ${sidebarOpen ? 'sidebar-open' : ''}`}>
+        {/* Logo — matches admin layout */}
         <div className="sidebar-logo">
-          <span className="dot">IL</span> Intellilearn
+          <img src={logo} alt="Intellilearn" className="sidebar-logo-img" />
+          <span className="sidebar-logo-text">Intellilearn</span>
         </div>
 
         <div className="sidebar-profile">

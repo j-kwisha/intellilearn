@@ -6,7 +6,7 @@
    GLOBAL CSS VARIABLES
    ============================================================ */
 :root {
-  --sidebar-width: 276px;
+  --sidebar-width: 260px;
   --sidebar-text: rgba(255,255,255,0.65);
   --sidebar-text-active: #ffffff;
   --sidebar-hover: rgba(255,255,255,0.08);
@@ -72,6 +72,24 @@ body:has(.sidebar.role-student) .ann-card-link:hover .ann-card { border-color: #
 body:has(.sidebar.role-student) .topbar .avatar { background: linear-gradient(135deg, #A98AF3, #7655D9); box-shadow: 0 2px 8px rgba(118,85,217,0.35); }
 body:has(.sidebar.role-student) .topbar-icon-btn:hover { background: #F1EEFF; color: #7655D9; border-color: #C9BAED; }
 body:has(.sidebar.role-student) .topbar-search input:focus { border-color: #7655D9; box-shadow: 0 0 0 3px rgba(118,85,217,0.1); }
+
+/* Student card accent bars — matches instructor/admin polish */
+body:has(.sidebar.role-student) .card,
+body:has(.sidebar.role-student) .bg-white.rounded-xl,
+body:has(.sidebar.role-student) .bg-white.rounded-2xl {
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(90deg, #7655D9, #A98AF3) 1;
+  border-image-slice: 1;
+}
+
+/* Nav item font refinement */
+body:has(.sidebar.role-student) .nav-item,
+body:has(.sidebar.role-instructor) .nav-item {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
 
 .sidebar.role-instructor {
   background: linear-gradient(180deg, #14532d 0%, #15803d 40%, #16a34a 75%, #22c55e 100%);
@@ -204,10 +222,10 @@ h1, h2, h3, h4, h5 {
 }
 
 .sidebar-logo {
-  padding: 26px 22px 20px;
+  padding: 22px 20px 18px;
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   color: #fff;
   letter-spacing: -0.02em;
   display: flex;
@@ -217,18 +235,22 @@ h1, h2, h3, h4, h5 {
   margin-bottom: 4px;
 }
 
-.sidebar-logo span.dot {
-  width: 28px; height: 28px;
-  background: linear-gradient(135deg, #8b5cf6, #a78bfa);
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 900;
-  color: white;
-  box-shadow: 0 4px 12px rgba(139,92,246,0.4);
+.sidebar-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
   flex-shrink: 0;
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+}
+
+.sidebar-logo-text {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .sidebar-nav {
