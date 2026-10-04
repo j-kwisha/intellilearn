@@ -237,8 +237,8 @@ h1, h2, h3, h4, h5 {
 }
 
 .sidebar-logo-img {
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
   flex-shrink: 0;
   mix-blend-mode: screen;
@@ -2565,16 +2565,16 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 }
 
 .adm-brand-logo-wrap {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: #ffffff;
+  width: 44px;
+  height: 44px;
+  border-radius: 0;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  overflow: hidden;
-  padding: 5px;
+  overflow: visible;
+  padding: 0;
 }
 
 .adm-brand-logo { width: 100%; height: 100%; object-fit: contain; }
@@ -3330,7 +3330,7 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 .instr-sidebar-waves { position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; }
 
 .instr-brand { display:flex; align-items:center; gap:12px; padding:6px 8px 10px; }
-.instr-brand-logo-wrap { width:42px; height:42px; border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; padding:5px; }
+.instr-brand-logo-wrap { width:44px; height:44px; border-radius:0; background:transparent; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:visible; padding:0; }
 .instr-brand-logo { width:100%; height:100%; object-fit:contain; }
 .instr-brand-name { color:#fff; font-weight:700; font-size:19px; letter-spacing:0.2px; font-family:"Poppins",sans-serif; }
 
@@ -3925,18 +3925,18 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
   padding: 6px 8px 10px;
 }
 
-/* Logo wrapper — exact same as .instr-brand-logo-wrap */
+/* Logo wrapper — no background, larger */
 .std-brand-logo-wrap {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: #fff;
+  width: 44px;
+  height: 44px;
+  border-radius: 0;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  overflow: hidden;
-  padding: 5px;
+  overflow: visible;
+  padding: 0;
 }
 
 /* Logo image — exact same as .instr-brand-logo */
