@@ -2,7 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import heroImg from '../../assets/Student_LandingPage.png';
-import logo from '../../assets/logo.png';
+import logo from '../../assets/logo copy.png';
 
 import imgLearningPath from '../../assets/Personalized_Learning_Path.png';
 import imgFeedback     from '../../assets/Instant_Feedback_System.png';
