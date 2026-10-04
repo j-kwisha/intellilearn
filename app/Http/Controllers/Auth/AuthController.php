@@ -60,12 +60,10 @@ class AuthController extends Controller
     }
 
     /**
-     * Send email verification link via Resend
+     * Send email verification link via Laravel Mail (resend transport)
      */
     private function sendVerificationEmail(User $user): void
     {
-        $frontend = env('FRONTEND_URL', 'http://localhost:5173');
-
         // Build a signed verification URL
         $verifyUrl = \URL::temporarySignedRoute(
             'verification.verify',
@@ -73,26 +71,31 @@ class AuthController extends Controller
             ['id' => $user->id, 'hash' => sha1($user->email)]
         );
 
+        $html = "
+            <div style='font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;'>
+                <h2 style='color: #1e1b4b;'>Verify your email</h2>
+                <p>Hi {$user->first_name},</p>
+                <p>Thanks for signing up for IntelliLearn! Click the button below to verify your email address. This link expires in <strong>60 minutes</strong>.</p>
+                <a href='{$verifyUrl}' style='display:inline-block; background:#7655D9; color:white; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:bold; margin: 16px 0;'>
+                    Verify Email Address
+                </a>
+                <p style='color:#64748b; font-size:13px;'>If you did not create an account, you can safely ignore this email.</p>
+                <p style='color:#64748b; font-size:13px;'>Or copy this link: <a href='{$verifyUrl}'>{$verifyUrl}</a></p>
+            </div>
+        ";
+
         try {
-            \Resend::emails()->send([
-                'from'    => 'IntelliLearn <onboarding@resend.dev>',
-                'to'      => [$user->email],
-                'subject' => 'Verify your IntelliLearn account',
-                'html'    => "
-                    <div style='font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;'>
-                        <h2 style='color: #1e1b4b;'>Verify your email</h2>
-                        <p>Hi {$user->first_name},</p>
-                        <p>Thanks for signing up for IntelliLearn! Click the button below to verify your email address. This link expires in <strong>60 minutes</strong>.</p>
-                        <a href='{$verifyUrl}' style='display:inline-block; background:#7655D9; color:white; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:bold; margin: 16px 0;'>
-                            Verify Email Address
-                        </a>
-                        <p style='color:#64748b; font-size:13px;'>If you did not create an account, you can safely ignore this email.</p>
-                        <p style='color:#64748b; font-size:13px;'>Or copy this link: <a href='{$verifyUrl}'>{$verifyUrl}</a></p>
-                    </div>
-                ",
-            ]);
+            \Illuminate\Support\Facades\Mail::send([], [], function ($message) use ($user, $html) {
+                $message->to($user->email, "{$user->first_name} {$user->last_name}")
+                    ->from('onboarding@resend.dev', 'IntelliLearn')
+                    ->subject('Verify your IntelliLearn account')
+                    ->html($html);
+            });
         } catch (\Exception $e) {
-            \Log::error('Failed to send verification email', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            \Log::error('Failed to send verification email', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
         }
     }
 
@@ -244,24 +247,25 @@ class AuthController extends Controller
             $frontend = env('FRONTEND_URL', 'http://localhost:5173');
             $resetUrl = "{$frontend}/reset-password?token={$token}&email=" . urlencode($request->email);
 
-            // Send email via Resend
-            \Resend::emails()->send([
-                'from'    => 'IntelliLearn <onboarding@resend.dev>',
-                'to'      => [$request->email],
-                'subject' => 'Reset your IntelliLearn password',
-                'html'    => "
-                    <div style='font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;'>
-                        <h2 style='color: #173861;'>Reset your password</h2>
-                        <p>Hi {$user->first_name},</p>
-                        <p>We received a request to reset your IntelliLearn password. Click the button below to set a new password. This link expires in <strong>60 minutes</strong>.</p>
-                        <a href='{$resetUrl}' style='display:inline-block; background:#173861; color:white; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:bold; margin: 16px 0;'>
-                            Reset Password
-                        </a>
-                        <p style='color:#64748b; font-size:13px;'>If you did not request a password reset, you can safely ignore this email.</p>
-                        <p style='color:#64748b; font-size:13px;'>Or copy this link: <a href='{$resetUrl}'>{$resetUrl}</a></p>
-                    </div>
-                ",
-            ]);
+            // Send email via Laravel Mail (resend transport)
+            $resetHtml = "
+                <div style='font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;'>
+                    <h2 style='color: #173861;'>Reset your password</h2>
+                    <p>Hi {$user->first_name},</p>
+                    <p>We received a request to reset your IntelliLearn password. Click the button below to set a new password. This link expires in <strong>60 minutes</strong>.</p>
+                    <a href='{$resetUrl}' style='display:inline-block; background:#173861; color:white; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:bold; margin: 16px 0;'>
+                        Reset Password
+                    </a>
+                    <p style='color:#64748b; font-size:13px;'>If you did not request a password reset, you can safely ignore this email.</p>
+                    <p style='color:#64748b; font-size:13px;'>Or copy this link: <a href='{$resetUrl}'>{$resetUrl}</a></p>
+                </div>
+            ";
+            \Illuminate\Support\Facades\Mail::send([], [], function ($message) use ($user, $resetUrl, $resetHtml) {
+                $message->to($user->email, "{$user->first_name} {$user->last_name}")
+                    ->from('onboarding@resend.dev', 'IntelliLearn')
+                    ->subject('Reset your IntelliLearn password')
+                    ->html($resetHtml);
+            });
         }
 
         return response()->json([
