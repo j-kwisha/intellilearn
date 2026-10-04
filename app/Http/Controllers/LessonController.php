@@ -293,14 +293,17 @@ class LessonController extends Controller
                 $timestamp = time();
                 $folder    = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
 
-                // Signature: alphabetically sorted params (excluding api_key, file, resource_type)
-                // joined as key=value&... then appended with the api_secret
+                // Signature: alphabetically sorted params, raw (not URL-encoded), appended with api_secret
                 $paramsToSign = [
                     'folder'    => $folder,
                     'timestamp' => $timestamp,
                 ];
                 ksort($paramsToSign);
-                $signatureString = http_build_query($paramsToSign) . $apiSecret;
+                $signatureParts = [];
+                foreach ($paramsToSign as $key => $value) {
+                    $signatureParts[] = "{$key}={$value}";
+                }
+                $signatureString = implode('&', $signatureParts) . $apiSecret;
                 $signature = sha1($signatureString);
 
                 $response = \Illuminate\Support\Facades\Http::attach(
