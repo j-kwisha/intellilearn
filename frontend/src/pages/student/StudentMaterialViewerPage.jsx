@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
-import chatbotAvatar from '../../assets/mascot.png';
+import chatbotAvatar from '../../assets/mascot_chathead.jpg';
 
 // Simple markdown renderer — handles bold, italic, bullets, numbered lists
 function MarkdownText({ text }) {
