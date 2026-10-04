@@ -528,7 +528,6 @@ export default function LoginPage() {
                       <br/>
                       <button onClick={()=>{ setRegSuccess(false); setAuthMode('login'); }} className="ll-btn" style={{ marginTop:8 }}>Go to Login</button>
                     </div>
-                    </div>
                   ) : (
                     <>
                       {regErrors.general && <div style={{ background:'#FEF2F2',color:'#DC2626',fontSize:13,padding:'10px 14px',borderRadius:10,marginBottom:12,border:'1px solid #FECACA' }}>{regErrors.general[0]}</div>}
