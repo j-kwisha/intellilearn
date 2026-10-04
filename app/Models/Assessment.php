@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Assessment extends Model
 {
@@ -16,6 +17,7 @@ class Assessment extends Model
         'description',
         'type',
         'topic',
+        'file_path',
         'total_points',
         'time_limit_minutes',
         'max_attempts',
@@ -25,6 +27,19 @@ class Assessment extends Model
         'score_visibility',
         'scores_released_at',
     ];
+
+    protected $appends = ['file_url'];
+
+    public function getFileUrlAttribute(): ?string
+    {
+        if ($this->file_path) {
+            if (str_starts_with($this->file_path, 'http')) {
+                return $this->file_path;
+            }
+            return Storage::disk('public')->url($this->file_path);
+        }
+        return null;
+    }
 
     protected function casts(): array
     {

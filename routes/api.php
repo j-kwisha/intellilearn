@@ -113,6 +113,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/courses/{course}/assessments/{assessment}', [AssessmentController::class, 'show']);
     Route::put('/courses/{course}/assessments/{assessment}', [AssessmentController::class, 'update']);
     Route::delete('/courses/{course}/assessments/{assessment}', [AssessmentController::class, 'destroy']);
+    Route::post('/courses/{course}/assessments/{assessment}/upload-file', [AssessmentController::class, 'uploadFile']);
     Route::post('/courses/{course}/assessments/{assessment}/release-scores', [AssessmentController::class, 'releaseScores']);
 
     // --- QUESTIONS ---

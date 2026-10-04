@@ -6,7 +6,7 @@ export default function InstructorCreateAssessmentPage() {
   const { courseId } = useParams();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState('form'); // 'form' | 'questions'
+  const [step, setStep] = useState('form'); // 'form' | 'questions' | 'upload_file'
   const [assessmentId, setAssessmentId] = useState(null);
   const [assessmentTitle, setAssessmentTitle] = useState('');
 
@@ -26,18 +26,25 @@ export default function InstructorCreateAssessmentPage() {
   const [qError, setQError] = useState('');
   const [savedQuestions, setSavedQuestions] = useState([]);
 
+  // Paper-based file upload
+  const [paperFile, setPaperFile] = useState(null);
+  const [paperFileType, setPaperFileType] = useState('pdf');
+  const [paperUploading, setPaperUploading] = useState(false);
+  const [paperUploadProgress, setPaperUploadProgress] = useState(0);
+  const [paperUploadError, setPaperUploadError] = useState('');
+  const [paperFileUrl, setPaperFileUrl] = useState(null);
+
   function newQuestion() {
     return { 
       question_text: '', 
       type: 'multiple_choice', 
       options: ['', '', '', ''], 
       correct_answer: '', 
-      points: 1,  // default 1 point
+      points: 1,
       matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }]
     };
   }
 
-  // ── Assessment form validation ──────────────────────────────
   const validateAssessmentForm = () => {
     if (!form.title.trim()) return 'Assessment title is required.';
     if (!form.type) return 'Please select an assessment type.';
@@ -60,18 +67,15 @@ export default function InstructorCreateAssessmentPage() {
 
       let created;
       if (assessmentId) {
-        // Assessment already exists — update it instead of creating a new one
         const res = await api.put(`/courses/${courseId}/assessments/${assessmentId}`, data);
         created = res.data.assessment;
       } else {
-        // First time — create new assessment
         const res = await api.post(`/courses/${courseId}/assessments`, data);
         created = res.data.assessment;
         setAssessmentId(created.id);
       }
       setAssessmentTitle(created.title);
 
-      // Add to student calendars if toggled (only on first create)
       if (!assessmentId && addToCalendar && form.due_date) {
         await api.post(`/courses/${courseId}/calendar`, {
           title: `📝 ${created.title}`,
@@ -82,11 +86,34 @@ export default function InstructorCreateAssessmentPage() {
         });
       }
 
-      setStep('questions');
+      // Paper-based goes to file upload step, others go to questions step
+      setStep(form.type === 'paper_based' ? 'upload_file' : 'questions');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save assessment.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUploadPaperFile = async (e) => {
+    e.preventDefault();
+    if (!paperFile) { setPaperUploadError('Please select a file.'); return; }
+    setPaperUploading(true); setPaperUploadError(''); setPaperUploadProgress(0);
+
+    const data = new FormData();
+    data.append('file', paperFile);
+    data.append('_method', 'PUT'); // Cloudinary upload handled in update
+
+    try {
+      const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/upload-file`, data, {
+        headers: { 'Content-Type': undefined },
+        onUploadProgress: ev => setPaperUploadProgress(Math.round((ev.loaded / ev.total) * 100)),
+      });
+      setPaperFileUrl(res.data.file_url);
+    } catch (err) {
+      setPaperUploadError(err.response?.data?.message || 'Upload failed. Please try again.');
+    } finally {
+      setPaperUploading(false);
     }
   };
 
@@ -265,9 +292,12 @@ export default function InstructorCreateAssessmentPage() {
 
       {/* Step indicator */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
-        {['Assessment Details', 'Add Questions'].map((label, i) => {
-          const active = (i === 0 && step === 'form') || (i === 1 && step === 'questions');
-          const done = i === 0 && step === 'questions';
+        {[
+          'Assessment Details',
+          form.type === 'paper_based' ? 'Upload File' : 'Add Questions'
+        ].map((label, i) => {
+          const active = (i === 0 && step === 'form') || (i === 1 && (step === 'questions' || step === 'upload_file'));
+          const done = i === 0 && (step === 'questions' || step === 'upload_file');
           return (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
@@ -278,7 +308,7 @@ export default function InstructorCreateAssessmentPage() {
                 fontSize: '0.8rem', fontWeight: 700,
               }}>{done ? '✓' : i + 1}</div>
               <span style={{ fontSize: '0.875rem', fontWeight: active ? 700 : 500, color: active ? '#0f172a' : '#94a3b8' }}>{label}</span>
-              {i === 0 && <div style={{ width: 40, height: 2, background: step === 'questions' ? '#10b981' : '#e2e8f0', borderRadius: 2 }} />}
+              {i === 0 && <div style={{ width: 40, height: 2, background: (step === 'questions' || step === 'upload_file') ? '#10b981' : '#e2e8f0', borderRadius: 2 }} />}
             </div>
           );
         })}
@@ -307,6 +337,7 @@ export default function InstructorCreateAssessmentPage() {
                   <option value="quiz">Quiz</option>
                   <option value="long_exam">Long Exam</option>
                   <option value="individual_activity">Individual Activity</option>
+                  <option value="paper_based">📄 Paper-Based (Upload PDF/DOCX)</option>
                 </select>
               </div>
               <div>
@@ -616,6 +647,86 @@ export default function InstructorCreateAssessmentPage() {
           </div>
 
           {/* Done */}
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button onClick={() => navigate(`/instructor/courses/${courseId}`)} style={S.btn}>
+              ✓ Done — Back to Course
+            </button>
+            <button onClick={() => setStep('form')} style={S.btnGhost}>
+              ← Edit Assessment Details
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP: Upload File (paper_based) */}
+      {step === 'upload_file' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', padding: 32 }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: 6, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              📄 Upload Question Sheet
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: 24 }}>
+              Upload the PDF or DOCX file that students will view and answer on paper.
+            </p>
+
+            {paperUploadError && (
+              <div style={{ background: '#FEF2F2', color: '#DC2626', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: '0.875rem' }}>
+                {paperUploadError}
+              </div>
+            )}
+
+            {paperFileUrl ? (
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: 20, textAlign: 'center' }}>
+                <div style={{ fontSize: '2rem', marginBottom: 8 }}>✅</div>
+                <p style={{ fontWeight: 700, color: '#14532d', marginBottom: 6 }}>File uploaded successfully!</p>
+                <p style={{ fontSize: '0.8rem', color: '#166534', marginBottom: 16 }}>Students will see this file when they open the assessment.</p>
+                <a href={paperFileUrl} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: '0.85rem', color: '#0d9488', textDecoration: 'underline' }}>
+                  Preview uploaded file →
+                </a>
+              </div>
+            ) : (
+              <form onSubmit={handleUploadPaperFile} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <label style={S.label}>File Type</label>
+                  <select style={{ ...S.input, background: 'white' }} value={paperFileType}
+                    onChange={e => setPaperFileType(e.target.value)}>
+                    <option value="pdf">PDF</option>
+                    <option value="docx">Word Document (DOCX)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Select File *</label>
+                  <div style={{ border: '2px dashed #cbd5e1', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => { e.preventDefault(); setPaperFile(e.dataTransfer.files[0]); }}>
+                    <input type="file" id="paper-file-input" accept=".pdf,.doc,.docx"
+                      onChange={e => setPaperFile(e.target.files[0])} style={{ display: 'none' }} />
+                    <label htmlFor="paper-file-input" style={{ cursor: 'pointer' }}>
+                      {paperFile ? (
+                        <p style={{ color: '#0d9488', fontWeight: 600, fontSize: '0.9rem' }}>📎 {paperFile.name}</p>
+                      ) : (
+                        <>
+                          <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>Click to select or drag & drop</p>
+                          <p style={{ color: '#94a3b8', fontSize: '0.78rem', marginTop: 4 }}>PDF or DOCX — Max 100MB</p>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                </div>
+                {paperUploading && paperUploadProgress > 0 && (
+                  <div style={{ background: '#f1f5f9', borderRadius: 99, height: 8, overflow: 'hidden' }}>
+                    <div style={{ background: '#0d9488', height: '100%', width: `${paperUploadProgress}%`, transition: 'width 0.3s', borderRadius: 99 }} />
+                  </div>
+                )}
+                <button type="submit" disabled={paperUploading || !paperFile}
+                  style={{ ...S.btn, opacity: (paperUploading || !paperFile) ? 0.6 : 1 }}>
+                  {paperUploading ? `Uploading ${paperUploadProgress}%...` : '⬆ Upload File'}
+                </button>
+              </form>
+            )}
+          </div>
+
           <div style={{ display: 'flex', gap: 12 }}>
             <button onClick={() => navigate(`/instructor/courses/${courseId}`)} style={S.btn}>
               ✓ Done — Back to Course

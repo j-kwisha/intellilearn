@@ -112,6 +112,49 @@ export default function StudentQuizPage() {
 
   if (!assessment) return <p className="text-slate-500">Assessment not found.</p>;
 
+  // Paper-based assessment — just show the file viewer
+  if (assessment.type === 'paper_based') {
+    const fileUrl = assessment.file_url;
+    const isPdf = assessment.file_path?.toLowerCase().endsWith('.pdf') || fileUrl?.includes('.pdf');
+    return (
+      <div className="space-y-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">{assessment.title}</h2>
+            <p className="text-sm text-slate-500 mt-1">📄 Paper-based assessment — view the file below and answer on paper.</p>
+          </div>
+          {fileUrl && (
+            <a href={fileUrl} target="_blank" rel="noopener noreferrer" download
+              className="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shrink-0">
+              Download
+            </a>
+          )}
+        </div>
+        {fileUrl ? (
+          <div style={{ height: 'calc(100vh - 200px)', borderRadius: 12, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+            {isPdf ? (
+              <iframe src={fileUrl} title={assessment.title} style={{ width: '100%', height: '100%', border: 'none' }} />
+            ) : (
+              <iframe
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`}
+                title={assessment.title}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="bg-slate-50 rounded-xl border border-slate-200 p-10 text-center">
+            <p className="text-slate-400">No file uploaded for this assessment yet.</p>
+          </div>
+        )}
+        <button onClick={() => navigate(`/student/courses/${courseId}`)}
+          className="w-full bg-slate-100 text-slate-700 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
+          ← Back to course
+        </button>
+      </div>
+    );
+  }
+
   // Show results
   if (result) {
     const scoreHidden = result.percentage === null;

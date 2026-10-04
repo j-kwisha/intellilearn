@@ -81,7 +81,7 @@ class AssessmentController extends Controller
         $validated = $request->validate([
             'title'              => ['required', 'string', 'max:255'],
             'description'        => ['nullable', 'string'],
-            'type'               => ['required', 'in:quiz,long_exam,individual_activity'],
+            'type'               => ['required', 'in:quiz,long_exam,individual_activity,paper_based'],
             'topic'              => ['nullable', 'string', 'max:255'],
             'lesson_id'          => ['nullable', 'exists:lessons,id'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
@@ -96,6 +96,14 @@ class AssessmentController extends Controller
         $validated['total_points'] = 0;
 
         $assessment = $course->assessments()->create($validated);
+
+        // Handle file upload for paper_based assessments
+        if ($validated['type'] === 'paper_based' && $request->hasFile('file')) {
+            $filePath = $this->uploadAssessmentFile($request->file('file'), $course->id, $assessment->id);
+            if ($filePath) {
+                $assessment->update(['file_path' => $filePath]);
+            }
+        }
 
         return response()->json([
             'message'    => 'Assessment created successfully.',
@@ -165,7 +173,7 @@ class AssessmentController extends Controller
         $validated = $request->validate([
             'title'              => ['sometimes', 'string', 'max:255'],
             'description'        => ['nullable', 'string'],
-            'type'               => ['sometimes', 'in:quiz,long_exam,individual_activity'],
+            'type'               => ['sometimes', 'in:quiz,long_exam,individual_activity,paper_based'],
             'topic'              => ['nullable', 'string', 'max:255'],
             'lesson_id'          => ['nullable', 'exists:lessons,id'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
@@ -177,7 +185,15 @@ class AssessmentController extends Controller
         ]);
 
         $assessment->update($validated);
-        
+
+        // Handle file upload for paper_based assessments
+        if ($request->hasFile('file')) {
+            $filePath = $this->uploadAssessmentFile($request->file('file'), $course->id, $assessment->id);
+            if ($filePath) {
+                $assessment->update(['file_path' => $filePath]);
+            }
+        }
+
         // Recalculate total_points from questions
         $totalPoints = $assessment->questions()->sum('points');
         $assessment->update(['total_points' => $totalPoints]);
@@ -465,6 +481,23 @@ class AssessmentController extends Controller
     }
 
     /**
+     * UPLOAD FILE FOR PAPER-BASED ASSESSMENT
+     */
+    public function uploadFile(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        if (! $this->canManageCourse($request->user(), $course)) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+        $request->validate(['file' => ['required', 'file', 'mimes:pdf,doc,docx', 'max:102400']]);
+        $filePath = $this->uploadAssessmentFile($request->file('file'), $course->id, $assessment->id);
+        if (! $filePath) {
+            return response()->json(['message' => 'File upload failed.'], 500);
+        }
+        $assessment->update(['file_path' => $filePath]);
+        return response()->json(['file_url' => $assessment->fresh()->file_url]);
+    }
+
+    /**
      * RELEASE SCORES FOR AN ASSESSMENT
      *
      * POST /api/courses/{course}/assessments/{assessment}/release-scores
@@ -642,5 +675,52 @@ class AssessmentController extends Controller
         if ($user->isAdmin()) return true;
         if ($user->isInstructor() && $course->instructor_id === $user->id) return true;
         return false;
+    }
+
+    /**
+     * Upload a PDF/DOCX file for a paper-based assessment to Cloudinary.
+     * Returns the file URL on success, null on failure.
+     */
+    private function uploadAssessmentFile($file, int $courseId, int $assessmentId): ?string
+    {
+        $cloudName = env('CLOUDINARY_CLOUD_NAME');
+        $apiKey    = env('CLOUDINARY_API_KEY');
+        $apiSecret = env('CLOUDINARY_API_SECRET');
+
+        if ($cloudName && $apiKey && $apiSecret) {
+            $timestamp = time();
+            $folder    = "intellilearn/course_{$courseId}/assessments";
+
+            $paramsToSign = ['folder' => $folder, 'timestamp' => $timestamp];
+            ksort($paramsToSign);
+            $signatureParts = [];
+            foreach ($paramsToSign as $key => $value) {
+                $signatureParts[] = "{$key}={$value}";
+            }
+            $signature = sha1(implode('&', $signatureParts) . $apiSecret);
+
+            $response = \Illuminate\Support\Facades\Http::attach(
+                'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
+            )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
+                'api_key'   => $apiKey,
+                'timestamp' => $timestamp,
+                'folder'    => $folder,
+                'signature' => $signature,
+            ]);
+
+            if ($response->successful()) {
+                return $response->json('secure_url');
+            }
+
+            \Log::error('Cloudinary assessment file upload failed', [
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ]);
+            return null;
+        }
+
+        // Fallback: local storage
+        $stored = $file->store("assessments/course_{$courseId}", 'public');
+        return \Illuminate\Support\Facades\Storage::disk('public')->url($stored);
     }
 }
