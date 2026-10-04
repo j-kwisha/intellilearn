@@ -95,7 +95,6 @@ class AuthController extends Controller
             \Log::error('Failed to send verification email', ['user_id' => $user->id, 'error' => $e->getMessage()]);
         }
     }
-    }
 
     /**
      * LOG IN AN EXISTING USER
