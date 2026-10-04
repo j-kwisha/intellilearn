@@ -87,7 +87,7 @@ body:has(.sidebar.role-student) .nav-item,
 body:has(.sidebar.role-instructor) .nav-item {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 0.84rem;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.01em;
 }
 
@@ -222,10 +222,10 @@ h1, h2, h3, h4, h5 {
 }
 
 .sidebar-logo {
-  padding: 22px 20px 18px;
+  padding: 18px 20px 16px;
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: 1.0rem;
   color: #fff;
   letter-spacing: -0.02em;
   display: flex;
@@ -233,21 +233,21 @@ h1, h2, h3, h4, h5 {
   gap: 10px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   margin-bottom: 4px;
+  min-height: 64px;
 }
 
 .sidebar-logo-img {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
   flex-shrink: 0;
-  filter: brightness(0) invert(1);
-  opacity: 0.92;
+  mix-blend-mode: screen;
 }
 
 .sidebar-logo-text {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   color: #ffffff;
   letter-spacing: -0.02em;
   white-space: nowrap;
@@ -274,7 +274,7 @@ h1, h2, h3, h4, h5 {
   padding: 10px 14px;
   border-radius: 10px;
   color: var(--sidebar-text);
-  font-size: 0.875rem;
+  font-size: 0.82rem;
   font-weight: 500;
   text-decoration: none;
   transition: all 0.18s ease;
@@ -345,9 +345,7 @@ h1, h2, h3, h4, h5 {
    ============================================================ */
 .topbar {
   height: 72px;
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #ffffff;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -389,7 +387,7 @@ h1, h2, h3, h4, h5 {
 }
 
 .avatar {
-  width: 42px; height: 42px;
+  width: 36px; height: 36px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent), var(--accent-mid));
   display: flex;
@@ -397,7 +395,7 @@ h1, h2, h3, h4, h5 {
   justify-content: center;
   color: white;
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-family: 'Plus Jakarta Sans', sans-serif;
   flex-shrink: 0;
   box-shadow: 0 2px 8px var(--accent-shadow);
@@ -490,6 +488,7 @@ h1, h2, h3, h4, h5 {
   flex: 1;
   padding: 26px 30px;
   overflow-y: auto;
+  overflow-x: hidden;
   width: 100%;
   height: 0;
 }
@@ -931,14 +930,19 @@ h1, h2, h3, h4, h5 {
 .welcome-banner::after {
   content: '';
   position: absolute;
-  top: -40px; right: 180px;
+  top: 10px; right: 180px;
   width: 220px; height: 220px;
   border-radius: 50%;
   background: rgba(255,255,255,0.04);
   pointer-events: none;
 }
 
-.welcome-banner-text { position: relative; z-index: 2; }
+.welcome-banner-text {
+  position: relative;
+  z-index: 2;
+  border-left: 4px solid #A98AF3;
+  padding-left: 22px;
+}
 
 .welcome-banner-text h1 {
   font-family: 'Plus Jakarta Sans', sans-serif;
@@ -1077,8 +1081,8 @@ h1, h2, h3, h4, h5 {
 }
 
 .sidebar-profile-name {
-  font-weight: 700;
-  font-size: 0.85rem;
+  font-weight: 600;
+  font-size: 0.82rem;
   color: white;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -3846,3 +3850,258 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 
 .instr-students-table th:nth-child(2),
 .instr-students-table td:nth-child(2) { min-width: 140px; }
+
+/* ============================================================
+   STD SIDEBAR — Student sidebar (mirrors instr- structure exactly)
+   Purple theme, same dimensions / spacing / proportions as instructor
+   ============================================================ */
+
+/* Purple design tokens */
+.std-sidebar {
+  --std-purple-900: #1a1040;
+  --std-purple-800: #241654;
+  --std-purple-700: #2e1c6a;
+  --std-purple-600: #3d2585;
+  --std-purple-500: #5032a8;
+  --std-purple-glow: #7655d9;
+  --std-mint:       #c4b5fd;
+  --std-mint-soft:  #ede9fe;
+}
+
+/* Sidebar container — exact same as .instr-sidebar */
+.std-sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  height: 100vh;
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #1e1250 0%, #160e40 100%);
+  padding: 24px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  z-index: 50;
+  box-shadow: 4px 0 24px rgba(26,16,64,0.45);
+  border-right: 1px solid rgba(255,255,255,0.04);
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Decorative waves — rendered as background layer */
+.std-sidebar .std-sidebar-waves {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* All direct children sit above the wave */
+.std-sidebar > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Mobile: hidden off-screen */
+@media (max-width: 768px) {
+  .std-sidebar {
+    transform: translateX(-100%);
+  }
+  .std-sidebar.std-sidebar--open {
+    transform: translateX(0);
+  }
+  .std-main-layout {
+    margin-left: 0 !important;
+    width: 100vw !important;
+  }
+}
+
+/* Brand / Logo — exact same as .instr-brand */
+.std-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 10px;
+}
+
+/* Logo wrapper — exact same as .instr-brand-logo-wrap */
+.std-brand-logo-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  padding: 5px;
+}
+
+/* Logo image — exact same as .instr-brand-logo */
+.std-brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Brand name — exact same as .instr-brand-name */
+.std-brand-name {
+  color: #fff;
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.2px;
+  font-family: 'Poppins', sans-serif;
+  white-space: nowrap;
+}
+
+/* Profile card — exact same as .instr-account-card */
+.std-account-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+/* Avatar — exact same as .instr-avatar--sidebar but purple */
+.std-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #7655d9;
+  color: #f5f0ff;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(118,85,217,0.45);
+}
+
+/* Account text stack — exact same as .instr-account-text */
+.std-account-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Name — exact same as .instr-account-name */
+.std-account-name {
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Role — exact same as .instr-account-role but purple tint */
+.std-account-role {
+  color: #c4b5fd;
+  font-size: 12.5px;
+  font-family: 'Inter', sans-serif;
+  text-transform: capitalize;
+}
+
+/* Nav container — exact same as .instr-nav */
+.std-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Nav item — exact same as .instr-nav-item */
+.std-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(196,181,253,0.75);
+  text-decoration: none;
+  font-size: 14.5px;
+  font-weight: 500;
+  padding: 11px 14px;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+  font-family: 'Inter', sans-serif;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+/* Nav item hover — same structure as .instr-nav-item:hover */
+.std-nav-item:hover {
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+}
+
+/* Active nav item — same structure as .instr-nav-item--active but purple gradient */
+.std-nav-item--active {
+  background: linear-gradient(90deg, #3d2585, #5032a8);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(61,37,133,0.45);
+}
+
+/* Nav icon — exact same as .instr-nav-icon */
+.std-nav-icon {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.std-nav-icon svg,
+.std-nav-icon > * {
+  width: 19px;
+  height: 19px;
+}
+
+/* Logout button — exact same as .instr-logout-btn but purple tint */
+.std-logout-btn {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #c4b5fd;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  width: 100%;
+  transition: background 0.15s, color 0.15s;
+}
+
+.std-logout-btn:hover {
+  background: rgba(255,255,255,0.10);
+  color: #fff;
+}
+
+/* Main layout — matches .main-layout but references std-sidebar width */
+.std-main-layout {
+  margin-left: 264px;
+  height: 100vh;
+  width: calc(100vw - 264px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-main, #f0f4f1);
+  overflow: hidden;
+}

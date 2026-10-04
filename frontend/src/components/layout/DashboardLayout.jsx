@@ -413,27 +413,38 @@ export default function DashboardLayout({ children }) {
     );
   }
 
-  /* ── Non-admin layout (student / instructor) ── */
+  /* ── Student / Instructor shared layout (non-admin) ── */
   return (
     <div className="dashboard-shell">
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
 
-      <aside className={`sidebar role-${user?.role || 'student'} ${sidebarOpen ? 'sidebar-open' : ''}`}>
-        {/* Logo — matches admin layout */}
-        <div className="sidebar-logo">
-          <img src={logo} alt="Intellilearn" className="sidebar-logo-img" />
-          <span className="sidebar-logo-text">Intellilearn</span>
+      <aside className={`std-sidebar role-${user?.role || 'student'} ${sidebarOpen ? 'std-sidebar--open' : ''}`}>
+
+        {/* Decorative waves — background layer, same composition as instr-sidebar-waves */}
+        <svg className="std-sidebar-waves" viewBox="0 0 264 900" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M264,120 C160,180 210,420 90,520 C10,585 40,760 -20,860 L-20,900 L264,900 Z" fill="rgba(255,255,255,0.05)"/>
+          <path d="M264,340 C190,400 220,580 130,660 C70,712 90,820 40,900 L264,900 Z" fill="rgba(255,255,255,0.03)"/>
+        </svg>
+
+        {/* Brand / Logo */}
+        <div className="std-brand">
+          <span className="std-brand-logo-wrap">
+            <img src={logo} alt="Intellilearn" className="std-brand-logo" />
+          </span>
+          <span className="std-brand-name">Intellilearn</span>
         </div>
 
-        <div className="sidebar-profile">
-          <div className="avatar">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
-          <div>
-            <div className="sidebar-profile-name">{user?.first_name} {user?.last_name}</div>
-            <div className="sidebar-profile-role">{user?.role}</div>
+        {/* Profile card */}
+        <div className="std-account-card">
+          <div className="std-avatar">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
+          <div className="std-account-text">
+            <span className="std-account-name">{user?.first_name} {user?.last_name}</span>
+            <span className="std-account-role">{user?.role}</span>
           </div>
         </div>
 
-        <div className="sidebar-nav">
+        {/* Nav */}
+        <nav className="std-nav">
           {items.map((item) => (
             <Link
               key={item.path}
@@ -442,21 +453,22 @@ export default function DashboardLayout({ children }) {
                 if (checkGuard()) { e.preventDefault(); return; }
                 setSidebarOpen(false);
               }}
-              className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+              className={`std-nav-item ${location.pathname === item.path ? 'std-nav-item--active' : ''}`}
             >
-              <span className="nav-icon">{item.icon}</span>
-              {item.label}
+              <span className="std-nav-icon">{item.icon}</span>
+              <span>{item.label}</span>
             </Link>
           ))}
-        </div>
+        </nav>
 
-        <button className="logout-btn" onClick={handleLogout}>
-          <LogoutIcon fontSize="small" />
-          Log out
+        {/* Logout */}
+        <button className="std-logout-btn" onClick={handleLogout}>
+          <LogoutIcon style={{ width: 19, height: 19, flexShrink: 0 }} />
+          <span>Log out</span>
         </button>
       </aside>
 
-      <div className="main-layout">
+      <div className="std-main-layout">
         <header className="topbar">
           <button className="topbar-toggle" onClick={() => setSidebarOpen(true)}>
             <MenuIcon />
@@ -519,7 +531,7 @@ export default function DashboardLayout({ children }) {
           )}
 
           <div className="topbar-user">
-            <div className="avatar">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
+            <div className="std-avatar" style={{width:40,height:40,fontSize:'13px'}}>{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
             <div>
               <div className="topbar-user-name">{user?.first_name} {user?.last_name}</div>
               <div className="topbar-user-id">{user?.email}</div>
