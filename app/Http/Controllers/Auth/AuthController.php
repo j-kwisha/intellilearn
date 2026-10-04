@@ -130,7 +130,8 @@ class AuthController extends Controller
         }
 
         // Check if email is verified
-        if (! $user->hasVerifiedEmail()) {
+        // Skip verification check for instructor and admin accounts
+        if ($user->isStudent() && ! $user->hasVerifiedEmail()) {
             // Generate a fresh token for resend capability
             $token = $user->createToken('auth-token')->plainTextToken;
             return response()->json([
