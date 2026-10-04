@@ -260,6 +260,8 @@ class AssessmentController extends Controller
             'matching_pairs.*.left_item'     => ['required_with:matching_pairs', 'string'],
             'matching_pairs.*.right_item'    => ['required_with:matching_pairs', 'string'],
             'matching_pairs.*.correct_match' => ['required_with:matching_pairs', 'string'],
+            'reference_lesson_id'            => ['nullable', 'exists:lessons,id'],
+            'reference_text'                 => ['nullable', 'string'],
         ]);
 
         // Require options for multiple choice
@@ -340,6 +342,8 @@ class AssessmentController extends Controller
             'questions.*.matching_pairs.*.left_item'     => ['nullable', 'string'],
             'questions.*.matching_pairs.*.right_item'    => ['nullable', 'string'],
             'questions.*.matching_pairs.*.correct_match' => ['nullable', 'string'],
+            'questions.*.reference_lesson_id'            => ['nullable', 'exists:lessons,id'],
+            'questions.*.reference_text'                 => ['nullable', 'string'],
         ]);
 
         $startOrder = $assessment->questions()->count();
@@ -419,6 +423,8 @@ class AssessmentController extends Controller
             'matching_pairs.*.left_item'     => ['required_with:matching_pairs', 'string'],
             'matching_pairs.*.right_item'    => ['required_with:matching_pairs', 'string'],
             'matching_pairs.*.correct_match' => ['required_with:matching_pairs', 'string'],
+            'reference_lesson_id'            => ['nullable', 'exists:lessons,id'],
+            'reference_text'                 => ['nullable', 'string'],
         ]);
 
         $question->update($validated);

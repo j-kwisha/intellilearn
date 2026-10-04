@@ -17,9 +17,18 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
     matching_pairs: question.matching_pairs?.length
       ? question.matching_pairs.map(p => ({ left_item: p.left_item, right_item: p.right_item }))
       : [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }],
+    reference_lesson_id: question.reference_lesson_id || '',
+    reference_text: question.reference_text || '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [lessons, setLessons] = useState([]);
+
+  useEffect(() => {
+    api.get(`/courses/${courseId}/lessons`)
+      .then(res => setLessons(res.data.lessons || []))
+      .catch(() => {});
+  }, [courseId]);
 
   const updatePair = (pi, field, val) => {
     const pairs = [...form.matching_pairs];
@@ -48,6 +57,9 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
         payload.correct_answer = form.correct_answer;
       } else if (form.type === 'short_answer') {
         payload.correct_answer = form.correct_answer;
+      } else if (form.type === 'essay') {
+        if (form.reference_lesson_id) payload.reference_lesson_id = form.reference_lesson_id;
+        if (form.reference_text) payload.reference_text = form.reference_text;
       } else if (form.type === 'matching') {
         payload.matching_pairs = form.matching_pairs.map(p => ({
           left_item: p.left_item,
@@ -152,7 +164,28 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
 
           {/* Essay */}
           {form.type === 'essay' && (
-            <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">Essay questions are graded manually.</p>
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">Essay questions are graded by AI. Set a reference material below (optional).</p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">📚 Reference Lesson</label>
+                <select style={{ ...inputStyle, background: 'white' }}
+                  value={form.reference_lesson_id || ''}
+                  onChange={e => setForm(f => ({ ...f, reference_lesson_id: e.target.value }))}>
+                  <option value="">— Use all course materials (default) —</option>
+                  {lessons.map(l => (
+                    <option key={l.id} value={l.id}>Lesson {l.order + 1}: {l.title}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">📝 Or paste reference text</label>
+                <textarea rows={4} style={{ ...inputStyle, resize: 'vertical' }}
+                  placeholder="Paste text the AI should use to grade this question..."
+                  value={form.reference_text || ''}
+                  onChange={e => setForm(f => ({ ...f, reference_text: e.target.value }))} />
+                <p className="text-xs text-slate-400 mt-1">Takes priority over the lesson reference above.</p>
+              </div>
+            </div>
           )}
 
           {/* Matching pairs */}
@@ -206,13 +239,21 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
 // ── Add Question Form ────────────────────────────────────────────────────────
 function newBlankQ() {
   return { question_text: '', type: 'multiple_choice', options: ['', '', '', ''], correct_answer: '', points: 1,
-    matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }] };
+    matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }],
+    reference_lesson_id: '', reference_text: '' };
 }
 
 function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
   const [questions, setQuestions] = useState([newBlankQ()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [lessons, setLessons] = useState([]);
+
+  useEffect(() => {
+    api.get(`/courses/${courseId}/lessons`)
+      .then(res => setLessons(res.data.lessons || []))
+      .catch(() => {});
+  }, [courseId]);
 
   const updateQ = (i, f, v) => setQuestions(p => p.map((q, idx) => idx === i ? { ...q, [f]: v } : q));
   const updateOpt = (qi, oi, v) => setQuestions(p => p.map((q, i) => {
@@ -233,7 +274,13 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
     try {
       const cleaned = questions.map(q => {
         const out = { ...q, points: parseFloat(q.points) };
-        if (q.type === 'essay') { delete out.options; delete out.correct_answer; delete out.matching_pairs; }
+        if (q.type === 'essay') { 
+          delete out.options; 
+          delete out.correct_answer; 
+          delete out.matching_pairs;
+          if (!out.reference_lesson_id) delete out.reference_lesson_id;
+          if (!out.reference_text) delete out.reference_text;
+        }
         else if (q.type === 'short_answer') { delete out.options; delete out.matching_pairs; }
         else if (q.type === 'true_false') { out.options = ['True', 'False']; delete out.matching_pairs; }
         else if (q.type === 'matching') { 
@@ -318,7 +365,28 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
                 value={q.correct_answer} onChange={e => updateQ(idx, 'correct_answer', e.target.value)} style={IS} />
             )}
             {q.type === 'essay' && (
-              <p className="text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-200">Essay questions are graded manually.</p>
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-200">Essay questions are graded by AI. Set a reference material below (optional).</p>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">📚 Reference Lesson</label>
+                  <select style={{ ...IS, background: 'white' }}
+                    value={q.reference_lesson_id || ''}
+                    onChange={e => updateQ(idx, 'reference_lesson_id', e.target.value)}>
+                    <option value="">— Use all course materials (default) —</option>
+                    {lessons.map(l => (
+                      <option key={l.id} value={l.id}>Lesson {l.order + 1}: {l.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">📝 Or paste reference text</label>
+                  <textarea rows={3} style={{ ...IS, resize: 'vertical' }}
+                    placeholder="Paste text the AI should use to grade this question..."
+                    value={q.reference_text || ''}
+                    onChange={e => updateQ(idx, 'reference_text', e.target.value)} />
+                  <p className="text-xs text-slate-400 mt-0.5">Takes priority over the lesson reference.</p>
+                </div>
+              </div>
             )}
             {q.type === 'matching' && (
               <div>

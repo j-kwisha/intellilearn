@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
@@ -34,6 +34,14 @@ export default function InstructorCreateAssessmentPage() {
   const [paperUploadError, setPaperUploadError] = useState('');
   const [paperFileUrl, setPaperFileUrl] = useState(null);
 
+  // Lessons list for essay reference picker
+  const [lessons, setLessons] = useState([]);
+  useEffect(() => {
+    api.get(`/courses/${courseId}/lessons`)
+      .then(res => setLessons(res.data.lessons || []))
+      .catch(() => {});
+  }, [courseId]);
+
   function newQuestion() {
     return { 
       question_text: '', 
@@ -41,7 +49,9 @@ export default function InstructorCreateAssessmentPage() {
       options: ['', '', '', ''], 
       correct_answer: '', 
       points: 1,
-      matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }]
+      matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }],
+      reference_lesson_id: '',
+      reference_text: '',
     };
   }
 
@@ -200,6 +210,8 @@ export default function InstructorCreateAssessmentPage() {
           delete out.options; 
           delete out.correct_answer; 
           delete out.matching_pairs;
+          if (!out.reference_lesson_id) delete out.reference_lesson_id;
+          if (!out.reference_text) delete out.reference_text;
         }
         else if (q.type === 'short_answer') { 
           delete out.options; 
@@ -222,6 +234,8 @@ export default function InstructorCreateAssessmentPage() {
         else { 
           out.options = q.options.filter(o => o.trim() !== ''); 
           delete out.matching_pairs;
+          delete out.reference_lesson_id;
+          delete out.reference_text;
         }
         return out;
       });
@@ -569,9 +583,38 @@ export default function InstructorCreateAssessmentPage() {
                     )}
 
                     {q.type === 'essay' && (
-                      <p style={{ fontSize: '0.85rem', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: 8, margin: 0 }}>
-                        Essay questions are graded manually by the instructor.
-                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <p style={{ fontSize: '0.85rem', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: 8, margin: 0 }}>
+                          Essay questions are graded by AI. Optionally set a reference material below so the AI grades based on specific content.
+                        </p>
+                        <div>
+                          <label style={S.label}>📚 Reference Lesson (optional)</label>
+                          <select
+                            style={{ ...S.input, background: 'white' }}
+                            value={q.reference_lesson_id || ''}
+                            onChange={e => updateQuestion(idx, 'reference_lesson_id', e.target.value)}
+                          >
+                            <option value="">— Use all course materials (default) —</option>
+                            {lessons.map(l => (
+                              <option key={l.id} value={l.id}>Lesson {l.order + 1}: {l.title}</option>
+                            ))}
+                          </select>
+                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>AI will use this lesson's uploaded files as reference.</p>
+                        </div>
+                        <div>
+                          <label style={S.label}>📝 Or paste reference text directly (optional)</label>
+                          <textarea
+                            style={{ ...S.input, resize: 'vertical', minHeight: 80 }}
+                            rows={4}
+                            placeholder="Paste text content here that the AI should use to evaluate the student's answer..."
+                            value={q.reference_text || ''}
+                            onChange={e => updateQuestion(idx, 'reference_text', e.target.value)}
+                          />
+                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>
+                            If filled, this takes priority over the lesson reference above.
+                          </p>
+                        </div>
+                      </div>
                     )}
 
                     {/* Matching pairs — simplified Term | Definition two-column layout */}

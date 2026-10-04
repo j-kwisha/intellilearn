@@ -188,29 +188,45 @@ class SubmissionController extends Controller
             else {
                 $answerText = $answerData['answer_text'] ?? null;
 
-                // Fetch course materials (PDFs, docs, etc. from same course)
+                // Fetch reference material — priority: question's reference_text > question's reference_lesson > assessment lesson > all course materials
                 $referenceText = null;
                 $course = $assessment->course;
-                
-                // First, try to get course-level materials
-                $courseMaterials = \App\Models\CourseMaterial::where('course_id', $course->id)
-                    ->whereNotNull('extracted_text')
-                    ->orderBy('order')
-                    ->get();
 
-                // If no course materials, fall back to lesson materials
-                if ($courseMaterials->isEmpty() && $assessment->lesson_id) {
-                    $courseMaterials = \App\Models\LessonMaterial::where('lesson_id', $assessment->lesson_id)
+                if ($question->reference_text && trim($question->reference_text)) {
+                    // Instructor uploaded/pasted reference text directly on the question
+                    $referenceText = substr($question->reference_text, 0, 6000);
+                } elseif ($question->reference_lesson_id) {
+                    // Instructor picked a specific lesson
+                    $lessonMaterials = \App\Models\LessonMaterial::where('lesson_id', $question->reference_lesson_id)
                         ->whereNotNull('extracted_text')
                         ->orderBy('order')
                         ->get();
-                }
+                    if ($lessonMaterials->isNotEmpty()) {
+                        $referenceText = substr(
+                            $lessonMaterials->pluck('extracted_text')->implode("\n\n---\n\n"),
+                            0, 6000
+                        );
+                    }
+                } else {
+                    // Fallback: course-level materials, then assessment lesson materials
+                    $courseMaterials = \App\Models\CourseMaterial::where('course_id', $course->id)
+                        ->whereNotNull('extracted_text')
+                        ->orderBy('order')
+                        ->get();
 
-                if ($courseMaterials->isNotEmpty()) {
-                    $referenceText = $courseMaterials
-                        ->pluck('extracted_text')
-                        ->implode("\n\n---\n\n");
-                    $referenceText = substr($referenceText, 0, 6000); // limit context
+                    if ($courseMaterials->isEmpty() && $assessment->lesson_id) {
+                        $courseMaterials = \App\Models\LessonMaterial::where('lesson_id', $assessment->lesson_id)
+                            ->whereNotNull('extracted_text')
+                            ->orderBy('order')
+                            ->get();
+                    }
+
+                    if ($courseMaterials->isNotEmpty()) {
+                        $referenceText = substr(
+                            $courseMaterials->pluck('extracted_text')->implode("\n\n---\n\n"),
+                            0, 6000
+                        );
+                    }
                 }
 
                 // Get rubric criteria if exists

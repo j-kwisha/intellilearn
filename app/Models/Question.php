@@ -17,13 +17,16 @@ class Question extends Model
         'correct_answer',
         'points',
         'order',
+        'reference_lesson_id',
+        'reference_text',
     ];
 
     protected function casts(): array
     {
         return [
-            'options' => 'array',    // Auto-converts JSON ↔ PHP array
-            'points'  => 'decimal:2',
+            'options'             => 'array',
+            'points'              => 'decimal:2',
+            'reference_lesson_id' => 'integer',
         ];
     }
 
@@ -43,6 +46,11 @@ class Question extends Model
     public function matchingPairs()
     {
         return $this->hasMany(MatchingPair::class)->orderBy('order');
+    }
+
+    public function referenceLesson()
+    {
+        return $this->belongsTo(\App\Models\Lesson::class, 'reference_lesson_id');
     }
 
     public function rubric()
