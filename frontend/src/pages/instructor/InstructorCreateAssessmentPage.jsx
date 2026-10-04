@@ -102,7 +102,6 @@ export default function InstructorCreateAssessmentPage() {
 
     const data = new FormData();
     data.append('file', paperFile);
-    data.append('_method', 'PUT'); // Cloudinary upload handled in update
 
     try {
       const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/upload-file`, data, {
