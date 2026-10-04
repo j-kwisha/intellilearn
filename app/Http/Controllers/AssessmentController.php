@@ -321,9 +321,9 @@ class AssessmentController extends Controller
             'questions.*.correct_answer' => ['nullable', 'string'],
             'questions.*.points'         => ['nullable', 'numeric', 'min:0.01'],
             'questions.*.matching_pairs'                 => ['nullable', 'array', 'min:2'],
-            'questions.*.matching_pairs.*.left_item'     => ['required_with:questions.*.matching_pairs', 'string'],
-            'questions.*.matching_pairs.*.right_item'    => ['required_with:questions.*.matching_pairs', 'string'],
-            'questions.*.matching_pairs.*.correct_match' => ['required_with:questions.*.matching_pairs', 'string'],
+            'questions.*.matching_pairs.*.left_item'     => ['nullable', 'string'],
+            'questions.*.matching_pairs.*.right_item'    => ['nullable', 'string'],
+            'questions.*.matching_pairs.*.correct_match' => ['nullable', 'string'],
         ]);
 
         $startOrder = $assessment->questions()->count();
@@ -344,7 +344,8 @@ class AssessmentController extends Controller
                     $question->matchingPairs()->create([
                         'left_item'     => $pairData['left_item'],
                         'right_item'    => $pairData['right_item'],
-                        'correct_match' => $pairData['correct_match'],
+                        // correct_match defaults to right_item if not explicitly provided
+                        'correct_match' => $pairData['correct_match'] ?? $pairData['right_item'],
                         'order'         => $pairIndex,
                     ]);
                 }
