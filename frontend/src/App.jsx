@@ -17,7 +17,7 @@ import GoogleCallback from './pages/auth/GoogleCallback';
 // Student
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentCoursesListPage from './pages/student/StudentCoursesListPage';
-import StudentCoursePage from './pages/student/StudentCoursePage';
+import StudentGradesPage from './pages/student/StudentGradesPage';
 import StudentQuizPage from './pages/student/StudentQuizPage';
 import StudentLessonPage from './pages/student/StudentLessonPage';
 import StudentMaterialViewerPage from './pages/student/StudentMaterialViewerPage';
@@ -104,6 +104,11 @@ export default function App() {
           <Route path="/student/calendar" element={
             <ProtectedRoute roles={['student']}>
               <DashboardLayout><StudentCalendarPage /></DashboardLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/student/grades" element={
+            <ProtectedRoute roles={['student']}>
+              <DashboardLayout><StudentGradesPage /></DashboardLayout>
             </ProtectedRoute>
           } />
           <Route path="/student/profile" element={

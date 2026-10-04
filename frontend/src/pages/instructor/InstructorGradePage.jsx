@@ -56,11 +56,12 @@ export default function InstructorGradePage() {
           {selectedCourse && (
             <button
               className="instr-pill-btn"
-              onClick={() => {
+              onClick={async () => {
                 const courseName = courses.find(c => c.id === selectedCourse)?.name || 'Course';
                 const course = courses.find(c => c.id === selectedCourse);
-                api.get(`/courses/${selectedCourse}/grades`).then(res => {
-                  const printWindow = window.open('', '_blank');
+                try {
+                  // Fetch data FIRST before opening any window
+                  const res = await api.get(`/courses/${selectedCourse}/grades`);
                   const rows = (res.data.grades || []).map(g =>
                     `<tr><td>${g.user?.first_name} ${g.user?.last_name}</td><td>${g.quiz_average!=null?g.quiz_average.toFixed(2):'—'}</td><td>${g.exam_average!=null?g.exam_average.toFixed(2):'—'}</td><td>${g.activity_average!=null?g.activity_average.toFixed(2):'—'}</td><td class="${g.overall_grade>=75?'grade-high':g.overall_grade>=60?'grade-fair':'grade-low'}">${g.overall_grade!=null?g.overall_grade.toFixed(2):'—'}</td><td>${g.remarks||'—'}</td></tr>`
                   ).join('');
@@ -68,11 +69,19 @@ export default function InstructorGradePage() {
                     <style>body{font-family:system-ui,sans-serif;margin:40px;color:#333}h1{font-size:28px;margin-bottom:5px}.meta{color:#666;margin-bottom:20px;font-size:14px}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#f3f4f6;padding:12px;text-align:left;font-weight:600;border-bottom:2px solid #d1d5db}td{padding:12px;border-bottom:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.grade-high{color:#10b981;font-weight:600}.grade-low{color:#ef4444;font-weight:600}.grade-fair{color:#f59e0b;font-weight:600}</style>
                     </head><body><h1>${courseName}</h1><div class="meta">${course?.code} · ${course?.section}</div><div class="meta">Printed on: ${new Date().toLocaleString('en-PH')}</div>
                     <table><thead><tr><th>Student</th><th>Quiz Avg</th><th>Exam Avg</th><th>Activity Avg</th><th>Overall Grade</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
-                  printWindow.document.write(html);
-                  printWindow.document.close();
-                  printWindow.focus();
-                  printWindow.print();
-                }).catch(console.error);
+                  // Open window and write synchronously after data is ready
+                  const printWindow = window.open('', '_blank');
+                  if (printWindow) {
+                    printWindow.document.open();
+                    printWindow.document.write(html);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    setTimeout(() => printWindow.print(), 500);
+                  }
+                } catch (err) {
+                  console.error('Print failed:', err);
+                  alert('Failed to load grades for printing. Please try again.');
+                }
               }}
             >
               Print Course Grades

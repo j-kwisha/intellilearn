@@ -116,6 +116,8 @@ export default function StudentQuizPage() {
   if (result) {
     const scoreHidden = result.percentage === null;
     const isPending = result.status === 'submitted' || result.status === 'in_progress';
+    // Only show answer correctness if score is visible to the student
+    const answersVisible = !scoreHidden && !isPending;
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
@@ -156,10 +158,10 @@ export default function StudentQuizPage() {
         </div>
 
         {/* AI Feedback Panel - only show if score is visible */}
-        {result.percentage !== null && <AiFeedbackPanel submissionId={result.id} />}
+        {answersVisible && <AiFeedbackPanel submissionId={result.id} />}
 
         {/* AI Recommendations — shown when score is below 75% and visible */}
-        {result.status === 'graded' && result.percentage !== null && result.percentage < 75 && (
+        {answersVisible && result.percentage < 75 && (
           <AiRecommendationsPanel
             quizAvg={result.percentage}
             topic={assessment.topic}
@@ -167,22 +169,16 @@ export default function StudentQuizPage() {
         )}
 
         {/* Show answers - only if score is visible */}
-        {result.percentage !== null && result.answers && (
+        {answersVisible && result.answers && (
           <div className="space-y-3">
             {result.answers.map((answer, idx) => {
-              // Special formatting for matching questions
               const isMatching = answer.question?.type === 'matching';
               let matchingAnswers = [];
               if (isMatching) {
                 try {
                   const parsed = JSON.parse(answer.answer_text || '{}');
-                  matchingAnswers = Object.entries(parsed).map(([pairId, selection]) => ({
-                    pairId,
-                    selection
-                  }));
-                } catch (e) {
-                  matchingAnswers = [];
-                }
+                  matchingAnswers = Object.entries(parsed).map(([pairId, selection]) => ({ pairId, selection }));
+                } catch (e) { matchingAnswers = []; }
               }
 
               return (
@@ -193,9 +189,7 @@ export default function StudentQuizPage() {
                 <p className="text-sm font-medium text-slate-800">
                   Q{idx + 1}: {answer.question?.question_text}
                 </p>
-                
                 {isMatching && matchingAnswers.length > 0 ? (
-                  // Matching question result display
                   <div className="text-sm text-slate-600 mt-3 space-y-1">
                     <p className="font-medium text-slate-700">Your matches:</p>
                     <div className="space-y-1">
@@ -216,23 +210,17 @@ export default function StudentQuizPage() {
                     </div>
                   </div>
                 ) : (
-                  // Other question types
                   <p className="text-sm text-slate-600 mt-2">
                     Your answer: <span className="font-medium">{answer.answer_text}</span>
                   </p>
                 )}
-                
                 {answer.is_correct !== null && (
-                  <p className={`text-xs mt-1 font-medium ${
-                    answer.is_correct ? 'text-emerald-600' : 'text-red-500'
-                  }`}>
+                  <p className={`text-xs mt-1 font-medium ${answer.is_correct ? 'text-emerald-600' : 'text-red-500'}`}>
                     {answer.is_correct ? '✓ Correct' : '✗ Incorrect'} — {answer.points_earned ?? 0} pts
                   </p>
                 )}
                 {answer.points_earned === null && answer.question?.type === 'essay' && (
-                  <p className="text-xs mt-1 font-medium text-amber-600">
-                    ⏳ Pending instructor review
-                  </p>
+                  <p className="text-xs mt-1 font-medium text-amber-600">⏳ Pending instructor review</p>
                 )}
                 {answer.ai_feedback && (
                   <p className={`text-xs mt-2 p-2 rounded ${

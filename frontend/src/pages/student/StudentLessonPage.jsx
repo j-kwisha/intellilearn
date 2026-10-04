@@ -181,40 +181,7 @@ export default function StudentLessonPage() {
         </div>
       )}
 
-      {/* Auto-done countdown indicator */}
-      {lesson.my_progress !== 'done' && !autoMarked && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center gap-4">
-          {/* Circular countdown */}
-          <div className="relative shrink-0" style={{ width: 44, height: 44 }}>
-            <svg width="44" height="44" style={{ transform: 'rotate(-90deg)' }}>
-              {/* Background ring */}
-              <circle cx="22" cy="22" r={radius} fill="none" stroke="#e0e7ff" strokeWidth="4" />
-              {/* Progress ring */}
-              <circle
-                cx="22" cy="22" r={radius}
-                fill="none"
-                stroke="#6366f1"
-                strokeWidth="4"
-                strokeDasharray={circumference}
-                strokeDashoffset={dashOffset}
-                strokeLinecap="round"
-                style={{ transition: 'stroke-dashoffset 1s linear' }}
-              />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-indigo-600">
-              {countdown}
-            </span>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-indigo-700">
-              Lesson will be marked as done in {countdown}s
-            </p>
-            <p className="text-xs text-indigo-500 mt-0.5">
-              Stay on this page — we're tracking your reading time.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Auto-done countdown — hidden from students, runs silently in background */}
 
       {/* Error message */}
       {markError && (
