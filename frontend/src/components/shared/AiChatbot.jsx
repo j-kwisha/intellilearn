@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import api from '../../services/api';
 
-import chatbotAvatar from '../../assets/chatbot_avatar.png';
+import chatbotAvatar from '../../assets/mascot.png';
 const AVATAR_URL = chatbotAvatar;
 
 // Video paths - place your video files in frontend/public/videos/
