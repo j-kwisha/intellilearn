@@ -178,7 +178,8 @@ export default function LoginPage() {
         display:'flex',alignItems:'center',padding:'0 40px',boxSizing:'border-box'
       }}>
         <div style={{ marginRight:'auto',display:'flex',alignItems:'center',gap:10,cursor:'pointer' }} onClick={()=>scrollTo(0)}>
-          <img src={logo} alt="IntelliLearn" style={{ height:38,objectFit:'contain' }} />
+          <img src={logo} alt="IntelliLearn" style={{ height:57,objectFit:'contain' }} />
+          <span style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", fontWeight:800, fontSize:18, color:'#1e1b4b', letterSpacing:'.04em' }}>INTELLILEARN</span>
         </div>
         <button className="nav-link active" onClick={()=>scrollTo(0)}>HOME</button>
         <button className="nav-link" onClick={()=>scrollTo(1)}>BLOGS</button>
@@ -529,8 +530,8 @@ export default function LoginPage() {
 
             {/* brand — logo + text once */}
             <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:28,position:'relative',zIndex:2 }}>
-              <img src={logo} alt="IntelliLearn" style={{ height:32,objectFit:'contain' }} />
-              <span style={{ fontWeight:800,fontSize:15,color:'var(--navy)',letterSpacing:'.02em' }}>INTELLILEARN</span>
+              <img src={logo} alt="IntelliLearn" style={{ height:48,objectFit:'contain' }} />
+              <span style={{ fontWeight:800,fontSize:18,color:'var(--navy)',letterSpacing:'.02em' }}>INTELLILEARN</span>
             </div>
 
             <h2 style={{ fontSize:52,fontWeight:800,color:'var(--navy)',lineHeight:1.08,margin:'0 0 8px',letterSpacing:'-.03em',position:'relative',zIndex:2 }}>
