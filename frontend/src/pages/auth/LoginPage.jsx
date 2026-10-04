@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
 import heroImg from '../../assets/Student_LandingPage.png';
 import logo from '../../assets/logo copy.png';
 
@@ -45,6 +46,10 @@ export default function LoginPage() {
   const [regErrors, setRegErrors]   = useState({});
   const [regLoading, setRegLoading] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
+  const [regEmail, setRegEmail] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -62,11 +67,24 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault(); setLoginError(''); setLoginLoading(true);
     try {
-      const user = await login(loginForm.email, loginForm.password);
-      if (user.role==='admin') navigate('/admin');
-      else if (user.role==='instructor') navigate('/instructor');
+      const result = await login(loginForm.email, loginForm.password);
+      // Check if backend returned requires_verification (403 case)
+      if (result?.requires_verification) {
+        setUnverifiedEmail(result.email);
+        return;
+      }
+      if (result.role==='admin') navigate('/admin');
+      else if (result.role==='instructor') navigate('/instructor');
       else navigate('/student');
-    } catch (err) { setLoginError(err.response?.data?.message || 'Login failed.'); }
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.requires_verification) {
+        setUnverifiedEmail(data.email);
+        if (data.token) localStorage.setItem('token', data.token);
+      } else {
+        setLoginError(data?.message || 'Login failed.');
+      }
+    }
     finally { setLoginLoading(false); }
   };
 
@@ -74,12 +92,28 @@ export default function LoginPage() {
     e.preventDefault(); setRegErrors({}); setRegLoading(true);
     try {
       const res = await register(regForm);
-      if (res.token) { localStorage.setItem('token', res.token); localStorage.setItem('user', JSON.stringify(res.user)); }
+      if (res.requires_verification) {
+        setRegEmail(regForm.email);
+        setRegSuccess(true);
+        return;
+      }
       navigate('/student');
     } catch (err) {
       if (err.response?.data?.errors) setRegErrors(err.response.data.errors);
       else setRegErrors({ general:[err.response?.data?.message || 'Registration failed.'] });
     } finally { setRegLoading(false); }
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true); setResendSent(false);
+    try {
+      await api.post('/email/resend');
+      setResendSent(true);
+    } catch (err) {
+      // silently fail
+    } finally {
+      setResendLoading(false);
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -360,7 +394,30 @@ export default function LoginPage() {
                   <div style={{ width:36,height:4,background:'var(--blue-600)',borderRadius:2,marginBottom:18 }} />
                   <h2 style={{ fontSize:52,fontWeight:800,color:'var(--navy)',margin:'0 0 6px',letterSpacing:'-.03em' }}>LOGIN</h2>
                   <p style={{ fontSize:14,color:'var(--muted)',marginBottom:28,fontFamily:"'DM Sans',sans-serif" }}>Welcome back! Please log in to continue.</p>
-                  {loginError && <div style={{ background:'#FEF2F2',color:'#DC2626',fontSize:13,padding:'10px 14px',borderRadius:10,marginBottom:16,border:'1px solid #FECACA' }}>{loginError}</div>}
+
+                  {/* Unverified email warning */}
+                  {unverifiedEmail ? (
+                    <div style={{ background:'#FFF7ED',border:'1px solid #FED7AA',borderRadius:12,padding:'16px 18px',marginBottom:16 }}>
+                      <p style={{ fontSize:14,fontWeight:700,color:'#92400E',margin:'0 0 6px' }}>📧 Email not verified</p>
+                      <p style={{ fontSize:13,color:'#78350f',margin:'0 0 12px',lineHeight:1.5 }}>
+                        Please verify <strong>{unverifiedEmail}</strong> before logging in. Check your inbox for the verification link.
+                      </p>
+                      {resendSent ? (
+                        <p style={{ fontSize:12,color:'#15803d',fontWeight:600,margin:0 }}>✓ Verification email resent! Check your inbox.</p>
+                      ) : (
+                        <button onClick={handleResendVerification} disabled={resendLoading}
+                          style={{ background:'#92400E',color:'white',border:'none',borderRadius:8,padding:'8px 16px',fontSize:12,fontWeight:700,cursor:'pointer',opacity:resendLoading?0.7:1 }}>
+                          {resendLoading ? 'Sending...' : 'Resend verification email'}
+                        </button>
+                      )}
+                      <button onClick={() => setUnverifiedEmail('')}
+                        style={{ background:'none',border:'none',cursor:'pointer',fontSize:12,color:'#92400E',marginLeft:12,textDecoration:'underline' }}>
+                        Try different email
+                      </button>
+                    </div>
+                  ) : (
+                    loginError && <div style={{ background:'#FEF2F2',color:'#DC2626',fontSize:13,padding:'10px 14px',borderRadius:10,marginBottom:16,border:'1px solid #FECACA' }}>{loginError}</div>
+                  )}
                   <form onSubmit={handleLogin} style={{ display:'flex',flexDirection:'column',gap:16 }}>
                     <div>
                       <label style={{ display:'block',fontSize:13,fontWeight:600,color:'var(--navy)',marginBottom:7,fontFamily:"'Plus Jakarta Sans',sans-serif" }}>Email Address</label>
@@ -452,9 +509,25 @@ export default function LoginPage() {
                   {regSuccess ? (
                     <div style={{ textAlign:'center',padding:'20px 0' }}>
                       <div style={{ fontSize:'3rem',marginBottom:12 }}>📧</div>
-                      <h3 style={{ fontSize:18,fontWeight:700,color:'var(--navy)',marginBottom:8 }}>Check your email!</h3>
-                      <p style={{ fontSize:14,color:'var(--muted)',lineHeight:1.6,marginBottom:20 }}>We sent a verification link. Click it to activate your account.</p>
-                      <button onClick={()=>{ setRegSuccess(false); setAuthMode('login'); }} className="ll-btn">Go to Login</button>
+                      <h3 style={{ fontSize:20,fontWeight:800,color:'var(--navy)',marginBottom:8 }}>Check your email!</h3>
+                      <p style={{ fontSize:14,color:'var(--muted)',lineHeight:1.6,marginBottom:6 }}>
+                        We sent a verification link to:
+                      </p>
+                      <p style={{ fontSize:14,fontWeight:700,color:'var(--navy)',marginBottom:16 }}>{regEmail}</p>
+                      <p style={{ fontSize:13,color:'var(--muted)',lineHeight:1.6,marginBottom:20 }}>
+                        Click the link in your email to activate your account. The link expires in 60 minutes.
+                      </p>
+                      {resendSent ? (
+                        <p style={{ fontSize:13,color:'#15803d',fontWeight:600,marginBottom:16 }}>✓ Verification email resent!</p>
+                      ) : (
+                        <button onClick={handleResendVerification} disabled={resendLoading}
+                          style={{ background:'none',border:'1.5px solid var(--blue-600)',color:'var(--blue-600)',borderRadius:8,padding:'8px 20px',fontSize:13,fontWeight:700,cursor:'pointer',marginBottom:12,opacity:resendLoading?0.7:1 }}>
+                          {resendLoading ? 'Sending...' : "Didn't receive it? Resend"}
+                        </button>
+                      )}
+                      <br/>
+                      <button onClick={()=>{ setRegSuccess(false); setAuthMode('login'); }} className="ll-btn" style={{ marginTop:8 }}>Go to Login</button>
+                    </div>
                     </div>
                   ) : (
                     <>

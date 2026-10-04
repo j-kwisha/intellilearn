@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import logo from '../../assets/logo.png';
+import logo from '../../assets/logo copy.png';
 import loginBg from '../../assets/login_bg.png';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 

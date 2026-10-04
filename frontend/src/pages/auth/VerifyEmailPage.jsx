@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import logo from '../../assets/logo.png';
+import logo from '../../assets/logo copy.png';
 import loginBg from '../../assets/login_bg.png';
 
 export default function VerifyEmailPage() {

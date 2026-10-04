@@ -25,6 +25,12 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await api.post('/login', { email, password });
+    // If requires_verification, don't set user — return the response for the UI to handle
+    if (res.data.requires_verification) {
+      // Store token so resend verification can be called
+      localStorage.setItem('token', res.data.token);
+      return res.data;
+    }
     localStorage.setItem('token', res.data.token);
     localStorage.setItem('user', JSON.stringify(res.data.user));
     setUser(res.data.user);
@@ -33,6 +39,11 @@ export function AuthProvider({ children }) {
 
   const register = async (data) => {
     const res = await api.post('/register', data);
+    // If requires_verification, store token for resend but do NOT log user in
+    if (res.data.requires_verification) {
+      localStorage.setItem('token', res.data.token);
+      return res.data;
+    }
     if (res.data.token) {
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));

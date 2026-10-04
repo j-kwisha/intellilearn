@@ -31,28 +31,70 @@ class AuthController extends Controller
     public function register(RegisterRequest $request): JsonResponse
     {
         $user = User::create([
-            'first_name'        => $request->first_name,
-            'last_name'         => $request->last_name,
-            'email'             => $request->email,
-            'password'          => $request->password,
-            'role'              => 'student',
-            'email_verified_at' => now(), // Auto-verify for live demo
+            'first_name' => $request->first_name,
+            'last_name'  => $request->last_name,
+            'email'      => $request->email,
+            'password'   => $request->password,
+            'role'       => 'student',
+            // email_verified_at intentionally NOT set — user must verify via email
         ]);
 
+        // Send verification email via Resend
+        $this->sendVerificationEmail($user);
+
+        // Return token so frontend can show resend option if needed
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Registration successful.',
-            'user'    => [
+            'message'           => 'Registration successful. Please check your email to verify your account.',
+            'requires_verification' => true,
+            'user' => [
                 'id'         => $user->id,
                 'first_name' => $user->first_name,
                 'last_name'  => $user->last_name,
                 'email'      => $user->email,
                 'role'       => $user->role,
-                'full_name'  => $user->full_name,
             ],
             'token' => $token,
         ], 201);
+    }
+
+    /**
+     * Send email verification link via Resend
+     */
+    private function sendVerificationEmail(User $user): void
+    {
+        $frontend = env('FRONTEND_URL', 'http://localhost:5173');
+
+        // Build a signed verification URL
+        $verifyUrl = \URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            ['id' => $user->id, 'hash' => sha1($user->email)]
+        );
+
+        try {
+            \Resend::emails()->send([
+                'from'    => 'IntelliLearn <onboarding@resend.dev>',
+                'to'      => [$user->email],
+                'subject' => 'Verify your IntelliLearn account',
+                'html'    => "
+                    <div style='font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;'>
+                        <h2 style='color: #1e1b4b;'>Verify your email</h2>
+                        <p>Hi {$user->first_name},</p>
+                        <p>Thanks for signing up for IntelliLearn! Click the button below to verify your email address. This link expires in <strong>60 minutes</strong>.</p>
+                        <a href='{$verifyUrl}' style='display:inline-block; background:#7655D9; color:white; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:bold; margin: 16px 0;'>
+                            Verify Email Address
+                        </a>
+                        <p style='color:#64748b; font-size:13px;'>If you did not create an account, you can safely ignore this email.</p>
+                        <p style='color:#64748b; font-size:13px;'>Or copy this link: <a href='{$verifyUrl}'>{$verifyUrl}</a></p>
+                    </div>
+                ",
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send verification email', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+        }
+    }
     }
 
     /**
@@ -85,6 +127,18 @@ class AuthController extends Controller
             throw ValidationException::withMessages([
                 'email' => ['Your account has been deactivated. Please contact the administrator.'],
             ]);
+        }
+
+        // Check if email is verified
+        if (! $user->hasVerifiedEmail()) {
+            // Generate a fresh token for resend capability
+            $token = $user->createToken('auth-token')->plainTextToken;
+            return response()->json([
+                'message'               => 'Please verify your email before logging in. Check your inbox for the verification link.',
+                'requires_verification' => true,
+                'email'                 => $user->email,
+                'token'                 => $token,
+            ], 403);
         }
 
         // Update last login timestamp — feeds into predictive analytics
@@ -291,16 +345,14 @@ class AuthController extends Controller
      */
     public function resendVerification(Request $request): JsonResponse
     {
-        if ($request->user()->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'Email is already verified.',
-            ]);
+        $user = $request->user();
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Email is already verified.']);
         }
 
-        $request->user()->sendEmailVerificationNotification();
+        $this->sendVerificationEmail($user);
 
-        return response()->json([
-            'message' => 'Verification email sent.',
-        ]);
+        return response()->json(['message' => 'Verification email sent. Please check your inbox.']);
     }
 }
