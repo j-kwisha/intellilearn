@@ -67,10 +67,13 @@ export default function StudentProfilePage() {
       {/* Profile header */}
       <div style={panelStyle}>
         <div style={{ display:'flex', alignItems:'center', gap:'18px' }}>
-          <div style={{ width:'64px', height:'64px', borderRadius:'50%', background: avatarBg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-            <span style={{ fontSize:'24px', fontWeight:700, color: avatarText, fontFamily:'Poppins,sans-serif' }}>
-              {user?.first_name?.[0]}{user?.last_name?.[0]}
-            </span>
+          <div style={{ width:'64px', height:'64px', borderRadius:'50%', background: avatarBg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, overflow:'hidden' }}>
+            {user?.avatar
+              ? <img src={user.avatar} alt="" referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              : <span style={{ fontSize:'24px', fontWeight:700, color: avatarText, fontFamily:'Poppins,sans-serif' }}>
+                  {user?.first_name?.[0]}{user?.last_name?.[0]}
+                </span>
+            }
           </div>
           <div>
             <h2 style={{ fontFamily:'Poppins,sans-serif', fontWeight:700, fontSize:'20px', color: inkStyle, margin:'0 0 2px' }}>

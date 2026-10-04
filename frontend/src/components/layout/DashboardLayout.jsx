@@ -277,6 +277,9 @@ export default function DashboardLayout({ children }) {
   if (user?.role === 'admin') {
     const pageLabel = items.find((i) => i.path === location.pathname)?.label || 'Dashboard';
     const initials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`;
+    const AvatarImg = ({ className, style }) => user?.avatar
+      ? <img src={user.avatar} alt={initials} referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%', ...style }} />
+      : <span>{initials}</span>;
 
     return (
       <div className="adm-app">
@@ -300,7 +303,7 @@ export default function DashboardLayout({ children }) {
 
           {/* Account card */}
           <div className="adm-account-card">
-            <div className="adm-avatar adm-avatar--sidebar">{initials}</div>
+            <div className="adm-avatar adm-avatar--sidebar"><AvatarImg /></div>
             <div className="adm-account-text">
               <span className="adm-account-name">{user?.first_name} {user?.last_name}</span>
               <span className="adm-account-role">{user?.role}</span>
@@ -396,7 +399,7 @@ export default function DashboardLayout({ children }) {
               </div>
               {/* User info */}
               <div className="adm-topbar-user">
-                <div className="adm-avatar adm-avatar--topbar">{initials}</div>
+                <div className="adm-avatar adm-avatar--topbar"><AvatarImg /></div>
                 <div className="adm-account-text">
                   <span className="adm-account-name adm-account-name--dark">{user?.first_name} {user?.last_name}</span>
                   <span className="adm-account-email">{user?.email}</span>
@@ -437,7 +440,12 @@ export default function DashboardLayout({ children }) {
 
         {/* Profile card */}
         <div className="std-account-card">
-          <div className="std-avatar">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
+          <div className="std-avatar">
+            {user?.avatar
+              ? <img src={user.avatar} alt="" referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
+              : <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>
+            }
+          </div>
           <div className="std-account-text">
             <span className="std-account-name">{user?.first_name} {user?.last_name}</span>
             <span className="std-account-role">{user?.role}</span>
@@ -532,7 +540,12 @@ export default function DashboardLayout({ children }) {
           )}
 
           <div className="topbar-user">
-            <div className="std-avatar" style={{width:40,height:40,fontSize:'13px'}}>{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
+            <div className="std-avatar" style={{width:40,height:40,fontSize:'13px'}}>
+              {user?.avatar
+                ? <img src={user.avatar} alt="" referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
+                : <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>
+              }
+            </div>
             <div>
               <div className="topbar-user-name">{user?.first_name} {user?.last_name}</div>
               <div className="topbar-user-id">{user?.email}</div>
