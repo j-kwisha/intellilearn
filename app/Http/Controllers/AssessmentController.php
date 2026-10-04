@@ -330,30 +330,40 @@ class AssessmentController extends Controller
         $created = [];
 
         foreach ($validated['questions'] as $index => $questionData) {
-            $questionData['order'] = $startOrder + $index;
-            
-            // Extract matching pairs if present
-            $matchingPairs = $questionData['matching_pairs'] ?? null;
-            unset($questionData['matching_pairs']);
-            
-            $question = $assessment->questions()->create($questionData);
-            
-            // Create matching pairs if this is a matching question
-            if ($question->type === 'matching' && !empty($matchingPairs)) {
-                foreach ($matchingPairs as $pairIndex => $pairData) {
-                    $question->matchingPairs()->create([
-                        'left_item'     => $pairData['left_item'],
-                        'right_item'    => $pairData['right_item'],
-                        // correct_match defaults to right_item if not explicitly provided
-                        'correct_match' => $pairData['correct_match'] ?? $pairData['right_item'],
-                        'order'         => $pairIndex,
-                    ]);
+            try {
+                $questionData['order'] = $startOrder + $index;
+                
+                // Extract matching pairs if present
+                $matchingPairs = $questionData['matching_pairs'] ?? null;
+                unset($questionData['matching_pairs']);
+                
+                $question = $assessment->questions()->create($questionData);
+                
+                // Create matching pairs if this is a matching question
+                if ($question->type === 'matching' && !empty($matchingPairs)) {
+                    foreach ($matchingPairs as $pairIndex => $pairData) {
+                        $question->matchingPairs()->create([
+                            'left_item'     => $pairData['left_item'],
+                            'right_item'    => $pairData['right_item'],
+                            'correct_match' => $pairData['correct_match'] ?? $pairData['right_item'],
+                            'order'         => $pairIndex,
+                        ]);
+                    }
+                    $question->load('matchingPairs');
                 }
-                // Reload pairs for the response
-                $question->load('matchingPairs');
+                
+                $created[] = $question;
+            } catch (\Exception $e) {
+                \Log::error('Failed to create question', [
+                    'index' => $index,
+                    'data'  => $questionData,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                return response()->json([
+                    'message' => 'Failed to save question ' . ($index + 1) . ': ' . $e->getMessage(),
+                ], 500);
             }
-            
-            $created[] = $question;
         }
 
         // Recalculate assessment total_points
