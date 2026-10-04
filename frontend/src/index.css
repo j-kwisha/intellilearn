@@ -237,8 +237,8 @@ h1, h2, h3, h4, h5 {
 }
 
 .sidebar-logo-img {
-  width: 44px;
-  height: 44px;
+  width: 57px;
+  height: 57px;
   object-fit: contain;
   flex-shrink: 0;
   mix-blend-mode: screen;
@@ -969,7 +969,7 @@ h1, h2, h3, h4, h5 {
   position: absolute;
   right: 0;
   bottom: 0;
-  height: 160px;
+  height: 192px;
   z-index: 2;
   pointer-events: none;
   filter: drop-shadow(0 4px 16px rgba(0,0,0,0.25));
@@ -2565,8 +2565,8 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 }
 
 .adm-brand-logo-wrap {
-  width: 44px;
-  height: 44px;
+  width: 57px;
+  height: 57px;
   border-radius: 0;
   background: transparent;
   display: flex;
@@ -3330,7 +3330,7 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 .instr-sidebar-waves { position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; }
 
 .instr-brand { display:flex; align-items:center; gap:12px; padding:6px 8px 10px; }
-.instr-brand-logo-wrap { width:44px; height:44px; border-radius:0; background:transparent; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:visible; padding:0; }
+.instr-brand-logo-wrap { width:57px; height:57px; border-radius:0; background:transparent; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:visible; padding:0; }
 .instr-brand-logo { width:100%; height:100%; object-fit:contain; }
 .instr-brand-name { color:#fff; font-weight:700; font-size:19px; letter-spacing:0.2px; font-family:"Poppins",sans-serif; }
 
@@ -3377,7 +3377,7 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 .instr-accent { color:var(--instr-mint); }
 .instr-welcome-text p { color:#cfe9db; font-size:17.5px; margin:0; font-family:"Inter",sans-serif; }
 .instr-mascot-wrap { position:absolute; right:64px; bottom:0; z-index:2; display:flex; align-items:flex-end; pointer-events:none; }
-.instr-mascot { height:246px; width:auto; display:block; filter:drop-shadow(0 12px 20px rgba(0,0,0,0.3)); }
+.instr-mascot { height:295px; width:auto; display:block; filter:drop-shadow(0 12px 20px rgba(0,0,0,0.3)); }
 .instr-sparkle { position:absolute; z-index:3; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
 .instr-sparkle--1 { top:20px; right:52px; width:24px; height:24px; }
 .instr-sparkle--2 { top:78px; left:42%; width:14px; height:14px; opacity:0.85; }
@@ -3927,8 +3927,8 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 
 /* Logo wrapper — no background, larger */
 .std-brand-logo-wrap {
-  width: 44px;
-  height: 44px;
+  width: 57px;
+  height: 57px;
   border-radius: 0;
   background: transparent;
   display: flex;
