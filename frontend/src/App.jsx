@@ -17,6 +17,7 @@ import GoogleCallback from './pages/auth/GoogleCallback';
 // Student
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentCoursesListPage from './pages/student/StudentCoursesListPage';
+import StudentCoursePage from './pages/student/StudentCoursePage';
 import StudentGradesPage from './pages/student/StudentGradesPage';
 import StudentQuizPage from './pages/student/StudentQuizPage';
 import StudentLessonPage from './pages/student/StudentLessonPage';
