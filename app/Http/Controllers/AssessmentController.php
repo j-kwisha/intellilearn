@@ -803,6 +803,13 @@ class AssessmentController extends Controller
                 'debug_errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
+            // Force logging to stderr for Railway capture
+            error_log("LARAVEL EXCEPTION: uploadReferenceText failed");
+            error_log("Exception Class: " . get_class($e));
+            error_log("Exception Message: " . $e->getMessage());
+            error_log("Exception File: " . $e->getFile() . ":" . $e->getLine());
+            error_log("Exception Trace: " . $e->getTraceAsString());
+            
             \Log::error('uploadReferenceText: General exception', [
                 'error' => $e->getMessage(),
                 'class' => get_class($e),
