@@ -306,9 +306,20 @@ class LessonController extends Controller
                 $signatureString = implode('&', $signatureParts) . $apiSecret;
                 $signature = sha1($signatureString);
 
+                // Use 'raw' resource type for documents (docx, ppt, etc.), 'video' for videos, 'image' for images
+                $ext = strtolower($file->getClientOriginalExtension());
+                $resourceType = 'raw'; // default for docs
+                if (in_array($ext, ['mp4', 'mov', 'avi', 'webm'])) {
+                    $resourceType = 'video';
+                } elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $resourceType = 'image';
+                } elseif ($ext === 'pdf') {
+                    $resourceType = 'auto'; // PDFs work with auto
+                }
+
                 $response = \Illuminate\Support\Facades\Http::attach(
                     'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
-                )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
+                )->post("https://api.cloudinary.com/v1_1/{$cloudName}/{$resourceType}/upload", [
                     'api_key'   => $apiKey,
                     'timestamp' => $timestamp,
                     'folder'    => $folder,
