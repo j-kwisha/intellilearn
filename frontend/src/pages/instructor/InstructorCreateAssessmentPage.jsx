@@ -115,7 +115,7 @@ export default function InstructorCreateAssessmentPage() {
 
     try {
       const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/upload-file`, data, {
-        headers: {},
+        transformRequest: [(data, headers) => { delete headers['Content-Type']; return data; }],
         onUploadProgress: ev => setPaperUploadProgress(Math.round((ev.loaded / ev.total) * 100)),
       });
       setPaperFileUrl(res.data.file_url);
