@@ -689,45 +689,15 @@ class AssessmentController extends Controller
      */
     private function uploadAssessmentFile($file, int $courseId, int $assessmentId): ?string
     {
-        $cloudName = env('CLOUDINARY_CLOUD_NAME');
-        $apiKey    = env('CLOUDINARY_API_KEY');
-        $apiSecret = env('CLOUDINARY_API_SECRET');
-
-        if ($cloudName && $apiKey && $apiSecret) {
-            $timestamp = time();
-            $folder    = "intellilearn/course_{$courseId}/assessments";
-
-            $paramsToSign = ['folder' => $folder, 'timestamp' => $timestamp];
-            ksort($paramsToSign);
-            $signatureParts = [];
-            foreach ($paramsToSign as $key => $value) {
-                $signatureParts[] = "{$key}={$value}";
-            }
-            $signature = sha1(implode('&', $signatureParts) . $apiSecret);
-
-            $response = \Illuminate\Support\Facades\Http::attach(
-                'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
-            )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
-                'api_key'   => $apiKey,
-                'timestamp' => $timestamp,
-                'folder'    => $folder,
-                'signature' => $signature,
-            ]);
-
-            if ($response->successful()) {
-                return $response->json('secure_url');
-            }
-
-            \Log::error('Cloudinary assessment file upload failed', [
-                'status' => $response->status(),
-                'body'   => $response->body(),
-            ]);
+        try {
+            // Store locally for reliability  
+            $folder = "assessments/course_{$courseId}/assessment_{$assessmentId}";
+            $stored = $file->store($folder, 'public');
+            return \Illuminate\Support\Facades\Storage::disk('public')->url($stored);
+        } catch (\Exception $e) {
+            \Log::error('Assessment file upload failed', ['error' => $e->getMessage()]);
             return null;
         }
-
-        // Fallback: local storage
-        $stored = $file->store("assessments/course_{$courseId}", 'public');
-        return \Illuminate\Support\Facades\Storage::disk('public')->url($stored);
     }
 
     /**
