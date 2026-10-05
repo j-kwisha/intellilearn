@@ -3359,7 +3359,7 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 .instr-main { flex:1; min-width:0; height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
 
 /* topbar */
-.instr-topbar { display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; padding:28px 40px 0; margin-bottom:26px; flex-shrink:0; }
+.instr-topbar { position:relative; z-index:3; display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; padding:28px 40px 0; margin-bottom:26px; flex-shrink:0; }
 .instr-page-title { font-size:28px; font-weight:700; color:var(--instr-ink); font-family:"Poppins",sans-serif; }
 .instr-topbar-right { display:flex; align-items:center; gap:18px; }
 .instr-search { display:flex; align-items:center; gap:10px; background:#e2efe8; border-radius:999px; padding:11px 20px; width:260px; position:relative; }
@@ -3369,15 +3369,15 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 .instr-topbar-user { display:flex; align-items:center; gap:10px; cursor:pointer; }
 
 /* welcome banner */
-.instr-welcome-banner { position:relative; padding:26px 44px; display:flex; align-items:center; margin:0 40px 30px; min-height:192px; overflow:visible; }
+.instr-welcome-banner { position:relative; isolation:isolate; padding:26px 44px; display:flex; align-items:center; margin:0 40px 30px; min-height:192px; overflow:visible; }
 .instr-welcome-bg { position:absolute; inset:0; overflow:hidden; border-radius:20px; background:linear-gradient(115deg,var(--instr-forest-900) 0%,var(--instr-forest-800) 45%,var(--instr-green-600) 145%); z-index:0; }
 .instr-banner-waves { position:absolute; left:0; bottom:0; width:100%; height:100%; pointer-events:none; }
 .instr-welcome-text { position:relative; z-index:2; max-width:54%; border-left:4px solid var(--instr-mint); padding-left:22px; }
 .instr-welcome-text h2 { color:#fff; font-size:39px; font-weight:700; margin-bottom:10px; line-height:1.2; font-family:"Poppins",sans-serif; }
 .instr-accent { color:var(--instr-mint); }
 .instr-welcome-text p { color:#cfe9db; font-size:17.5px; margin:0; font-family:"Inter",sans-serif; }
-.instr-mascot-wrap { position:absolute; right:64px; bottom:0; z-index:2; display:flex; align-items:flex-end; pointer-events:none; }
-.instr-mascot { height:295px; width:auto; display:block; filter:drop-shadow(0 12px 20px rgba(0,0,0,0.3)); }
+.instr-mascot-wrap { position:absolute; right:64px; bottom:0; z-index:1; display:flex; align-items:flex-end; pointer-events:none; }
+.instr-mascot { height:235px; width:auto; display:block; filter:drop-shadow(0 12px 20px rgba(0,0,0,0.3)); }
 .instr-sparkle { position:absolute; z-index:3; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
 .instr-sparkle--1 { top:20px; right:52px; width:24px; height:24px; }
 .instr-sparkle--2 { top:78px; left:42%; width:14px; height:14px; opacity:0.85; }
