@@ -124,9 +124,18 @@ export default function InstructorDashboard() {
   const [loading, setLoading]         = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen]   = useState(false);
+  const [expandedCourses, setExpandedCourses] = useState({}); // Track which courses are expanded
   const searchRef                     = useRef(null);
 
   const handleLogout = async () => { await logout(); navigate('/login'); };
+
+  // Toggle course expansion in at-risk section
+  const toggleCourseExpansion = (courseName) => {
+    setExpandedCourses(prev => ({
+      ...prev,
+      [courseName]: !prev[courseName]
+    }));
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -549,66 +558,118 @@ export default function InstructorDashboard() {
                     return groups;
                   }, {});
 
-                  return Object.entries(groupedByCourse).map(([courseName, students]) => (
-                    <div key={courseName} style={{ marginBottom: '20px' }}>
-                      {/* Course header */}
-                      <div style={{ 
-                        padding: '8px 12px', 
-                        background: 'linear-gradient(135deg, #f0f7f3 0%, #e6f3ea 100%)',
-                        borderRadius: '8px',
-                        marginBottom: '8px',
-                        border: '1px solid #d1e7d7'
-                      }}>
-                        <h4 style={{ 
-                          margin: 0, 
-                          fontSize: '13px', 
-                          fontWeight: 600, 
-                          color: '#065f46',
-                          fontFamily: 'Poppins, sans-serif'
-                        }}>
-                          {courseName} ({students.length} student{students.length !== 1 ? 's' : ''})
-                        </h4>
+                  return Object.entries(groupedByCourse).map(([courseName, students]) => {
+                    const isExpanded = expandedCourses[courseName] || false;
+                    
+                    return (
+                      <div key={courseName} style={{ marginBottom: '12px' }}>
+                        {/* Clickable Course header with dropdown arrow */}
+                        <button
+                          onClick={() => toggleCourseExpansion(courseName)}
+                          style={{ 
+                            width: '100%',
+                            padding: '12px 16px', 
+                            background: 'linear-gradient(135deg, #f0f7f3 0%, #e6f3ea 100%)',
+                            borderRadius: '8px',
+                            marginBottom: isExpanded ? '8px' : '0',
+                            border: '1px solid #d1e7d7',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = 'linear-gradient(135deg, #e6f3ea 0%, #d1e7d7 100%)';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'linear-gradient(135deg, #f0f7f3 0%, #e6f3ea 100%)';
+                          }}
+                        >
+                          <h4 style={{ 
+                            margin: 0, 
+                            fontSize: '14px', 
+                            fontWeight: 600, 
+                            color: '#065f46',
+                            fontFamily: 'Poppins, sans-serif'
+                          }}>
+                            {courseName} ({students.length} at-risk student{students.length !== 1 ? 's' : ''})
+                          </h4>
+                          
+                          {/* Dropdown arrow */}
+                          <svg 
+                            style={{ 
+                              width: '16px', 
+                              height: '16px', 
+                              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.2s ease',
+                              color: '#065f46'
+                            }} 
+                            viewBox="0 0 24 24" 
+                            fill="none"
+                          >
+                            <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                        
+                        {/* Collapsible students list */}
+                        {isExpanded && (
+                          <div style={{ 
+                            background: '#fafcfb',
+                            borderRadius: '8px',
+                            border: '1px solid #e6f3ea',
+                            overflow: 'hidden'
+                          }}>
+                            {students.map((student, index) => {
+                              const isHigh = student.risk_level === 'High Risk';
+                              const barColor = isHigh ? '#e0453c' : '#f0a020';
+                              const badgeStyle = isHigh
+                                ? { background: '#fdecec', color: '#e0453c' }
+                                : { background: '#fbf0d9', color: '#b9790f' };
+                              return (
+                                <Link 
+                                  to="/instructor/students" 
+                                  key={student.id} 
+                                  className="instr-risk-row"
+                                  style={{
+                                    borderBottom: index < students.length - 1 ? '1px solid #e6f3ea' : 'none',
+                                    margin: 0,
+                                    borderRadius: 0
+                                  }}
+                                >
+                                  <div className="instr-risk-avatar">{student.initials}</div>
+                                  <div className="instr-risk-body">
+                                    <div className="instr-risk-top">
+                                      <span className="instr-risk-name">{student.name}</span>
+                                      <span className="instr-risk-score">Risk Score: {student.risk_score}%</span>
+                                    </div>
+                                    <div className="instr-risk-bar-row">
+                                      <div className="instr-risk-bar-track">
+                                        <div style={{ width: `${student.risk_score}%`, height: '100%', background: barColor, borderRadius: '999px' }} />
+                                      </div>
+                                      <span className="instr-risk-badge" style={badgeStyle}>{student.risk_level}</span>
+                                    </div>
+                                    {student.reasons && student.reasons.length > 0 && (
+                                      <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                        {student.reasons.map((r, i) => (
+                                          <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: '#fef9c3', color: '#854d0e', fontFamily: 'Inter,sans-serif' }}>
+                                            {r}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <svg className="instr-risk-chevron" viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                      
-                      {/* Students in this course */}
-                      {students.map((student) => {
-                        const isHigh = student.risk_level === 'High Risk';
-                        const barColor = isHigh ? '#e0453c' : '#f0a020';
-                        const badgeStyle = isHigh
-                          ? { background: '#fdecec', color: '#e0453c' }
-                          : { background: '#fbf0d9', color: '#b9790f' };
-                        return (
-                          <Link to="/instructor/students" key={student.id} className="instr-risk-row">
-                            <div className="instr-risk-avatar">{student.initials}</div>
-                            <div className="instr-risk-body">
-                              <div className="instr-risk-top">
-                                <span className="instr-risk-name">{student.name}</span>
-                                <span className="instr-risk-score">Risk Score: {student.risk_score}%</span>
-                              </div>
-                              <div className="instr-risk-bar-row">
-                                <div className="instr-risk-bar-track">
-                                  <div style={{ width: `${student.risk_score}%`, height: '100%', background: barColor, borderRadius: '999px' }} />
-                                </div>
-                                <span className="instr-risk-badge" style={badgeStyle}>{student.risk_level}</span>
-                              </div>
-                              {student.reasons && student.reasons.length > 0 && (
-                                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                  {student.reasons.map((r, i) => (
-                                    <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: '#fef9c3', color: '#854d0e', fontFamily: 'Inter,sans-serif' }}>
-                                      {r}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <svg className="instr-risk-chevron" viewBox="0 0 24 24" fill="none">
-                              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  ));
+                    );
+                  });
                 })()}
               </div>
             )}
