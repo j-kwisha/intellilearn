@@ -188,7 +188,7 @@ class SubmissionController extends Controller
             else {
                 $answerText = $answerData['answer_text'] ?? null;
 
-                // Fetch reference material — priority: question's reference_text > question's reference_lesson > assessment lesson > all course materials
+                // Essays require reference material explicitly provided for the question.
                 $referenceText = null;
                 $course = $assessment->course;
 
@@ -207,7 +207,8 @@ class SubmissionController extends Controller
                                 'answer_text'      => $answerText,
                                 'is_correct'       => null,
                                 'points_earned'    => null,
-                                'ai_feedback'      => 'Reference lesson has been removed. Pending manual grading by instructor.',
+                                'ai_feedback'      => null,
+                                'criterion_scores' => null,
                             ]
                         );
                         $allAutoGradable = false;
@@ -225,7 +226,7 @@ class SubmissionController extends Controller
                             0, 6000
                         );
                     }
-                } else {
+                } elseif ($question->type !== 'essay') {
                     // Fallback: course-level materials, then assessment lesson materials
                     $courseMaterials = \App\Models\CourseMaterial::where('course_id', $course->id)
                         ->whereNotNull('extracted_text')
@@ -245,6 +246,23 @@ class SubmissionController extends Controller
                             0, 6000
                         );
                     }
+                }
+
+                // Without usable instructor-provided references, leave essays ungraded.
+                if ($question->type === 'essay' && ! trim($referenceText ?? '')) {
+                    SubmissionAnswer::updateOrCreate(
+                        ['submission_id' => $submission->id, 'question_id' => $question->id],
+                        [
+                            'answer_text'      => $answerText,
+                            'is_correct'       => null,
+                            'points_earned'    => null,
+                            'ai_feedback'      => null,
+                            'criterion_scores' => null,
+                        ]
+                    );
+                    $allAutoGradable = false;
+                    $totalPoints += $question->points;
+                    continue;
                 }
 
                 // Get rubric criteria if exists
@@ -313,9 +331,7 @@ class SubmissionController extends Controller
                 }
 
                 // Only mark as auto-gradable if AI actually succeeded
-                if ($gradingState === 'graded' && $pointsEarned !== null) {
-                    $allAutoGradable = true;
-                } else {
+                if ($gradingState !== 'graded' || $pointsEarned === null) {
                     $allAutoGradable = false;
                 }
 
@@ -449,7 +465,7 @@ class SubmissionController extends Controller
         return response()->json([
             'message'    => $allAutoGradable
                 ? 'Assessment submitted and graded!'
-                : 'Assessment submitted. Some essay questions could not be auto-graded and are pending instructor review.',
+                : 'Assessment submitted. Some answers are waiting to be graded by the instructor.',
             'submission' => $submission,
         ]);
     }
