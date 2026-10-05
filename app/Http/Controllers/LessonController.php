@@ -282,9 +282,10 @@ class LessonController extends Controller
 
         // Handle file upload
         if ($request->hasFile('file')) {
-            $file = $request->file('file');
+            try {
+                $file = $request->file('file');
 
-            $cloudName = env('CLOUDINARY_CLOUD_NAME');
+                $cloudName = env('CLOUDINARY_CLOUD_NAME');
             $apiKey    = env('CLOUDINARY_API_KEY');
             $apiSecret = env('CLOUDINARY_API_SECRET');
 
@@ -347,6 +348,10 @@ class LessonController extends Controller
                 $folder   = "materials/course_{$course->id}/lesson_{$lesson->id}";
                 $stored   = $file->store($folder, 'public');
                 $filePath = Storage::disk('public')->url($stored);
+            }
+            } catch (\Exception $e) {
+                \Log::error('File upload error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+                return response()->json(['message' => 'File upload failed: ' . $e->getMessage()], 500);
             }
 
             // Extract text from PDF for AI chatbot
