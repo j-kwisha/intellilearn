@@ -315,10 +315,7 @@ class LessonController extends Controller
                     'timestamp' => $timestamp,
                 ];
                 
-                // Include resource_type in signature if not auto
-                if ($resourceType !== 'auto') {
-                    $paramsToSign['resource_type'] = $resourceType;
-                }
+                // NOTE: Do NOT include resource_type in signature for authenticated uploads
                 ksort($paramsToSign);
                 $signatureParts = [];
                 foreach ($paramsToSign as $key => $value) {
