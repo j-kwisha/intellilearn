@@ -84,19 +84,13 @@ class AuthController extends Controller
             </div>
         ";
 
-        try {
-            \Illuminate\Support\Facades\Mail::send([], [], function ($message) use ($user, $html) {
-                $message->to($user->email, "{$user->first_name} {$user->last_name}")
-                    ->from('onboarding@resend.dev', 'IntelliLearn')
-                    ->subject('Verify your IntelliLearn account')
-                    ->html($html);
-            });
-        } catch (\Exception $e) {
-            \Log::error('Failed to send verification email', [
-                'user_id' => $user->id,
-                'error'   => $e->getMessage(),
-            ]);
-        }
+        // Send email via Laravel Mail - same method as forgot password (no try-catch to match working flow)
+        \Illuminate\Support\Facades\Mail::send([], [], function ($message) use ($user, $html) {
+            $message->to($user->email, "{$user->first_name} {$user->last_name}")
+                ->from('onboarding@resend.dev', 'IntelliLearn')
+                ->subject('Verify your IntelliLearn account')
+                ->html($html);
+        });
     }
 
     /**
