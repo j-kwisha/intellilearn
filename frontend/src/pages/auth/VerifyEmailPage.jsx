@@ -1,18 +1,11 @@
-import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import logo from '../../assets/logo copy.png';
 import loginBg from '../../assets/login_bg.png';
 
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState('loading');
-
-  useEffect(() => {
-    const s = searchParams.get('status');
-    if (s === 'success' || s === 'already') setStatus('success');
-    else if (s === 'error') setStatus('error');
-    else setStatus('error'); // no status param = direct navigation, not a valid link
-  }, []);
+  const result = searchParams.get('status');
+  const status = result === 'success' || result === 'already' ? 'success' : 'error';
 
   return (
     <div style={{

@@ -46,6 +46,10 @@ class SubmissionController extends Controller
             return response()->json(['message' => 'This assessment is not available yet.'], 403);
         }
 
+        if ($message = $this->assessmentDateError($assessment)) {
+            return response()->json(['message' => $message], 403);
+        }
+
         // Check if student has an in-progress attempt
         $existingAttempt = Submission::where('user_id', $user->id)
             ->where('assessment_id', $assessment->id)
@@ -123,6 +127,10 @@ class SubmissionController extends Controller
             return response()->json([
                 'message' => 'No active submission found. Start the assessment first.',
             ], 404);
+        }
+
+        if ($message = $this->assessmentDateError($assessment)) {
+            return response()->json(['message' => $message], 403);
         }
 
         // Load all questions for this assessment (for auto-grading)
@@ -556,5 +564,17 @@ class SubmissionController extends Controller
         if ($user->isAdmin()) return true;
         if ($user->isInstructor() && $course->instructor_id === $user->id) return true;
         return false;
+    }
+
+    private function assessmentDateError(Assessment $assessment): ?string
+    {
+        $currentTime = now();
+        if ($assessment->available_from && $currentTime->lt($assessment->available_from)) {
+            return 'This assessment is not open yet.';
+        }
+        if ($assessment->due_date && $currentTime->gte($assessment->due_date)) {
+            return 'The deadline for this assessment has passed.';
+        }
+        return null;
     }
 }

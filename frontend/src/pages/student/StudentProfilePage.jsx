@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import { connectGoogleProfile } from '../../services/googleProfile';
 
@@ -47,7 +47,6 @@ export default function StudentProfilePage() {
 
   const inkStyle = isInstructor ? 'var(--instr-ink)' : 'var(--adm-ink)';
   const mutedStyle = isInstructor ? 'var(--instr-muted)' : 'var(--adm-muted)';
-  const bgStyle = isInstructor ? 'var(--instr-bg)' : 'var(--adm-bg)';
   const accentColor = isInstructor ? 'var(--instr-green-600)' : 'var(--adm-blue-500)';
   const avatarBg = isInstructor ? 'var(--instr-mint-soft)' : '#eef1ff';
   const avatarText = isInstructor ? 'var(--instr-green-600)' : 'var(--adm-blue-500)';

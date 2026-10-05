@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import logo from '../../assets/logo copy.png';
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import logo from '../../assets/logo copy.png';
 import instructorMascot from '../../assets/instructor_db_profile.png';
@@ -147,7 +147,7 @@ export default function InstructorDashboard() {
         try {
           const statsRes = await api.get('/instructor/stats');
           if (statsRes.data) setStats(statsRes.data);
-        } catch (_) {
+        } catch {
           const totalStudents = courseList.reduce((sum, c) => sum + (c.students_count || 0), 0);
           setStats(prev => ({ ...prev, my_courses: courseList.length, total_students: totalStudents }));
         }
@@ -155,7 +155,7 @@ export default function InstructorDashboard() {
         try {
           const subRes = await api.get('/instructor/submissions/recent');
           if (subRes.data?.submissions?.length > 0) setSubmissions(subRes.data.submissions);
-        } catch (_) {}
+        } catch { /* Optional dashboard data is unavailable. */ }
 
         // Fetch at-risk students — try AI endpoint per course, fall back gracefully
         const riskStudents = [];
@@ -210,7 +210,7 @@ export default function InstructorDashboard() {
                 });
               }
             });
-          } catch (_courseErr) {
+          } catch {
             // This course's AI endpoint failed — skip it, don't kill the whole loop
           }
         }

@@ -1,11 +1,11 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../services/api';
 
-const AuthContext = createContext(null);
+import { AuthContext } from './AuthContextStore';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('token')));
 
   // Check if user is logged in on app load
   useEffect(() => {
@@ -18,8 +18,6 @@ export function AuthProvider({ children }) {
           localStorage.removeItem('user');
         })
         .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
     }
   }, []);
 
@@ -55,7 +53,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       await api.post('/logout');
-    } catch (e) {
+    } catch {
       // Even if API fails, clear local state
     }
     localStorage.removeItem('token');
@@ -68,10 +66,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
 }

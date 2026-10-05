@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
@@ -426,7 +426,7 @@ export default function InstructorAssessmentPage() {
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [showAddQuestion, setShowAddQuestion] = useState(false);
 
-  const fetchAll = () => {
+  const fetchAll = useCallback(() => {
     Promise.all([
       api.get(`/courses/${courseId}/assessments/${assessmentId}`),
       api.get(`/courses/${courseId}/assessments/${assessmentId}/submissions`),
@@ -437,9 +437,9 @@ export default function InstructorAssessmentPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
+  }, [courseId, assessmentId]);
 
-  useEffect(() => { fetchAll(); }, [courseId, assessmentId]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const openGrading = async (submission) => {
     const res = await api.get(`/courses/${courseId}/assessments/${assessmentId}/submissions/${submission.id}`);
@@ -506,7 +506,6 @@ export default function InstructorAssessmentPage() {
 
   if (!assessment) return <p className="text-slate-500">Assessment not found.</p>;
 
-  const gradedCount = submissions.filter((s) => s.status === 'graded').length;
   const pendingCount = submissions.filter((s) => s.status === 'submitted').length;
   const avgScore = submissions.length
     ? (submissions.filter(s => s.percentage != null).reduce((sum, s) => sum + parseFloat(s.percentage), 0) /

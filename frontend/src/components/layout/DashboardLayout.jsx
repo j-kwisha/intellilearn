@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -20,7 +20,7 @@ import EngineeringIcon from '@mui/icons-material/Engineering';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import ScienceIcon from '@mui/icons-material/Science';
 import logo from '../../assets/logo copy.png';
-import { useNavigationGuard } from '../../context/NavigationGuardContext';
+import { useNavigationGuard } from '../../context/NavigationGuardContextStore';
 
 const navItems = {
   student: [
@@ -277,8 +277,8 @@ export default function DashboardLayout({ children }) {
   if (user?.role === 'admin') {
     const pageLabel = items.find((i) => i.path === location.pathname)?.label || 'Dashboard';
     const initials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`;
-    const AvatarImg = ({ className, style }) => user?.avatar
-      ? <img src={user.avatar} alt={initials} referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%', ...style }} />
+    const avatarContent = user?.avatar
+      ? <img src={user.avatar} alt={initials} referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
       : <span>{initials}</span>;
 
     return (
@@ -303,7 +303,7 @@ export default function DashboardLayout({ children }) {
 
           {/* Account card */}
           <div className="adm-account-card">
-            <div className="adm-avatar adm-avatar--sidebar"><AvatarImg /></div>
+            <div className="adm-avatar adm-avatar--sidebar">{avatarContent}</div>
             <div className="adm-account-text">
               <span className="adm-account-name">{user?.first_name} {user?.last_name}</span>
               <span className="adm-account-role">{user?.role}</span>
@@ -399,7 +399,7 @@ export default function DashboardLayout({ children }) {
               </div>
               {/* User info */}
               <div className="adm-topbar-user">
-                <div className="adm-avatar adm-avatar--topbar"><AvatarImg /></div>
+                <div className="adm-avatar adm-avatar--topbar">{avatarContent}</div>
                 <div className="adm-account-text">
                   <span className="adm-account-name adm-account-name--dark">{user?.first_name} {user?.last_name}</span>
                   <span className="adm-account-email">{user?.email}</span>

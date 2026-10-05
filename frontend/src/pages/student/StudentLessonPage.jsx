@@ -1,11 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
-import DatasetIcon from '@mui/icons-material/Dataset';
-import LinkIcon from '@mui/icons-material/Link';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
 
 const AUTO_DONE_SECONDS = 30;
 
@@ -15,9 +10,8 @@ export default function StudentLessonPage() {
   const [lesson, setLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [markError, setMarkError] = useState('');
-  const [countdown, setCountdown] = useState(AUTO_DONE_SECONDS);
   const [autoMarked, setAutoMarked] = useState(false);
-  const startTime = useRef(Date.now());
+  const startTime = useRef(null);
   const timerRef = useRef(null);
   const markedRef = useRef(false);
 
@@ -26,38 +20,17 @@ export default function StudentLessonPage() {
       .then((res) => {
         const l = res.data.lesson;
         setLesson(l);
-        if (l.my_progress === 'done') {
-          setAutoMarked(true);
-          setCountdown(0);
-        }
+        setAutoMarked(l.my_progress === 'done');
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [courseId, lessonId]);
 
-  // Countdown timer — starts once lesson loads and not already done
-  useEffect(() => {
-    if (!lesson || lesson.my_progress === 'done' || autoMarked) return;
-
-    timerRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          markAsDone();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timerRef.current);
-  }, [lesson, autoMarked]);
-
-  const markAsDone = async () => {
+  const markAsDone = useCallback(async () => {
     if (markedRef.current) return;
     markedRef.current = true;
     setMarkError('');
-    const secondsSpent = Math.round((Date.now() - startTime.current) / 1000);
+    const secondsSpent = Math.round((Date.now() - (startTime.current ?? Date.now())) / 1000);
     try {
       await api.put(`/courses/${courseId}/lessons/${lessonId}/progress`, {
         status: 'done',
@@ -70,7 +43,26 @@ export default function StudentLessonPage() {
       markedRef.current = false;
       setMarkError(err.response?.data?.message || 'Could not mark lesson as done. Please try again.');
     }
-  };
+  }, [courseId, lessonId]);
+
+  useEffect(() => {
+    startTime.current = Date.now();
+    markedRef.current = false;
+  }, [courseId, lessonId]);
+
+  // Keep network side effects outside the countdown state updater.
+  useEffect(() => {
+    if (!lesson || String(lesson.id) !== String(lessonId) || lesson.my_progress === 'done' || autoMarked) return;
+    let remaining = AUTO_DONE_SECONDS;
+    timerRef.current = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(timerRef.current);
+        void markAsDone();
+      }
+    }, 1000);
+    return () => clearInterval(timerRef.current);
+  }, [lesson, lessonId, autoMarked, markAsDone]);
 
   if (loading) {
     return (
@@ -88,23 +80,6 @@ export default function StudentLessonPage() {
     done: 'bg-emerald-100 text-emerald-700',
     missing: 'bg-red-100 text-red-700',
   };
-
-  const getMaterialIcon = (type) => {
-    const iconProps = { sx: { fontSize: 28, color: 'var(--purple-primary)' } };
-    switch (type) {
-      case 'pdf': return <PictureAsPdfIcon {...iconProps} />;
-      case 'video': return <VideoLibraryIcon {...iconProps} />;
-      case 'ppt': return <DatasetIcon {...iconProps} />;
-      case 'link': return <LinkIcon {...iconProps} />;
-      default: return <AttachFileIcon {...iconProps} />;
-    }
-  };
-
-  // Progress ring math
-  const radius = 16;
-  const circumference = 2 * Math.PI * radius;
-  const progress = countdown / AUTO_DONE_SECONDS;
-  const dashOffset = circumference * (1 - progress);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">

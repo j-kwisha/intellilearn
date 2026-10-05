@@ -213,7 +213,7 @@ function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded })
   const handleSubmitGrades = async () => {
     setSaving(true);
     const gradeArray = Object.entries(grades)
-      .filter(([_, g]) => g.points_earned !== '' && g.points_earned !== null)
+      .filter(([, g]) => g.points_earned !== '' && g.points_earned !== null)
       .map(([qId, g]) => ({ question_id: parseInt(qId), points_earned: parseFloat(g.points_earned), ai_feedback: g.ai_feedback || null, ...(g.criterion_scores ? { criterion_scores: g.criterion_scores } : {}) }));
     try {
       await api.put(`/courses/${courseId}/assessments/${assessmentId}/submissions/${submission.id}/grade`, { grades: gradeArray });

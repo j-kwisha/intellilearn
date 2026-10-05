@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import { useNavigationGuard } from '../../context/NavigationGuardContext';
+import { useNavigationGuard } from '../../context/NavigationGuardContextStore';
 
 export default function StudentQuizPage() {
   const { courseId, assessmentId } = useParams();
@@ -14,6 +14,12 @@ export default function StudentQuizPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     api.get(`/courses/${courseId}/assessments/${assessmentId}`)
@@ -73,6 +79,7 @@ export default function StudentQuizPage() {
     try {
       const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/start`);
       setSubmission(res.data.submission);
+      setAnswers(Object.fromEntries((res.data.submission.answers || []).map(answer => [answer.question_id, answer.answer_text ?? ''])));
     } catch (err) {
       setError(err.response?.data?.message || 'Could not start assessment.');
     }
@@ -223,7 +230,7 @@ export default function StudentQuizPage() {
                 try {
                   const parsed = JSON.parse(answer.answer_text || '{}');
                   matchingAnswers = Object.entries(parsed).map(([pairId, selection]) => ({ pairId, selection }));
-                } catch (e) { matchingAnswers = []; }
+                } catch { matchingAnswers = []; }
               }
 
               return (
@@ -293,6 +300,11 @@ export default function StudentQuizPage() {
     );
   }
 
+  const dateMessage = assessment.available_from && currentTime < Date.parse(assessment.available_from)
+    ? 'This assessment is not open yet.'
+    : assessment.due_date && currentTime >= Date.parse(assessment.due_date)
+      ? 'The deadline for this assessment has passed.' : '';
+
   // Show start screen
   if (!submission) {
     return (
@@ -307,15 +319,16 @@ export default function StudentQuizPage() {
           {assessment.description && (
             <p className="text-sm text-slate-600 mt-4">{assessment.description}</p>
           )}
-          {error && (
+          {(error || dateMessage) && (
             <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg mt-4 border border-red-100">
-              {error}
+              {error || dateMessage}
             </div>
           )}
           <button
             onClick={startQuiz}
+            disabled={Boolean(dateMessage)}
             className="mt-6 bg-indigo-600 text-white px-8 py-2.5 rounded-lg text-sm font-semibold
-              hover:bg-indigo-700 transition-colors"
+              hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Start Assessment
           </button>

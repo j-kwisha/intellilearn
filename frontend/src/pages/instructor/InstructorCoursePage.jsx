@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
@@ -131,19 +131,16 @@ export default function InstructorCoursePage() {
   const [tab, setTab] = useState('lessons');
   const [loading, setLoading] = useState(true);
 
-  const [showLessonForm, setShowLessonForm] = useState(false);
   const [showAssessmentForm, setShowAssessmentForm] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState(null);
-  const [showQuestionForm, setShowQuestionForm] = useState(null);
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
-  const [showEventForm, setShowEventForm] = useState(false);
   const [showMaterialForm, setShowMaterialForm] = useState(null); // lessonId
 
   // Join code state
   const [codeLoading, setCodeLoading] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
 
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     Promise.all([
       api.get(`/courses/${courseId}`),
       api.get(`/courses/${courseId}/lessons`),
@@ -160,9 +157,9 @@ export default function InstructorCoursePage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
+  }, [courseId]);
 
-  useEffect(() => { fetchData(); }, [courseId]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
@@ -181,7 +178,7 @@ export default function InstructorCoursePage() {
     try {
       await api.delete(`/courses/${courseId}/announcements/${id}`);
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    } catch (err) {
+    } catch {
       alert('Failed to delete.');
     }
   };
@@ -191,7 +188,7 @@ export default function InstructorCoursePage() {
     try {
       const res = await api.post(`/courses/${courseId}/generate-code`);
       setCourse((prev) => ({ ...prev, join_code: res.data.join_code }));
-    } catch (err) {
+    } catch {
       alert('Failed to generate code.');
     } finally {
       setCodeLoading(false);
@@ -204,7 +201,7 @@ export default function InstructorCoursePage() {
     try {
       await api.delete(`/courses/${courseId}/join-code`);
       setCourse((prev) => ({ ...prev, join_code: null }));
-    } catch (err) {
+    } catch {
       alert('Failed to revoke code.');
     } finally {
       setCodeLoading(false);
@@ -904,8 +901,8 @@ function CalendarTab({ courseId }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const typeColors = { lesson:'#3B82F6', quiz:'#F59E0B', exam:'#EF4444', activity:'#10B981', deadline:'#EF4444', other:'#6B7280' };
-  const fetchEvents = () => { api.get(`/calendar?course_id=${courseId}`).then(r=>setEvents(r.data.events||[])).catch(console.error); };
-  useEffect(() => { fetchEvents(); }, [courseId]);
+  const fetchEvents = useCallback(() => { api.get(`/calendar?course_id=${courseId}`).then(r=>setEvents(r.data.events||[])).catch(console.error); }, [courseId]);
+  useEffect(() => { fetchEvents(); }, [fetchEvents]);
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true); setError('');
     try { await api.post(`/courses/${courseId}/calendar`, form); setShowForm(false); setForm({title:'',event_type:'other',start_date:'',description:'',color:'#3B82F6'}); fetchEvents(); }

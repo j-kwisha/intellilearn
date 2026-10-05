@@ -71,9 +71,6 @@ export default function InstructorAnalyticsPage() {
   useEffect(() => {
     if (!selectedCourse) return;
 
-    setCourseStats(null);
-    setAtRiskStudents([]);
-
     Promise.all([
       api.get(`/courses/${selectedCourse}/grades`),
       api.get(`/ai/courses/${selectedCourse}/student-risk`),
@@ -153,7 +150,6 @@ export default function InstructorAnalyticsPage() {
     );
   }
 
-  const selectedCourseName = courses.find(c => c.id === selectedCourse)?.name || '';
 
   return (
     <div className="space-y-6">
@@ -168,7 +164,7 @@ export default function InstructorAnalyticsPage() {
         <label className="block text-sm font-medium text-slate-700 mb-2">Select Course</label>
         <select
           value={selectedCourse || ''}
-          onChange={(e) => setSelectedCourse(parseInt(e.target.value))}
+          onChange={(e) => { setCourseStats(null); setAtRiskStudents([]); setSelectedCourse(parseInt(e.target.value)); }}
           className="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm
             focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
         >

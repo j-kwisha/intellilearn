@@ -1,8 +1,8 @@
-import { createContext, useContext, useRef } from 'react';
+import { useRef } from 'react';
 
 // Holds a callback that returns true if navigation should be blocked.
 // Components like StudentQuizPage register a guard; DashboardLayout checks it.
-const NavigationGuardContext = createContext(null);
+import { NavigationGuardContext } from './NavigationGuardContextStore';
 
 export function NavigationGuardProvider({ children }) {
   // guardRef.current = function that returns { blocked: bool, message: string } | null
@@ -25,5 +25,3 @@ export function NavigationGuardProvider({ children }) {
     </NavigationGuardContext.Provider>
   );
 }
-
-export const useNavigationGuard = () => useContext(NavigationGuardContext);

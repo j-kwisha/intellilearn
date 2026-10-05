@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import AiChatbot from '../../components/shared/AiChatbot';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -179,7 +179,7 @@ export default function StudentDashboard() {
                 a.course_id   = course.id;
               });
               allAnn.push(...r.data.announcements);
-            } catch (_) {}
+            } catch { /* Optional dashboard data is unavailable. */ }
           })
         );
         allAnn.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -189,14 +189,14 @@ export default function StudentDashboard() {
         try {
           const statsRes = await api.get('/student/stats');
           if (statsRes.data) setStats(statsRes.data);
-        } catch (_) {}
+        } catch { /* Optional dashboard data is unavailable. */ }
 
         // ── AI Recommendations (real data) ──
         try {
           const aiRes = await api.get('/student/ai-recommendations');
           if (aiRes.data) setAiPath(aiRes.data);
           else setAiPath(null);
-        } catch (_) { setAiPath(null); }
+        } catch { setAiPath(null); }
 
       } catch (err) {
         console.warn('Dashboard API unavailable, showing placeholder data.', err);

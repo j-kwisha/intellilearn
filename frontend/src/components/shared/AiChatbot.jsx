@@ -99,7 +99,7 @@ export default function AiChatbot() {
       if (!greetingDismissed) setShowGreeting(true);
     }, 3000);
     return () => clearTimeout(greetingTimer.current);
-  }, []);
+  }, [greetingDismissed]);
 
   useEffect(() => {
     if (showGreeting) {
@@ -388,7 +388,7 @@ export default function AiChatbot() {
                   objectFit: 'contain',
                   display: videoState === 'peeking' ? 'block' : 'none',
                 }}
-                onError={(e) => {
+                onError={() => {
                   console.warn('Peeking video failed to load, using fallback');
                   setVideoState('static');
                 }}
@@ -407,7 +407,7 @@ export default function AiChatbot() {
                   objectFit: 'contain',
                   display: videoState === 'idle' ? 'block' : 'none',
                 }}
-                onError={(e) => {
+                onError={() => {
                   console.warn('Idle video failed to load, using fallback');
                   setVideoState('static');
                 }}

@@ -67,29 +67,34 @@ export default function StudentMaterialViewerPage() {
 
   // Fetch material from API if state was lost (page reload)
   useEffect(() => {
-    if (!material && materialId) {
+    let active = true;
+    if (materialId && String(material?.id) !== String(materialId)) {
       api.get(`/courses/${courseId}/lessons/${lessonId}`)
         .then(res => {
           const found = res.data.lesson?.materials?.find(m => String(m.id) === String(materialId));
-          if (found) setMaterial(found);
+          if (active && found) setMaterial(found);
         })
         .catch(console.error);
     }
-  }, [materialId]);
+    return () => { active = false; };
+  }, [materialId, courseId, lessonId, material]);
 
   // Fetch extracted text for AI — use materialId directly so it works even before material loads
   useEffect(() => {
     const id = materialId || material?.id;
     if (!id) return;
+    let active = true;
     api.get(`/ai/materials/${id}/context`)
       .then(res => {
+        if (!active) return;
+        setLessonContext(res.data.has_text ? res.data.extracted_text : null);
         if (res.data.has_text) {
-          setLessonContext(res.data.extracted_text);
           setMessages([{ from: 'bot', text: 'Hi! I have read this lesson material. Ask me anything about it!' }]);
         }
       })
-      .catch(() => {});
-  }, [materialId]);
+      .catch(() => { if (active) setLessonContext(null); });
+    return () => { active = false; };
+  }, [materialId, material?.id]);
 
   useEffect(() => {
     if (chatOpen) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

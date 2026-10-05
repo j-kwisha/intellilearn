@@ -167,6 +167,7 @@ class PresentationSeederTest extends TestCase
 
     public function test_presentation_login_dashboards_and_quiz_submission_work(): void
     {
+        $this->travelTo(PresentationData::date()->setHour(12));
         $this->dataset();
         foreach (['marisol.reyes', 'adrian.mendoza', 'isabella.santos'] as $name) {
             $account = $this->user($name);
@@ -190,6 +191,37 @@ class PresentationSeederTest extends TestCase
         $this->postJson($path . '/submit', ['submission_id' => $attempt,
             'answers' => $assessment->questions()->get()->map(fn ($q) => ['question_id' => $q->id, 'answer_text' => $q->correct_answer])->all(),
         ])->assertOk()->assertJsonPath('submission.status', 'graded')->assertJsonPath('submission.percentage', '100.00');
+    }
+
+    public function test_assessment_dates_block_early_starts_closed_resumes_and_late_submissions(): void
+    {
+        $this->dataset();
+        $this->travelTo(PresentationData::date()->setHour(12));
+        $course = Course::where('code', 'IT 321')->firstOrFail();
+        $assessment = $course->assessments()->orderByDesc('due_date')->firstOrFail();
+        $student = $this->user('isabella.santos');
+        Sanctum::actingAs($student);
+        $path = "/api/courses/{$course->id}/assessments/{$assessment->id}";
+        $assessment->update(['available_from' => now()->addHour(), 'due_date' => now()->addHours(2)]);
+        $this->postJson($path . '/start')->assertForbidden()->assertJsonPath('message', 'This assessment is not open yet.');
+        $this->assertSame(0, $assessment->submissions()->count());
+        $assessment->update(['available_from' => now(), 'due_date' => now()->addHour()]);
+        $attempt = $this->postJson($path . '/start')->assertCreated()->json('submission.id');
+        $this->postJson($path . '/start')->assertOk()->assertJsonPath('submission.id', $attempt);
+        $this->travel(1)->hours();
+        $this->postJson($path . '/start')->assertForbidden()->assertJsonPath('message', 'The deadline for this assessment has passed.');
+        $question = $assessment->questions()->firstOrFail();
+        $this->postJson($path . '/submit', ['submission_id' => $attempt, 'answers' => [
+            ['question_id' => $question->id, 'answer_text' => $question->correct_answer],
+        ]])->assertForbidden();
+        $this->assertDatabaseHas('submissions', ['id' => $attempt, 'status' => 'in_progress']);
+        $this->assertSame(0, Submission::findOrFail($attempt)->answers()->count());
+        // A fresh attempt is also denied after closure.
+        Sanctum::actingAs($this->user('sofia.ramos'));
+        $this->postJson($path . '/start')->assertForbidden();
+        // Assessments without date restrictions remain usable.
+        $assessment->update(['available_from' => null, 'due_date' => null]);
+        $this->postJson($path . '/start')->assertCreated();
     }
 
     public function test_material_context_and_filtered_calendar_respect_course_access(): void

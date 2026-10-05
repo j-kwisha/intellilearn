@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import logo from '../../assets/logo copy.png';
 
@@ -93,7 +93,7 @@ export default function InstructorLayout({ children, pageTitle }) {
   };
 
   const initials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`;
-  const AvatarContent = () => user?.avatar
+  const avatarContent = user?.avatar
     ? <img src={user.avatar} alt={initials} referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
     : <>{initials}</>;
 
@@ -121,7 +121,7 @@ export default function InstructorLayout({ children, pageTitle }) {
         </div>
 
         <div className="instr-account-card">
-          <div className="instr-avatar instr-avatar--sidebar"><AvatarContent /></div>
+          <div className="instr-avatar instr-avatar--sidebar">{avatarContent}</div>
           <div className="instr-account-text">
             <span className="instr-account-name">{user?.first_name} {user?.last_name}</span>
             <span className="instr-account-role">Instructor</span>
@@ -178,7 +178,7 @@ export default function InstructorLayout({ children, pageTitle }) {
               )}
             </div>
             <div className="instr-topbar-user">
-              <div className="instr-avatar instr-avatar--topbar"><AvatarContent /></div>
+              <div className="instr-avatar instr-avatar--topbar">{avatarContent}</div>
               <div className="instr-account-text">
                 <span className="instr-account-name instr-account-name--dark">{user?.first_name} {user?.last_name}</span>
                 <span className="instr-account-email">{user?.email}</span>

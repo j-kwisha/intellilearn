@@ -8,27 +8,6 @@ export default function StudentGradesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch all enrolled courses with grade data
-    api.get('/courses')
-      .then(async (res) => {
-        const courses = res.data.courses || [];
-        const gradePromises = courses.map(course =>
-          api.get(`/courses/${course.id}/grades`)
-            .then(r => {
-              const myGrade = (r.data.grades || []).find(g => g.user_id === undefined || true);
-              return { course, grade: r.data.my_grade || null };
-            })
-            .catch(() => ({ course, grade: null }))
-        );
-        const results = await Promise.all(gradePromises);
-        setGrades(results);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
-  // Simpler approach — use student stats which already has grade info
-  useEffect(() => {
     api.get('/courses')
       .then(async (coursesRes) => {
         const courses = coursesRes.data.courses || [];

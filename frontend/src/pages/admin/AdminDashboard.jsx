@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import mascot from '../../assets/mascot.png';
 
@@ -45,7 +44,6 @@ function ActionMenu({ onDelete, deleting }) {
 }
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(null);

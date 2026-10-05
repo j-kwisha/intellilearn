@@ -4,18 +4,21 @@ import api from '../../services/api';
 export default function StudentCalendarPage() {
   const [events, setEvents] = useState([]);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(true);
+  const [loadedMonth, setLoadedMonth] = useState(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
 
+  const loading = loadedMonth !== monthStr;
+
   useEffect(() => {
-    setLoading(true);
+    let active = true;
     api.get(`/calendar?month=${monthStr}`)
-      .then((res) => setEvents(res.data.events))
+      .then((res) => { if (active) setEvents(res.data.events); })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoadedMonth(monthStr); });
+    return () => { active = false; };
   }, [monthStr]);
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));

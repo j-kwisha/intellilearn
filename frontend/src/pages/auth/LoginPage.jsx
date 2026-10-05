@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import heroImg from '../../assets/Student_LandingPage.png';
 import logo from '../../assets/logo copy.png';
@@ -109,7 +109,7 @@ export default function LoginPage() {
     try {
       await api.post('/email/resend');
       setResendSent(true);
-    } catch (err) {
+    } catch {
       // silently fail
     } finally {
       setResendLoading(false);
