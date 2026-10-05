@@ -312,7 +312,7 @@ class LessonController extends Controller
             'type'           => $validated['type'],
             'file_path'      => $filePath,
             'url'            => $validated['url'] ?? null,
-            'order'          => $validated['order'] ?? $lesson->materials()->count(),
+            'order'          => $validated['order'] ?? ($lesson->materials()->max('order') + 1),
             'extracted_text' => $extractedText,
         ]);
 
