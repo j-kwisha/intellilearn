@@ -329,7 +329,7 @@ class LessonController extends Controller
 
                 $response = \Illuminate\Support\Facades\Http::timeout(120)->attach(
                     'file', $fileContents, $file->getClientOriginalName()
-                )->post("https://api.cloudinary.com/v1_1/{$cloudName}/{$resourceType}/upload", [
+                )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
                     'api_key'   => $apiKey,
                     'timestamp' => $timestamp,
                     'folder'    => $folder,
