@@ -272,7 +272,7 @@ class LessonController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'type'  => ['required', 'in:pdf,docx,video,ppt,link,other'],
-            'file'  => ['nullable', 'file', 'max:512000'], // 500MB max — MIME validation relaxed for Office format compatibility
+            'file'  => ['nullable', 'file', 'max:512000'], // 500MB max ï¿½ MIME validation relaxed for Office format compatibility
             'url'   => ['nullable', 'url'],
             'order' => ['nullable', 'integer', 'min:0'],
         ]);
@@ -303,6 +303,11 @@ class LessonController extends Controller
                     'folder'    => $folder,
                     'timestamp' => $timestamp,
                 ];
+                
+                // Include resource_type in signature if not auto
+                if ($resourceType !== 'auto') {
+                    $paramsToSign['resource_type'] = $resourceType;
+                }
                 ksort($paramsToSign);
                 $signatureParts = [];
                 foreach ($paramsToSign as $key => $value) {
@@ -329,7 +334,7 @@ class LessonController extends Controller
 
                 $response = \Illuminate\Support\Facades\Http::timeout(120)->attach(
                     'file', $fileContents, $file->getClientOriginalName()
-                )->post("https://api.cloudinary.com/v1_1/{$cloudName}/auto/upload", [
+                )->post("https://api.cloudinary.com/v1_1/{$cloudName}/{$resourceType}/upload", [
                     'api_key'   => $apiKey,
                     'timestamp' => $timestamp,
                     'folder'    => $folder,
