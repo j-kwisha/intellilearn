@@ -728,10 +728,15 @@ class AssessmentController extends Controller
             $extension = strtolower($file->getClientOriginalExtension());
             
             if ($extension === 'pdf') {
-                // Extract text from PDF using existing parser
-                $parser = new \Smalot\PdfParser\Parser();
-                $pdf = $parser->parseFile($file->getRealPath());
-                $extractedText = $pdf->getText();
+                try {
+                    // Extract text from PDF using existing parser
+                    $parser = new \Smalot\PdfParser\Parser();
+                    $pdf = $parser->parseFile($file->getRealPath());
+                    $extractedText = $pdf->getText();
+                } catch (\Exception $e) {
+                    \Log::error('PDF parsing failed', ['error' => $e->getMessage()]);
+                    $extractedText = "PDF file uploaded: " . $file->getClientOriginalName() . ". Text extraction failed. Please try a different PDF or paste text manually.";
+                }
             } elseif ($extension === 'txt') {
                 // Read plain text file
                 $extractedText = file_get_contents($file->getRealPath());
