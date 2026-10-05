@@ -834,8 +834,6 @@ function MaterialUploadForm({ courseId, lessonId, onClose, onSuccess }) {
     data.append('file', file);
     try {
       await api.post(`/courses/${courseId}/lessons/${lessonId}/materials`, data, {
-        // Do NOT set Content-Type manually — let the browser set multipart/form-data with the correct boundary
-        transformRequest: [(data, headers) => { delete headers['Content-Type']; return data; }],
         onUploadProgress: ev => setProgress(Math.round((ev.loaded / ev.total) * 100)),
       });
       onSuccess();
