@@ -289,72 +289,10 @@ class LessonController extends Controller
             $apiKey    = env('CLOUDINARY_API_KEY');
             $apiSecret = env('CLOUDINARY_API_SECRET');
 
-            // For non-PDF files, store locally to avoid Cloudinary complexity with Office docs
-            $ext = strtolower($file->getClientOriginalExtension());
-            $usesCloudinary = in_array($ext, ['pdf', 'docx', 'pptx', 'xlsx', 'mp4', 'mov', 'avi', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
-
-            if ($usesCloudinary && $cloudName && $apiKey && $apiSecret) {
-                // Upload to Cloudinary
-                $timestamp = time();
-                $folder    = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
-
-                // Use 'raw' resource type for documents (docx, ppt, etc.), 'video' for videos, 'image' for images
-                $ext = strtolower($file->getClientOriginalExtension());
-                $resourceType = 'raw'; // default for docs
-                if (in_array($ext, ['mp4', 'mov', 'avi', 'webm'])) {
-                    $resourceType = 'video';
-                } elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                    $resourceType = 'image';
-                } elseif ($ext === 'pdf') {
-                    $resourceType = 'auto'; // PDFs work with auto
-                }
-
-                // Signature: alphabetically sorted params, raw (not URL-encoded), appended with api_secret
-                $paramsToSign = [
-                    'folder'    => $folder,
-                    'timestamp' => $timestamp,
-                ];
-                
-                // NOTE: Do NOT include resource_type in signature for authenticated uploads
-                ksort($paramsToSign);
-                $signatureParts = [];
-                foreach ($paramsToSign as $key => $value) {
-                    $signatureParts[] = "{$key}={$value}";
-                }
-                $signatureString = implode('&', $signatureParts) . $apiSecret;
-                $signature = sha1($signatureString);
-
-                $fileContents = @file_get_contents($file->getRealPath());
-                if ($fileContents === false) {
-                    return response()->json(['message' => 'Could not read the uploaded file. Please try again.'], 500);
-                }
-
-                $response = \Illuminate\Support\Facades\Http::timeout(120)->attach(
-                    'file', $fileContents, $file->getClientOriginalName()
-                )->post("https://api.cloudinary.com/v1_1/{$cloudName}/{$resourceType}/upload", [
-                    'api_key'   => $apiKey,
-                    'timestamp' => $timestamp,
-                    'folder'    => $folder,
-                    'signature' => $signature,
-                ]);
-
-                if ($response->failed()) {
-                    \Log::error('Cloudinary upload failed', [
-                        'status' => $response->status(),
-                        'body'   => $response->body(),
-                    ]);
-                    return response()->json([
-                        'message' => 'File upload to cloud failed: ' . ($response->json('error.message') ?? 'Unknown error'),
-                    ], 500);
-                }
-
-                $filePath = $response->json('secure_url');
-            } else {
-                // Fallback: store locally in public storage
-                $folder   = "materials/course_{$course->id}/lesson_{$lesson->id}";
-                $stored   = $file->store($folder, 'public');
-                $filePath = Storage::disk('public')->url($stored);
-            }
+            // Store all files locally for now - simpler and more reliable
+            $folder = "materials/course_{$course->id}/lesson_{$lesson->id}";
+            $stored = $file->store($folder, 'public');
+            $filePath = Storage::disk('public')->url($stored);
             } catch (\Exception $e) {
                 \Log::error('File upload error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
                 return response()->json(['message' => 'File upload failed: ' . $e->getMessage()], 500);
