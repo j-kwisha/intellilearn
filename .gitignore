@@ -27,3 +27,10 @@ ai-service/.env
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Database exports and generated Python artifacts
+*.sql
+*.dump
+*.backup
+__pycache__/
+*.py[cod]

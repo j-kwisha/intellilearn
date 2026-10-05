@@ -112,7 +112,7 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         // Check if user exists AND password matches
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! $user || ! $user->password || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -318,7 +318,7 @@ class AuthController extends Controller
         }
 
         // Check new password is different from current
-        if (Hash::check($request->password, $user->password)) {
+        if ($user->password && Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'password' => ['New password must be different from your current password.'],
             ]);

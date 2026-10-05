@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -41,12 +42,26 @@ class SocialAuthController extends Controller
             // Get user from Google
             $googleUser = Socialite::driver('google')->stateless()->user();
 
+            if (!filter_var($googleUser->getEmail(), FILTER_VALIDATE_EMAIL)
+                || !($googleUser->user['email_verified'] ?? $googleUser->user['verified_email'] ?? false)) {
+                return response()->json(['message' => 'Choose a Google account with a verified email address.'], 422);
+            }
+
             // Find or create user
             $user = User::where('google_id', $googleUser->getId())
                 ->orWhere('email', $googleUser->getEmail())
                 ->first();
 
             if ($user) {
+                if (strcasecmp($user->email, (string) $googleUser->getEmail()) !== 0) {
+                    return response()->json(['message' => 'The Google email must match your IntelliLearn account email.'], 422);
+                }
+                if (!$user->is_active) {
+                    return response()->json(['message' => 'Your account has been deactivated. Please contact the administrator.'], 403);
+                }
+                if ($user->google_id && (string) $user->google_id !== (string) $googleUser->getId()) {
+                    return response()->json(['message' => 'This email is linked to another Google account.'], 422);
+                }
                 // Update existing user with Google info
                 $user->update([
                     'google_id' => $googleUser->getId(),
@@ -60,11 +75,14 @@ class SocialAuthController extends Controller
                     'last_name' => $googleUser->user['family_name'] ?? '',
                     'email' => $googleUser->getEmail(),
                     'avatar' => $googleUser->getAvatar(),
-                    'email_verified_at' => now(),
                     'password' => null, // No password for OAuth users
                     'role' => 'student', // Default role for new OAuth users
                 ]);
             }
+
+            // Only Google's verified email assertion can verify an OAuth account.
+            if (!$user->hasVerifiedEmail()) $user->markEmailAsVerified();
+            $user->update(['last_login_at' => now()]);
 
             // Generate token
             $token = $user->createToken('auth_token')->plainTextToken;
@@ -75,10 +93,10 @@ class SocialAuthController extends Controller
                 'token' => $token,
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            Log::warning('Google OAuth authentication failed', ['exception_type' => get_class($e)]);
             return response()->json([
                 'message' => 'OAuth authentication failed',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -148,7 +166,8 @@ class SocialAuthController extends Controller
                 'user' => $user,
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            Log::warning('Google profile linking failed', ['user_id' => $request->user()?->id, 'exception_type' => get_class($e)]);
             return response()->json([
                 'message' => 'Failed to link Google account',
             ], 500);

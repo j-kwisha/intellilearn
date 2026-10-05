@@ -811,17 +811,9 @@ class AssessmentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'File validation failed',
-                'debug_error' => $e->getMessage(),
-                'debug_errors' => $e->errors()
+                'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
-            // Force logging to stderr for Railway capture
-            error_log("LARAVEL EXCEPTION: uploadReferenceText failed");
-            error_log("Exception Class: " . get_class($e));
-            error_log("Exception Message: " . $e->getMessage());
-            error_log("Exception File: " . $e->getFile() . ":" . $e->getLine());
-            error_log("Exception Trace: " . $e->getTraceAsString());
-            
             \Log::error('uploadReferenceText: General exception', [
                 'error' => $e->getMessage(),
                 'class' => get_class($e),
@@ -833,9 +825,6 @@ class AssessmentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to extract text from file. Please try again or paste text manually.',
-                'debug_error' => $e->getMessage(),
-                'debug_class' => get_class($e),
-                'debug_location' => $e->getFile() . ':' . $e->getLine()
             ], 500);
         }
     }

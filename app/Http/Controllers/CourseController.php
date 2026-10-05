@@ -8,6 +8,7 @@ use App\Models\Enrollment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Smalot\PdfParser\Parser as PdfParser;
 
 class CourseController extends Controller
@@ -80,7 +81,7 @@ class CourseController extends Controller
 
         // Only admins can assign a different instructor
         if ($user->isAdmin()) {
-            $rules['instructor_id'] = ['required', 'exists:users,id'];
+            $rules['instructor_id'] = ['required', Rule::exists('users', 'id')->where('role', 'instructor')];
         }
 
         $validated = $request->validate($rules);
@@ -147,7 +148,7 @@ class CourseController extends Controller
             'name'          => ['sometimes', 'string', 'max:255'],
             'code'          => ['sometimes', 'string', 'max:50', 'unique:courses,code,' . $course->id],
             'description'   => ['nullable', 'string'],
-            'instructor_id' => ['sometimes', 'exists:users,id'],
+            'instructor_id' => ['sometimes', Rule::exists('users', 'id')->where('role', 'instructor')],
             'semester'      => ['sometimes', 'string', 'max:100'],
             'section'       => ['nullable', 'string', 'max:50'],
             'status'        => ['sometimes', 'in:active,archived'],
@@ -208,7 +209,7 @@ class CourseController extends Controller
         }
 
         $validated = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
+            'user_id' => ['required', Rule::exists('users', 'id')->where('role', 'student')],
         ]);
 
         // Check if already enrolled

@@ -39,7 +39,8 @@ return [
     |
     */
 
-    'debug' => (bool) env('APP_DEBUG', false),
+    // Production responses must never contain stack traces, even if misconfigured.
+    'debug' => env('APP_ENV', 'production') === 'production' ? false : (bool) env('APP_DEBUG', false),
 
     /*
     |--------------------------------------------------------------------------

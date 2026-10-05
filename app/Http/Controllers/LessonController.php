@@ -300,7 +300,7 @@ class LessonController extends Controller
                 }
             } catch (\Exception $e) {
                 \Log::error('File upload error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-                return response()->json(['message' => 'File upload failed: ' . $e->getMessage()], 500);
+                return response()->json(['message' => 'File upload failed. Please try again.'], 500);
             }
         }
 

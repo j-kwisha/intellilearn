@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Course;
+use App\Models\Enrollment;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -44,6 +47,8 @@ class AdminController extends Controller
         ]);
 
         $user = User::create($validated);
+        // Administrators provision accounts directly; there is no invitation flow.
+        $user->markEmailAsVerified();
 
         return response()->json([
             'message' => 'User created successfully.',
@@ -69,6 +74,14 @@ class AdminController extends Controller
             'is_active'  => ['sometimes', 'boolean'],
         ]);
 
+        if (isset($validated['role']) && $validated['role'] !== $user->role) {
+            if ($validated['role'] !== 'instructor' && Course::where('instructor_id', $user->id)->exists()) {
+                throw ValidationException::withMessages(['role' => 'Reassign this user\'s courses before changing their instructor role.']);
+            }
+            if ($validated['role'] !== 'student' && Enrollment::where('user_id', $user->id)->exists()) {
+                throw ValidationException::withMessages(['role' => 'Remove this user\'s enrollments before changing their student role.']);
+            }
+        }
         $user->update($validated);
 
         return response()->json([
