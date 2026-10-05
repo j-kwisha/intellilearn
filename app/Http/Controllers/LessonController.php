@@ -289,7 +289,11 @@ class LessonController extends Controller
             $apiKey    = env('CLOUDINARY_API_KEY');
             $apiSecret = env('CLOUDINARY_API_SECRET');
 
-            if ($cloudName && $apiKey && $apiSecret) {
+            // For non-PDF files, store locally to avoid Cloudinary complexity with Office docs
+            $ext = strtolower($file->getClientOriginalExtension());
+            $usesCloudinary = in_array($ext, ['pdf', 'mp4', 'mov', 'avi', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
+
+            if ($usesCloudinary && $cloudName && $apiKey && $apiSecret) {
                 // Upload to Cloudinary
                 $timestamp = time();
                 $folder    = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
