@@ -317,8 +317,13 @@ class LessonController extends Controller
                     $resourceType = 'auto'; // PDFs work with auto
                 }
 
-                $response = \Illuminate\Support\Facades\Http::attach(
-                    'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
+                $fileContents = @file_get_contents($file->getRealPath());
+                if ($fileContents === false) {
+                    return response()->json(['message' => 'Could not read the uploaded file. Please try again.'], 500);
+                }
+
+                $response = \Illuminate\Support\Facades\Http::timeout(120)->attach(
+                    'file', $fileContents, $file->getClientOriginalName()
                 )->post("https://api.cloudinary.com/v1_1/{$cloudName}/{$resourceType}/upload", [
                     'api_key'   => $apiKey,
                     'timestamp' => $timestamp,
