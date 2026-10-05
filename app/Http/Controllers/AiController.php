@@ -293,6 +293,13 @@ class AiController extends Controller
      */
     public function materialContext(Request $request, LessonMaterial $material): JsonResponse
     {
+        $user = $request->user();
+        $course = $material->lesson->course;
+        $allowed = $user->isAdmin()
+            || ($user->isInstructor() && $course->instructor_id === $user->id)
+            || ($user->isStudent() && $material->lesson->is_published
+                && Enrollment::where('user_id', $user->id)->where('course_id', $course->id)->where('status', 'active')->exists());
+        if (!$allowed) return response()->json(['message' => 'You do not have access to this material.'], 403);
         return response()->json([
             'material_id'    => $material->id,
             'title'          => $material->title,

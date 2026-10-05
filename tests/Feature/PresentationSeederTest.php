@@ -165,6 +165,53 @@ class PresentationSeederTest extends TestCase
         Http::assertSent(fn ($r) => $r['reference_material'] === $result['reference_snapshot']['text']);
     }
 
+    public function test_presentation_login_dashboards_and_quiz_submission_work(): void
+    {
+        $this->dataset();
+        foreach (['marisol.reyes', 'adrian.mendoza', 'isabella.santos'] as $name) {
+            $account = $this->user($name);
+            $this->postJson('/api/login', ['email' => $account->email, 'password' => config('presentation.password')])
+                ->assertOk()->assertJsonPath('user.role', $account->role);
+        }
+        Sanctum::actingAs($this->user('marisol.reyes'));
+        $this->getJson('/api/admin/users')->assertOk()->assertJsonCount(13, 'users');
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $this->getJson('/api/instructor/stats')->assertOk()->assertJsonPath('my_courses', 2);
+        $course = Course::where('code', 'IT 321')->firstOrFail();
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $this->getJson('/api/student/stats')->assertOk();
+        $this->getJson('/api/courses')->assertOk()->assertJsonCount(3, 'courses');
+        $this->getJson("/api/courses/{$course->id}/lessons")->assertOk()->assertJsonCount(4, 'lessons');
+        $this->getJson("/api/courses/{$course->id}/announcements")->assertOk()->assertJsonCount(3, 'announcements');
+        $this->getJson('/api/calendar')->assertOk()->assertJsonCount(9, 'events');
+        $assessment = $course->assessments()->orderByDesc('due_date')->firstOrFail();
+        $path = "/api/courses/{$course->id}/assessments/{$assessment->id}";
+        $attempt = $this->postJson($path . '/start')->assertCreated()->json('submission.id');
+        $this->postJson($path . '/submit', ['submission_id' => $attempt,
+            'answers' => $assessment->questions()->get()->map(fn ($q) => ['question_id' => $q->id, 'answer_text' => $q->correct_answer])->all(),
+        ])->assertOk()->assertJsonPath('submission.status', 'graded')->assertJsonPath('submission.percentage', '100.00');
+    }
+
+    public function test_material_context_and_filtered_calendar_respect_course_access(): void
+    {
+        $this->dataset();
+        $course = Course::where('code', 'IT 323')->firstOrFail();
+        $material = $course->lessons()->firstOrFail()->materials()->firstOrFail();
+        foreach (['miguel.navarro', 'adrian.mendoza'] as $name) {
+            Sanctum::actingAs($this->user($name));
+            $this->getJson("/api/ai/materials/{$material->id}/context")->assertForbidden();
+            $this->getJson("/api/calendar?course_id={$course->id}")->assertOk()->assertJsonCount(0, 'events');
+        }
+        foreach (['isabella.santos', 'lara.villanueva', 'marisol.reyes'] as $name) {
+            Sanctum::actingAs($this->user($name));
+            $this->getJson("/api/ai/materials/{$material->id}/context")->assertOk()->assertJsonPath('has_text', true);
+            $this->getJson("/api/calendar?course_id={$course->id}")->assertOk()->assertJsonCount(3, 'events');
+        }
+        $material->lesson->update(['is_published' => false]);
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $this->getJson("/api/ai/materials/{$material->id}/context")->assertForbidden();
+    }
+
     public function test_seeding_refuses_production_and_preserves_unrelated_accounts(): void
     {
         $this->app->detectEnvironment(fn () => 'production');

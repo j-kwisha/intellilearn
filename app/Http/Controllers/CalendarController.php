@@ -21,18 +21,17 @@ class CalendarController extends Controller
 
         if ($request->has('course_id')) {
             $query->where('course_id', $request->course_id);
-        } else {
-            // Get events for all accessible courses
-            if ($user->isStudent()) {
-                $courseIds = Enrollment::where('user_id', $user->id)
-                    ->where('status', 'active')
-                    ->pluck('course_id');
-                $query->whereIn('course_id', $courseIds);
-            } elseif ($user->isInstructor()) {
-                $query->whereHas('course', fn($q) => $q->where('instructor_id', $user->id));
-            }
-            // Admin sees all
         }
+        // Apply authorization even when a caller supplies a course filter.
+        if ($user->isStudent()) {
+            $courseIds = Enrollment::where('user_id', $user->id)
+                ->where('status', 'active')
+                ->pluck('course_id');
+            $query->whereIn('course_id', $courseIds);
+        } elseif ($user->isInstructor()) {
+            $query->whereHas('course', fn($q) => $q->where('instructor_id', $user->id));
+        }
+        // Admin sees all.
 
         // Optional month filter
         if ($request->has('month')) {
