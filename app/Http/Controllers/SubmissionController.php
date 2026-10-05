@@ -102,10 +102,15 @@ class SubmissionController extends Controller
 
         $validated = $request->validate([
             'submission_id'           => ['required', 'exists:submissions,id'],
-            'answers'                 => ['required', 'array', 'min:1'],
-            'answers.*.question_id'   => ['required', 'exists:questions,id'],
-            'answers.*.answer_text'   => ['nullable', 'string'],
+            'answers'                 => ['required', 'string'], // Now JSON string
+            'essay_file_*'            => ['nullable', 'file', 'mimes:pdf,doc,docx,txt', 'max:10240'], // 10MB max
         ]);
+
+        // Decode answers JSON
+        $answersArray = json_decode($validated['answers'], true);
+        if (!is_array($answersArray)) {
+            return response()->json(['message' => 'Invalid answers format.'], 422);
+        }
 
         // Find the submission and verify ownership
         $submission = Submission::where('id', $validated['submission_id'])
@@ -128,7 +133,10 @@ class SubmissionController extends Controller
         $allAutoGradable = true;
 
         // Process each answer
-        foreach ($validated['answers'] as $answerData) {
+        foreach ($answersArray as $answerData) {
+            // Validate each answer structure
+            if (!isset($answerData['question_id'])) continue;
+
             $question = $questions->get($answerData['question_id']);
 
             if (! $question) continue;
@@ -187,6 +195,43 @@ class SubmissionController extends Controller
             // Essay — auto-grade with AI
             else {
                 $answerText = $answerData['answer_text'] ?? null;
+                $fileUrl = null;
+
+                // Handle file upload for essay questions
+                $fileKey = "essay_file_{$question->id}";
+                if ($request->hasFile($fileKey)) {
+                    $file = $request->file($fileKey);
+                    
+                    // Upload to Cloudinary
+                    try {
+                        $uploadResult = cloudinary()->upload($file->getRealPath(), [
+                            'folder' => "intellilearn/submissions/{$course->id}/{$assessment->id}",
+                            'resource_type' => 'auto',
+                            'public_id' => "submission_{$submission->id}_q_{$question->id}_" . time(),
+                        ]);
+                        $fileUrl = $uploadResult->getSecurePath();
+                        
+                        // Extract text from uploaded file for AI grading
+                        if (strtolower($file->getClientOriginalExtension()) === 'pdf') {
+                            // Use PDF text extraction (similar to lesson materials)
+                            $parser = new \Smalot\PdfParser\Parser();
+                            try {
+                                $pdf = $parser->parseFile($file->getRealPath());
+                                $extractedText = $pdf->getText();
+                                // Use extracted text as answer for AI grading
+                                if ($extractedText && trim($extractedText)) {
+                                    $answerText = substr($extractedText, 0, 8000);
+                                }
+                            } catch (\Exception $e) {
+                                \Log::warning("PDF extraction failed for essay: " . $e->getMessage());
+                            }
+                        }
+                        // For DOC/DOCX, we'll use the filename as reference for now
+                        // Full text extraction from DOCX would require additional library
+                    } catch (\Exception $e) {
+                        \Log::error("File upload failed for essay: " . $e->getMessage());
+                    }
+                }
 
                 // Fetch reference material — priority: question's reference_text > question's reference_lesson > assessment lesson > all course materials
                 $referenceText = null;
@@ -196,7 +241,26 @@ class SubmissionController extends Controller
                     // Instructor uploaded/pasted reference text directly on the question
                     $referenceText = substr($question->reference_text, 0, 6000);
                 } elseif ($question->reference_lesson_id) {
-                    // Instructor picked a specific lesson
+                    // Instructor picked a specific lesson — CHECK IF IT STILL EXISTS
+                    $lessonExists = \App\Models\Lesson::where('id', $question->reference_lesson_id)->exists();
+                    
+                    if (!$lessonExists) {
+                        // Lesson has been deleted — skip AI grading, mark for manual review
+                        SubmissionAnswer::updateOrCreate(
+                            ['submission_id' => $submission->id, 'question_id' => $question->id],
+                            [
+                                'answer_text'      => $answerText,
+                                'file_url'         => $fileUrl,
+                                'is_correct'       => null,
+                                'points_earned'    => null,
+                                'ai_feedback'      => 'Reference lesson has been removed. Pending manual grading by instructor.',
+                            ]
+                        );
+                        $allAutoGradable = false;
+                        $totalPoints += $question->points;
+                        continue;
+                    }
+                    
                     $lessonMaterials = \App\Models\LessonMaterial::where('lesson_id', $question->reference_lesson_id)
                         ->whereNotNull('extracted_text')
                         ->orderBy('order')
@@ -305,6 +369,7 @@ class SubmissionController extends Controller
                     ['submission_id' => $submission->id, 'question_id' => $question->id],
                     [
                         'answer_text'      => $answerText,
+                        'file_url'         => $fileUrl,
                         'is_correct'       => $isCorrect ?? null,
                         'points_earned'    => $pointsEarned ?? null,
                         'ai_feedback'      => $aiFeedback,

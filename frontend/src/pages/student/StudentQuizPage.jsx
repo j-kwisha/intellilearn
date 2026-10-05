@@ -10,6 +10,7 @@ export default function StudentQuizPage() {
   const [assessment, setAssessment] = useState(null);
   const [submission, setSubmission] = useState(null);
   const [answers, setAnswers] = useState({});
+  const [essayFiles, setEssayFiles] = useState({}); // Store uploaded files for essay questions
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -82,19 +83,42 @@ export default function StudentQuizPage() {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
+  const handleFileUpload = (questionId, file) => {
+    setEssayFiles((prev) => ({ ...prev, [questionId]: file }));
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setError('');
 
-    const answerArray = Object.entries(answers).map(([questionId, answerText]) => ({
-      question_id: parseInt(questionId),
-      answer_text: answerText,
-    }));
-
     try {
-      const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/submit`, {
-        submission_id: submission.id,
-        answers: answerArray,
+      // Use FormData to handle both text answers and file uploads
+      const formData = new FormData();
+      formData.append('submission_id', submission.id);
+
+      // Build answers array
+      const answerArray = [];
+      
+      for (const [questionId, answerText] of Object.entries(answers)) {
+        answerArray.push({
+          question_id: parseInt(questionId),
+          answer_text: answerText,
+        });
+      }
+      
+      formData.append('answers', JSON.stringify(answerArray));
+
+      // Append essay files separately
+      for (const [questionId, file] of Object.entries(essayFiles)) {
+        if (file) {
+          formData.append(`essay_file_${questionId}`, file);
+        }
+      }
+
+      const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/submit`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
       setResult(res.data.submission);
     } catch (err) {
@@ -253,9 +277,26 @@ export default function StudentQuizPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-600 mt-2">
-                    Your answer: <span className="font-medium">{answer.answer_text}</span>
-                  </p>
+                  <div className="mt-2 space-y-2">
+                    {answer.file_url && (
+                      <div className="text-sm">
+                        <span className="text-slate-600">Uploaded file: </span>
+                        <a 
+                          href={answer.file_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 hover:text-indigo-700 font-medium underline"
+                        >
+                          View submission
+                        </a>
+                      </div>
+                    )}
+                    {answer.answer_text && !answer.file_url && (
+                      <p className="text-sm text-slate-600">
+                        Your answer: <span className="font-medium">{answer.answer_text}</span>
+                      </p>
+                    )}
+                  </div>
                 )}
                 {answer.is_correct !== null && (
                   <p className={`text-xs mt-1 font-medium ${answer.is_correct ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -428,15 +469,39 @@ export default function StudentQuizPage() {
                 </div>
               </div>
             ) : q.type === 'essay' ? (
-              <textarea
-                value={answers[q.id] || ''}
-                onChange={(e) => handleAnswer(q.id, e.target.value)}
-                rows={5}
-                placeholder="Write your answer here..."
-                className="w-full px-4 py-3 rounded-lg border border-slate-300 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                  placeholder-slate-400 resize-none"
-              />
+              <div className="space-y-3">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-700">📎 Upload your essay answer as a file (PDF, DOC, DOCX)</p>
+                </div>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleFileUpload(q.id, file);
+                      // Store filename as answer_text for display purposes
+                      handleAnswer(q.id, file.name);
+                    }
+                  }}
+                  className="block w-full text-sm text-slate-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-lg file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-indigo-50 file:text-indigo-700
+                    hover:file:bg-indigo-100
+                    cursor-pointer"
+                />
+                {essayFiles[q.id] && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-lg">
+                    <span>📄</span>
+                    <span className="font-medium">{essayFiles[q.id].name}</span>
+                    <span className="text-xs text-slate-400">
+                      ({(essayFiles[q.id].size / 1024).toFixed(1)} KB)
+                    </span>
+                  </div>
+                )}
+              </div>
             ) : (
               <input
                 type="text"

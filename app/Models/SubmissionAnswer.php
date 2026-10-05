@@ -13,9 +13,12 @@ class SubmissionAnswer extends Model
         'submission_id',
         'question_id',
         'answer_text',
+        'file_url',
         'is_correct',
         'points_earned',
         'ai_feedback',
+        'criterion_scores',
+        'instructor_override',
     ];
 
     protected function casts(): array
