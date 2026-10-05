@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import EssayQuestionFields from '../../components/EssayQuestionFields';
+import { rubricError } from '../../services/rubric';
+import EssayGradingDetails from '../../components/EssayGradingDetails';
 
 // ── Inline question editor (for published assessments) ──────────────────────
 function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved }) {
@@ -19,6 +22,8 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
       : [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }],
     reference_lesson_id: question.reference_lesson_id || '',
     reference_text: question.reference_text || '',
+    reference_file: question.reference_file || null,
+    rubric: question.rubric || null,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -58,8 +63,12 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
       } else if (form.type === 'short_answer') {
         payload.correct_answer = form.correct_answer;
       } else if (form.type === 'essay') {
-        if (form.reference_lesson_id) payload.reference_lesson_id = form.reference_lesson_id;
-        if (form.reference_text) payload.reference_text = form.reference_text;
+        payload.reference_lesson_id = form.reference_lesson_id || null;
+        payload.reference_text = form.reference_text || null;
+        payload.reference_file = form.reference_file || null;
+        payload.rubric = form.rubric ? { ...form.rubric, total_points: Number(form.points) } : null;
+        const error = rubricError(payload.rubric, form.points);
+        if (error) throw new Error(error);
       } else if (form.type === 'matching') {
         payload.matching_pairs = form.matching_pairs.map(p => ({
           left_item: p.left_item,
@@ -70,7 +79,7 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
       await api.put(`/courses/${courseId}/assessments/${assessmentId}/questions/${question.id}`, payload);
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save question.');
+      setError(err.response?.data?.message || err.message || 'Failed to save question.');
     } finally {
       setSaving(false);
     }
@@ -162,70 +171,8 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
             </div>
           )}
 
-          {/* Essay */}
           {form.type === 'essay' && (
-            <div className="space-y-3">
-              <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">Essay questions are graded by AI. Set a reference material below (optional).</p>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">📚 Reference Lesson</label>
-                <select style={{ ...inputStyle, background: 'white' }}
-                  value={form.reference_lesson_id || ''}
-                  onChange={e => setForm(f => ({ ...f, reference_lesson_id: e.target.value }))}>
-                  <option value="">— Use all course materials (default) —</option>
-                  {lessons.map(l => (
-                    <option key={l.id} value={l.id}>Lesson {l.order + 1}: {l.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">📎 Or upload reference file</label>
-                <div className="space-y-2">
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.txt"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        // Create FormData and upload file
-                        const formData = new FormData();
-                        formData.append('reference_file', file);
-                        
-                        // Upload and extract text
-                        api.post(`/courses/${courseId}/upload-reference-text`, formData, {
-                          headers: { 'Content-Type': 'multipart/form-data' }
-                        })
-                        .then(res => {
-                          if (res.data.extracted_text) {
-                            setForm(f => ({ ...f, reference_text: res.data.extracted_text }));
-                          }
-                        })
-                        .catch(err => {
-                          console.error('File upload failed:', err);
-                          alert('File upload failed. Please try again.');
-                        });
-                      }
-                    }}
-                    className="block w-full text-sm text-slate-500
-                      file:mr-4 file:py-2 file:px-4
-                      file:rounded-lg file:border-0
-                      file:text-sm file:font-semibold
-                      file:bg-indigo-50 file:text-indigo-700
-                      hover:file:bg-indigo-100
-                      cursor-pointer"
-                  />
-                  {form.reference_text && (
-                    <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded border">
-                      <strong>Extracted text preview:</strong>
-                      <div className="mt-1 max-h-24 overflow-y-auto text-xs text-slate-500">
-                        {form.reference_text.substring(0, 200)}
-                        {form.reference_text.length > 200 && '...'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400 mt-1">Upload PDF/DOC to extract text for AI grading. Takes priority over lesson reference above.</p>
-              </div>
-            </div>
+            <EssayQuestionFields question={form} onChange={patch => setForm(f => ({ ...f, ...patch }))} courseId={courseId} assessmentId={assessmentId} lessons={lessons} />
           )}
 
           {/* Matching pairs */}
@@ -280,7 +227,7 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
 function newBlankQ() {
   return { question_text: '', type: 'multiple_choice', options: ['', '', '', ''], correct_answer: '', points: 1,
     matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }],
-    reference_lesson_id: '', reference_text: '' };
+    reference_lesson_id: '', reference_text: '', reference_file: null, rubric: null };
 }
 
 function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
@@ -314,6 +261,10 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
     try {
       const cleaned = questions.map(q => {
         const out = { ...q, points: parseFloat(q.points) };
+        if (q.type === 'essay' && q.rubric) {
+          const error = rubricError(q.rubric, q.points); if (error) throw new Error(error);
+          out.rubric = { ...q.rubric, total_points: Number(q.points) };
+        } else if (q.type !== 'essay') delete out.rubric;
         if (q.type === 'essay') { 
           delete out.options; 
           delete out.correct_answer; 
@@ -337,7 +288,7 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
       });
       await api.post(`/courses/${courseId}/assessments/${assessmentId}/questions/bulk`, { questions: cleaned });
       onSuccess();
-    } catch (err) { setError(err.response?.data?.message || 'Failed to save.'); }
+    } catch (err) { setError(err.response?.data?.message || err.message || 'Failed to save.'); }
     finally { setSaving(false); }
   };
 
@@ -405,28 +356,7 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
                 value={q.correct_answer} onChange={e => updateQ(idx, 'correct_answer', e.target.value)} style={IS} />
             )}
             {q.type === 'essay' && (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-200">Essay questions are graded by AI. Set a reference material below (optional).</p>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">📚 Reference Lesson</label>
-                  <select style={{ ...IS, background: 'white' }}
-                    value={q.reference_lesson_id || ''}
-                    onChange={e => updateQ(idx, 'reference_lesson_id', e.target.value)}>
-                    <option value="">— Use all course materials (default) —</option>
-                    {lessons.map(l => (
-                      <option key={l.id} value={l.id}>Lesson {l.order + 1}: {l.title}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">📝 Or paste reference text</label>
-                  <textarea rows={3} style={{ ...IS, resize: 'vertical' }}
-                    placeholder="Paste text the AI should use to grade this question..."
-                    value={q.reference_text || ''}
-                    onChange={e => updateQ(idx, 'reference_text', e.target.value)} />
-                  <p className="text-xs text-slate-400 mt-0.5">Takes priority over the lesson reference.</p>
-                </div>
-              </div>
+              <EssayQuestionFields question={q} onChange={patch => setQuestions(prev => prev.map((item, i) => i === idx ? { ...item, ...patch } : item))} courseId={courseId} assessmentId={assessmentId} lessons={lessons} />
             )}
             {q.type === 'matching' && (
               <div>
@@ -527,10 +457,11 @@ export default function InstructorAssessmentPage() {
   const saveGrades = async () => {
     setGradeSaving(true); setGradeError('');
     try {
-      const gradeArray = Object.entries(grades).map(([qId, g]) => ({
+      const gradeArray = Object.entries(grades).filter(([, g]) => g.points_earned !== '' && g.points_earned !== null).map(([qId, g]) => ({
         question_id: parseInt(qId),
         points_earned: parseFloat(g.points_earned) || 0,
         ai_feedback: g.ai_feedback || '',
+        ...(g.criterion_scores ? { criterion_scores: g.criterion_scores } : {}),
       }));
       await api.put(`/courses/${courseId}/assessments/${assessmentId}/submissions/${selectedSubmission.id}/grade`, {
         grades: gradeArray,
@@ -551,10 +482,10 @@ export default function InstructorAssessmentPage() {
   };
 
   const togglePublish = async () => {
-    await api.put(`/courses/${courseId}/assessments/${assessmentId}`, {
-      is_published: !assessment.is_published,
-    });
-    fetchAll();
+    try {
+      await api.put(`/courses/${courseId}/assessments/${assessmentId}`, { is_published: !assessment.is_published });
+      fetchAll();
+    } catch (err) { alert(err.response?.data?.message || 'Could not publish assessment.'); }
   };
 
   const releaseScores = async () => {
@@ -829,6 +760,7 @@ export default function InstructorAssessmentPage() {
                   {answer.question?.correct_answer && (
                     <p className="text-xs text-emerald-600">Correct answer: {answer.question.correct_answer}</p>
                   )}
+                  <EssayGradingDetails answer={answer} grade={grades[answer.question_id]} onChange={patch => setGrades(prev => ({ ...prev, [answer.question_id]: { ...prev[answer.question_id], ...patch } }))} />
                   {/* Auto-graded */}
                   {answer.is_correct !== null && answer.question?.type !== 'essay' ? (
                     <p className={`text-xs font-medium ${answer.is_correct ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -842,14 +774,15 @@ export default function InstructorAssessmentPage() {
                         <input
                           type="number"
                           min={0}
-                          max={answer.question?.points}
+                          max={answer.rubric_snapshot?.total_points ?? answer.question?.points}
+                          step="0.01"
                           value={grades[answer.question_id]?.points_earned ?? ''}
                           onChange={(e) => setGrades((prev) => ({
                             ...prev,
                             [answer.question_id]: { ...prev[answer.question_id], points_earned: e.target.value }
                           }))}
                           className="w-24 px-3 py-1.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                          placeholder={`/ ${answer.question?.points}`}
+                          placeholder={`/ ${answer.rubric_snapshot?.total_points ?? answer.question?.points}`}
                         />
                       </div>
                       <div className="flex items-start gap-3">

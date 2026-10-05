@@ -126,6 +126,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- RUBRICS ---
     Route::post('/courses/{course}/assessments/{assessment}/questions/{question}/rubric', [AssessmentController::class, 'saveRubric']);
+    Route::post('/courses/{course}/assessments/{assessment}/rubric/generate', [AssessmentController::class, 'generateRubric']);
     Route::get('/courses/{course}/assessments/{assessment}/questions/{question}/rubric', [AssessmentController::class, 'getRubric']);
     Route::delete('/courses/{course}/assessments/{assessment}/questions/{question}/rubric', [AssessmentController::class, 'deleteRubric']);
 

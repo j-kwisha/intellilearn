@@ -9,6 +9,12 @@ use App\Models\Question;
 use App\Models\Rubric;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Services\RubricService;
+use App\Services\EssayReferenceService;
+use App\Services\DocumentTextService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 
 class AssessmentController extends Controller
 {
@@ -137,10 +143,15 @@ class AssessmentController extends Controller
 
         $assessment->load('questions.matchingPairs');
 
+        if (!$user->isStudent()) {
+            $assessment->load('questions.rubric.criteria.levels');
+            $assessment->questions->each(fn ($q) => $q->makeVisible(['reference_text', 'reference_file', 'rubric']));
+        }
+
         // Hide correct answers from students
         if ($user->isStudent()) {
             $assessment->questions->each(function ($question) {
-                $question->makeHidden('correct_answer');
+                $question->makeHidden(['correct_answer', 'reference_text', 'reference_file', 'rubric']);
                 // For matching questions, hide correct_match from students
                 if ($question->type === 'matching' && $question->matchingPairs) {
                     $question->matchingPairs->each(function ($pair) {
@@ -184,6 +195,14 @@ class AssessmentController extends Controller
             'score_visibility'   => ['sometimes', 'in:immediate,instructor_release,hidden'],
         ]);
 
+        if ($validated['is_published'] ?? false) {
+            foreach ($assessment->questions()->where('type', 'essay')->with('rubric.criteria.levels')->get() as $essay) {
+                if (!$essay->rubric) {
+                    throw ValidationException::withMessages(['rubric' => 'Save a grading rubric for every essay before publishing.']);
+                }
+                app(RubricService::class)->validate(app(RubricService::class)->snapshot($essay->rubric), (float) $essay->points);
+            }
+        }
         $assessment->update($validated);
 
         // Handle file upload for paper_based assessments
@@ -261,7 +280,9 @@ class AssessmentController extends Controller
             'matching_pairs.*.right_item'    => ['required_with:matching_pairs', 'string'],
             'matching_pairs.*.correct_match' => ['required_with:matching_pairs', 'string'],
             'reference_lesson_id'            => ['nullable', 'exists:lessons,id'],
-            'reference_text'                 => ['nullable', 'string'],
+            'reference_text'                 => ['nullable', 'string', 'max:24000'],
+            'reference_file' => ['nullable', 'array'],
+            'rubric' => ['nullable', 'array'],
         ]);
 
         // Require options for multiple choice
@@ -286,7 +307,13 @@ class AssessmentController extends Controller
             $validated['order'] = $assessment->questions()->count();
         }
 
-        $question = $assessment->questions()->create($validated);
+        $rubricData = $this->questionRubric($validated, $assessment);
+        unset($validated['rubric']);
+        $question = DB::transaction(function () use ($assessment, $validated, $rubricData, $user) {
+            $question = $assessment->questions()->create($validated);
+            if ($rubricData) app(RubricService::class)->save($question, $rubricData, $user->id);
+            return $question;
+        });
 
         // Create matching pairs if this is a matching question
         if ($validated['type'] === 'matching' && !empty($validated['matching_pairs'])) {
@@ -343,48 +370,39 @@ class AssessmentController extends Controller
             'questions.*.matching_pairs.*.right_item'    => ['nullable', 'string'],
             'questions.*.matching_pairs.*.correct_match' => ['nullable', 'string'],
             'questions.*.reference_lesson_id'            => ['nullable', 'exists:lessons,id'],
-            'questions.*.reference_text'                 => ['nullable', 'string'],
+            'questions.*.reference_text'                 => ['nullable', 'string', 'max:24000'],
+            'questions.*.reference_file' => ['nullable', 'array'],
+            'questions.*.rubric' => ['nullable', 'array'],
         ]);
 
-        $startOrder = $assessment->questions()->count();
-        $created = [];
-
-        foreach ($validated['questions'] as $index => $questionData) {
-            try {
+        // Validate the entire batch before creating any question.
+        foreach ($validated['questions'] as &$data) {
+            $data['rubric'] = $this->questionRubric($data, $assessment);
+        }
+        unset($data);
+        $created = DB::transaction(function () use ($validated, $assessment, $user) {
+            $startOrder = $assessment->questions()->count();
+            $created = [];
+            foreach ($validated['questions'] as $index => $questionData) {
                 $questionData['order'] = $startOrder + $index;
-                
-                // Extract matching pairs if present
-                $matchingPairs = $questionData['matching_pairs'] ?? null;
-                unset($questionData['matching_pairs']);
-                
+                $pairs = $questionData['matching_pairs'] ?? [];
+                $rubric = $questionData['rubric'];
+                unset($questionData['matching_pairs'], $questionData['rubric']);
                 $question = $assessment->questions()->create($questionData);
-                
-                // Create matching pairs if this is a matching question
-                if ($question->type === 'matching' && !empty($matchingPairs)) {
-                    foreach ($matchingPairs as $pairIndex => $pairData) {
+                if ($rubric) app(RubricService::class)->save($question, $rubric, $user->id);
+                if ($question->type === 'matching') {
+                    foreach ($pairs as $order => $pair) {
                         $question->matchingPairs()->create([
-                            'left_item'     => $pairData['left_item'],
-                            'right_item'    => $pairData['right_item'],
-                            'correct_match' => $pairData['correct_match'] ?? $pairData['right_item'],
-                            'order'         => $pairIndex,
+                            'left_item' => $pair['left_item'], 'right_item' => $pair['right_item'],
+                            'correct_match' => $pair['correct_match'] ?? $pair['right_item'], 'order' => $order,
                         ]);
                     }
                     $question->load('matchingPairs');
                 }
-                
                 $created[] = $question;
-            } catch (\Exception $e) {
-                \Log::error('Failed to create question', [
-                    'index' => $index,
-                    'data'  => $questionData,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-                return response()->json([
-                    'message' => 'Failed to save question ' . ($index + 1) . ': ' . $e->getMessage(),
-                ], 500);
             }
-        }
+            return $created;
+        });
 
         // Recalculate assessment total_points
         $assessment->update(['total_points' => $assessment->questions()->sum('points')]);
@@ -408,7 +426,7 @@ class AssessmentController extends Controller
             return response()->json(['message' => 'You do not have permission to update questions.'], 403);
         }
 
-        if ($question->assessment_id !== $assessment->id) {
+        if ($question->assessment_id !== $assessment->id || $assessment->course_id !== $course->id) {
             return response()->json(['message' => 'Question not found in this assessment.'], 404);
         }
 
@@ -424,10 +442,25 @@ class AssessmentController extends Controller
             'matching_pairs.*.right_item'    => ['required_with:matching_pairs', 'string'],
             'matching_pairs.*.correct_match' => ['required_with:matching_pairs', 'string'],
             'reference_lesson_id'            => ['nullable', 'exists:lessons,id'],
-            'reference_text'                 => ['nullable', 'string'],
+            'reference_text'                 => ['nullable', 'string', 'max:24000'],
+            'reference_file' => ['nullable', 'array'],
+            'rubric' => ['nullable', 'array'],
         ]);
 
-        $question->update($validated);
+        $effective = array_merge($question->getAttributes(), $validated);
+        $effective['reference_file'] = $validated['reference_file'] ?? $question->reference_file;
+        if (!array_key_exists('rubric', $validated) && $question->rubric) {
+            $effective['rubric'] = app(RubricService::class)->snapshot($question->rubric);
+        }
+        $rubric = $this->questionRubric($effective, $assessment);
+        $saveRubric = array_key_exists('rubric', $validated);
+        unset($validated['rubric']);
+        DB::transaction(function () use ($question, $validated, $rubric, $saveRubric, $user) {
+            $question->update($validated);
+            if ($saveRubric && $rubric) app(RubricService::class)->save($question, $rubric, $user->id);
+            elseif ($saveRubric || $question->type !== 'essay') $question->rubric()->delete();
+        });
+
 
         // Update matching pairs if provided and this is a matching question
         if (isset($validated['matching_pairs']) && $question->type === 'matching') {
@@ -545,13 +578,58 @@ class AssessmentController extends Controller
     }
 
     /**
-     * CREATE OR UPDATE RUBRIC FOR AN ESSAY QUESTION
+     * GENERATE AN EDITABLE RUBRIC DRAFT (does not save it)
      *
-     * POST /api/courses/{course}/assessments/{assessment}/questions/{question}/rubric
-     * Body: { title?, description?, criteria: [{ criterion, description, max_points }] }
+     * POST /api/courses/{course}/assessments/{assessment}/rubric/generate
      *
-     * Creates or updates grading rubric for essay questions.
+     * Only the teacher's subsequent save activates the rubric.
      */
+    public function generateRubric(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        if (!$this->canManageCourse($request->user(), $course)) abort(403);
+        if ($assessment->course_id !== $course->id) abort(404);
+        $data = $request->validate([
+            'question_text' => ['required', 'string', 'max:10000'],
+            'points' => ['required', 'numeric', 'min:0.01', 'max:999.99'],
+            'reference_text' => ['nullable', 'string', 'max:24000'],
+            'reference_lesson_id' => ['nullable', 'integer'],
+            'instructions' => ['nullable', 'string', 'max:4000'],
+            'learning_objective' => ['nullable', 'string', 'max:4000'],
+        ]);
+        $reference = app(EssayReferenceService::class)->resolve($data, $course->id);
+        if (trim($reference['text']) === '') {
+            throw ValidationException::withMessages(['reference' => 'Attach readable reference content before generating a rubric.']);
+        }
+        try {
+            $response = Http::timeout(60)->post(rtrim(env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/') . '/generate-rubric', [
+                'question' => $data['question_text'], 'max_points' => $data['points'],
+                'reference_material' => $reference['text'],
+                'instructions' => $data['instructions'] ?? $assessment->description ?? '',
+                'learning_objective' => $data['learning_objective'] ?? '',
+            ])->throw()->json();
+            $response['source'] = 'ai_generated';
+            $draft = app(RubricService::class)->validate($response, (float) $data['points']);
+            // A generated draft is never saved or activated until the teacher saves it.
+            return response()->json(['rubric' => $draft, 'reference_truncated' => $reference['truncated']]);
+        } catch (\Throwable $e) {
+            \Log::warning('Rubric generation failed', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'AI could not generate a valid rubric. Try again or create one manually.'], 502);
+        }
+    }
+
+    private function questionRubric(array $data, Assessment $assessment): ?array
+    {
+        app(EssayReferenceService::class)->resolve($data, $assessment->course_id);
+        if (($data['type'] ?? '') !== 'essay') return null;
+        if (!empty($data['rubric'])) {
+            return app(RubricService::class)->validate($data['rubric'], (float) ($data['points'] ?? 1));
+        }
+        if ($assessment->is_published) {
+            throw ValidationException::withMessages(['rubric' => 'Save a rubric before adding an essay to a published assessment.']);
+        }
+        return null;
+    }
+
     public function saveRubric(Request $request, Course $course, Assessment $assessment, Question $question): JsonResponse
     {
         $user = $request->user();
@@ -568,36 +646,8 @@ class AssessmentController extends Controller
             return response()->json(['message' => 'Rubrics can only be created for essay questions.'], 422);
         }
 
-        $validated = $request->validate([
-            'title'       => ['nullable', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'criteria'    => ['required', 'array', 'min:1'],
-            'criteria.*.criterion'   => ['required', 'string', 'max:255'],
-            'criteria.*.description' => ['required', 'string'],
-            'criteria.*.max_points'  => ['required', 'numeric', 'min:0.01'],
-        ]);
-
-        // Delete existing rubric if it exists
-        $question->rubric()?->delete();
-
-        // Create new rubric
-        $rubric = \App\Models\Rubric::create([
-            'question_id' => $question->id,
-            'title'       => $validated['title'] ?? null,
-            'description' => $validated['description'] ?? null,
-        ]);
-
-        // Create criteria
-        foreach ($validated['criteria'] as $index => $criterionData) {
-            $rubric->criteria()->create([
-                'criterion'   => $criterionData['criterion'],
-                'description' => $criterionData['description'],
-                'max_points'  => $criterionData['max_points'],
-                'order'       => $index,
-            ]);
-        }
-
-        $rubric->load('criteria');
+        $data = $request->all();
+        $rubric = app(RubricService::class)->save($question, $data, $user->id);
 
         return response()->json([
             'message' => 'Rubric saved successfully.',
@@ -614,7 +664,7 @@ class AssessmentController extends Controller
     {
         $user = $request->user();
 
-        if (! $this->canAccessCourse($user, $course)) {
+        if (! $this->canManageCourse($user, $course)) {
             return response()->json(['message' => 'You do not have access to this course.'], 403);
         }
 
@@ -622,7 +672,7 @@ class AssessmentController extends Controller
             return response()->json(['message' => 'Question not found in this assessment.'], 404);
         }
 
-        $rubric = $question->rubric()?->with('criteria')->first();
+        $rubric = $question->rubric()?->with('criteria.levels')->first();
 
         if (! $rubric) {
             return response()->json(null);
@@ -654,6 +704,9 @@ class AssessmentController extends Controller
             return response()->json(['message' => 'No rubric found for this question.'], 404);
         }
 
+        if ($assessment->is_published && $question->type === 'essay') {
+            throw ValidationException::withMessages(['rubric' => 'Unpublish the assessment before removing its essay rubric.']);
+        }
         $rubric->delete();
 
         return response()->json(['message' => 'Rubric deleted successfully.']);
@@ -719,7 +772,7 @@ class AssessmentController extends Controller
 
             $user = $request->user();
 
-            if (! $user->isAdmin() && ! $user->isInstructor()) {
+            if (!$this->canManageCourse($user, $course)) {
                 \Log::warning('uploadReferenceText: Unauthorized user');
                 return response()->json(['message' => 'Only instructors can upload reference files.'], 403);
             }
@@ -738,56 +791,14 @@ class AssessmentController extends Controller
                 'extension' => $file->getClientOriginalExtension()
             ]);
 
-            $extractedText = '';
-
-            // Extract text based on file type
-            $extension = strtolower($file->getClientOriginalExtension());
-            \Log::info('uploadReferenceText: Processing file type', ['extension' => $extension]);
-            
-            if ($extension === 'pdf') {
-                \Log::info('uploadReferenceText: Starting PDF parsing');
-                try {
-                    // Extract text from PDF using existing parser
-                    $parser = new \Smalot\PdfParser\Parser();
-                    \Log::info('uploadReferenceText: PDF parser created');
-                    
-                    $pdf = $parser->parseFile($file->getRealPath());
-                    \Log::info('uploadReferenceText: PDF file parsed');
-                    
-                    $extractedText = $pdf->getText();
-                    \Log::info('uploadReferenceText: PDF text extracted', ['length' => strlen($extractedText)]);
-                } catch (\Exception $e) {
-                    \Log::error('uploadReferenceText: PDF parsing failed', [
-                        'error' => $e->getMessage(),
-                        'class' => get_class($e),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                    $extractedText = "PDF file uploaded: " . $file->getClientOriginalName() . ". Text extraction failed. Please try a different PDF or paste text manually.";
-                }
-            } elseif ($extension === 'txt') {
-                \Log::info('uploadReferenceText: Processing TXT file');
-                $extractedText = file_get_contents($file->getRealPath());
-                \Log::info('uploadReferenceText: TXT file read', ['length' => strlen($extractedText)]);
-            } elseif (in_array($extension, ['doc', 'docx'])) {
-                \Log::info('uploadReferenceText: Processing DOCX file');
-                $extractedText = "DOCX file uploaded: " . $file->getClientOriginalName() . ". Text extraction for DOCX files not yet implemented. Please convert to PDF or paste text manually.";
-            }
-
-            \Log::info('uploadReferenceText: Text processing complete');
-
-            // Clean and limit text
-            $extractedText = trim($extractedText);
-            if (strlen($extractedText) > 8000) {
-                $extractedText = substr($extractedText, 0, 8000) . '... [truncated]';
-            }
+            $extractedText = app(DocumentTextService::class)->extract($file);
 
             \Log::info('uploadReferenceText: Preparing response');
             return response()->json([
                 'success' => true,
                 'extracted_text' => $extractedText,
                 'filename' => $file->getClientOriginalName(),
+                'reference_file' => ['filename' => $file->getClientOriginalName(), 'sha256' => hash_file('sha256', $file->getRealPath())],
                 'file_size' => $file->getSize(),
             ]);
 

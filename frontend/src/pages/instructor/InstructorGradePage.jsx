@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import EssayGradingDetails from '../../components/EssayGradingDetails';
 
 export default function InstructorGradePage() {
   const [courses, setCourses] = useState([]);
@@ -213,7 +214,7 @@ function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded })
     setSaving(true);
     const gradeArray = Object.entries(grades)
       .filter(([_, g]) => g.points_earned !== '' && g.points_earned !== null)
-      .map(([qId, g]) => ({ question_id: parseInt(qId), points_earned: parseFloat(g.points_earned), ai_feedback: g.ai_feedback || null }));
+      .map(([qId, g]) => ({ question_id: parseInt(qId), points_earned: parseFloat(g.points_earned), ai_feedback: g.ai_feedback || null, ...(g.criterion_scores ? { criterion_scores: g.criterion_scores } : {}) }));
     try {
       await api.put(`/courses/${courseId}/assessments/${assessmentId}/submissions/${submission.id}/grade`, { grades: gradeArray });
       onGraded();
@@ -245,10 +246,11 @@ function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded })
                 Auto-graded: {answer.is_correct ? '✓ Correct' : '✗ Incorrect'}
               </p>
             )}
+            <EssayGradingDetails answer={answer} grade={grades[answer.question_id]} onChange={patch => setGrades(prev => ({ ...prev, [answer.question_id]: { ...prev[answer.question_id], ...patch } }))} />
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
               <div>
-                <label className="instr-form-label">Points (max {answer.question?.points})</label>
-                <input type="number" min={0} max={answer.question?.points} step={1}
+                <label className="instr-form-label">Points (max {answer.rubric_snapshot?.total_points ?? answer.question?.points})</label>
+                <input type="number" min={0} max={answer.rubric_snapshot?.total_points ?? answer.question?.points} step="0.01"
                   value={grades[answer.question_id]?.points_earned ?? ''}
                   onChange={e => updateGrade(answer.question_id, 'points_earned', e.target.value)}
                   className="instr-form-input" />

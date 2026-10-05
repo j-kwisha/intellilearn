@@ -9,6 +9,8 @@ class SubmissionAnswer extends Model
 {
     use HasFactory;
 
+    protected $hidden = ['rubric_snapshot', 'reference_snapshot', 'ai_evaluation', 'teacher_criterion_scores', 'overridden_by', 'overridden_at', 'criterion_scores'];
+
     protected $fillable = [
         'submission_id',
         'question_id',
@@ -19,6 +21,12 @@ class SubmissionAnswer extends Model
         'ai_feedback',
         'criterion_scores',
         'instructor_override',
+        'rubric_snapshot',
+        'reference_snapshot',
+        'ai_evaluation',
+        'teacher_criterion_scores',
+        'overridden_by',
+        'overridden_at',
     ];
 
     protected function casts(): array
@@ -26,6 +34,12 @@ class SubmissionAnswer extends Model
         return [
             'is_correct'    => 'boolean',
             'points_earned' => 'decimal:2',
+            'rubric_snapshot' => 'array',
+            'reference_snapshot' => 'array',
+            'ai_evaluation' => 'array',
+            'teacher_criterion_scores' => 'array',
+            'instructor_override' => 'boolean',
+            'overridden_at' => 'datetime',
         ];
     }
 

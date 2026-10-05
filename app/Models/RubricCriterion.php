@@ -25,4 +25,9 @@ class RubricCriterion extends Model
     {
         return $this->belongsTo(Rubric::class);
     }
+
+    public function levels()
+    {
+        return $this->hasMany(RubricLevel::class)->orderBy('order');
+    }
 }

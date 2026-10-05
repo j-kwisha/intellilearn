@@ -9,6 +9,8 @@ class Question extends Model
 {
     use HasFactory;
 
+    protected $hidden = ['reference_text', 'reference_file', 'rubric'];
+
     protected $fillable = [
         'assessment_id',
         'question_text',
@@ -19,6 +21,7 @@ class Question extends Model
         'order',
         'reference_lesson_id',
         'reference_text',
+        'reference_file',
     ];
 
     protected function casts(): array
@@ -27,6 +30,7 @@ class Question extends Model
             'options'             => 'array',
             'points'              => 'decimal:2',
             'reference_lesson_id' => 'integer',
+            'reference_file' => 'array',
         ];
     }
 

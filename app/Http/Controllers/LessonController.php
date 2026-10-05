@@ -291,11 +291,9 @@ class LessonController extends Controller
                 $filePath = Storage::disk('public')->url($stored);
                 
                 // Extract text from PDF for AI chatbot
-                if ($validated['type'] === 'pdf') {
+                if (in_array($validated['type'], ['pdf', 'docx'])) {
                     try {
-                        $parser = new PdfParser();
-                        $pdf = $parser->parseFile($file->getRealPath());
-                        $extractedText = substr($pdf->getText(), 0, 8000);
+                        $extractedText = app(\App\Services\DocumentTextService::class)->extract($file);
                     } catch (\Exception $e) {
                         $extractedText = null;
                     }

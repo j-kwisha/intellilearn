@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import EssayQuestionFields from '../../components/EssayQuestionFields';
+import { rubricError } from '../../services/rubric';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
@@ -488,7 +490,7 @@ function LessonForm({ courseId, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true); setError('');
     try { await api.post(`/courses/${courseId}/lessons`, form); onSuccess(); }
-    catch (err) { setError(err.response?.data?.message || 'Failed.'); }
+    catch (err) { setError(err.response?.data?.message || err.message || 'Failed.'); }
     finally { setSaving(false); }
   };
 
@@ -579,7 +581,7 @@ function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
       }
       onSuccess();
     }
-    catch (err) { setError(err.response?.data?.message || 'Failed.'); } finally { setSaving(false); }
+    catch (err) { setError(err.response?.data?.message || err.message || 'Failed.'); } finally { setSaving(false); }
   };
   
   return (
@@ -623,7 +625,7 @@ function AnnouncementForm({ courseId, onClose, onSuccess }) {
         await api.post(`/courses/${courseId}/calendar`, { title:form.title, event_type:'other', start_date:calendarDate, description:form.content, color:'#f59e0b' });
       }
       onSuccess();
-    } catch (err) { setError(err.response?.data?.message || 'Failed.'); } finally { setSaving(false); }
+    } catch (err) { setError(err.response?.data?.message || err.message || 'Failed.'); } finally { setSaving(false); }
   };
   return (
     <FormCard title="Post Announcement" error={error}>
@@ -659,6 +661,10 @@ function newBlankQuestion() {
 }
 
 function QuestionForm({ courseId, assessmentId, onClose, onSuccess }) {
+  const [referenceLessons, setReferenceLessons] = useState([]);
+  useEffect(() => {
+    api.get(`/courses/${courseId}/lessons`).then(res => setReferenceLessons(res.data.lessons || [])).catch(() => {});
+  }, [courseId]);
   const [questions, setQuestions] = useState([newBlankQuestion()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -695,6 +701,10 @@ function QuestionForm({ courseId, assessmentId, onClose, onSuccess }) {
     try {
       const cleaned = questions.map(q => {
         const out={...q};
+        if (q.type === 'essay' && q.rubric) {
+          const error = rubricError(q.rubric, q.points); if (error) throw new Error(error);
+          out.rubric = { ...q.rubric, total_points: Number(q.points) };
+        } else if (q.type !== 'essay') delete out.rubric;
         if(q.type==='essay'){ delete out.options; delete out.correct_answer; delete out.matching_pairs; }
         else if(q.type==='short_answer'){ delete out.options; delete out.matching_pairs; }
         else if(q.type==='true_false'){ out.options=['True','False']; delete out.matching_pairs; }
@@ -704,7 +714,7 @@ function QuestionForm({ courseId, assessmentId, onClose, onSuccess }) {
       });
       await api.post(`/courses/${courseId}/assessments/${assessmentId}/questions/bulk`, { questions:cleaned });
       onSuccess();
-    } catch (err) { setError(err.response?.data?.message || 'Failed.'); } finally { setSaving(false); }
+    } catch (err) { setError(err.response?.data?.message || err.message || 'Failed.'); } finally { setSaving(false); }
   };
 
   return (
@@ -761,9 +771,8 @@ function QuestionForm({ courseId, assessmentId, onClose, onSuccess }) {
                 <input type="text" placeholder="Expected answer (leave blank to grade manually)" value={q.correct_answer} onChange={e=>updateQ(idx,'correct_answer',e.target.value)} className={FI} />
               )}
 
-              {/* Essay */}
-              {q.type==='essay' && (
-                <p style={{ fontSize:'12px', color:'var(--instr-muted)', background:'var(--instr-bg)', padding:'10px 12px', borderRadius:'8px' }}>Essay questions are graded manually.</p>
+              {q.type === 'essay' && (
+                <EssayQuestionFields question={q} onChange={patch => setQuestions(prev => prev.map((item, i) => i === idx ? { ...item, ...patch } : item))} courseId={courseId} assessmentId={assessmentId} lessons={referenceLessons} />
               )}
 
               {/* Matching pairs */}
@@ -900,7 +909,7 @@ function CalendarTab({ courseId }) {
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true); setError('');
     try { await api.post(`/courses/${courseId}/calendar`, form); setShowForm(false); setForm({title:'',event_type:'other',start_date:'',description:'',color:'#3B82F6'}); fetchEvents(); }
-    catch (err) { setError(err.response?.data?.message || 'Failed.'); } finally { setSaving(false); }
+    catch (err) { setError(err.response?.data?.message || err.message || 'Failed.'); } finally { setSaving(false); }
   };
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>

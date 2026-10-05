@@ -11,6 +11,10 @@ use App\Models\Submission;
 use App\Models\SubmissionAnswer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Services\EssayGradingService;
+use App\Services\RubricService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class SubmissionController extends Controller
 {
@@ -94,6 +98,7 @@ class SubmissionController extends Controller
      */
     public function submit(Request $request, Course $course, Assessment $assessment): JsonResponse
     {
+        if ($assessment->course_id !== $course->id) abort(404);
         $user = $request->user();
 
         if (! $user->isStudent()) {
@@ -103,7 +108,7 @@ class SubmissionController extends Controller
         $validated = $request->validate([
             'submission_id'           => ['required', 'exists:submissions,id'],
             'answers'                 => ['required', 'array', 'min:1'],
-            'answers.*.question_id'   => ['required', 'exists:questions,id'],
+            'answers.*.question_id'   => ['required', 'exists:questions,id', 'distinct'],
             'answers.*.answer_text'   => ['nullable', 'string'],
         ]);
 
@@ -126,6 +131,14 @@ class SubmissionController extends Controller
         $totalScore = 0;
         $totalPoints = 0;
         $allAutoGradable = true;
+
+        $provided = collect($validated['answers'])->keyBy('question_id');
+        foreach ($provided as $id => $answer) {
+            if (!$questions->has($id)) throw ValidationException::withMessages(['answers' => 'A question does not belong to this assessment.']);
+        }
+        $validated['answers'] = $questions->map(fn ($question) => $provided->get($question->id, [
+            'question_id' => $question->id, 'answer_text' => null,
+        ]))->values()->all();
 
         // Process each answer
         foreach ($validated['answers'] as $answerData) {
@@ -184,171 +197,18 @@ class SubmissionController extends Controller
                     
                 $isCorrect = $correctCount === $totalPairs;
             }
-            // Essay — auto-grade with AI
-            else {
-                $answerText = $answerData['answer_text'] ?? null;
-
-                // Essays require reference material explicitly provided for the question.
-                $referenceText = null;
-                $course = $assessment->course;
-
-                if ($question->reference_text && trim($question->reference_text)) {
-                    // Instructor uploaded/pasted reference text directly on the question
-                    $referenceText = substr($question->reference_text, 0, 6000);
-                } elseif ($question->reference_lesson_id) {
-                    // Instructor picked a specific lesson — CHECK IF IT STILL EXISTS
-                    $lessonExists = \App\Models\Lesson::where('id', $question->reference_lesson_id)->exists();
-                    
-                    if (!$lessonExists) {
-                        // Lesson has been deleted — skip AI grading, mark for manual review
-                        SubmissionAnswer::updateOrCreate(
-                            ['submission_id' => $submission->id, 'question_id' => $question->id],
-                            [
-                                'answer_text'      => $answerText,
-                                'is_correct'       => null,
-                                'points_earned'    => null,
-                                'ai_feedback'      => null,
-                                'criterion_scores' => null,
-                            ]
-                        );
-                        $allAutoGradable = false;
-                        $totalPoints += $question->points;
-                        continue;
-                    }
-                    
-                    $lessonMaterials = \App\Models\LessonMaterial::where('lesson_id', $question->reference_lesson_id)
-                        ->whereNotNull('extracted_text')
-                        ->orderBy('order')
-                        ->get();
-                    if ($lessonMaterials->isNotEmpty()) {
-                        $referenceText = substr(
-                            $lessonMaterials->pluck('extracted_text')->implode("\n\n---\n\n"),
-                            0, 6000
-                        );
-                    }
-                } elseif ($question->type !== 'essay') {
-                    // Fallback: course-level materials, then assessment lesson materials
-                    $courseMaterials = \App\Models\CourseMaterial::where('course_id', $course->id)
-                        ->whereNotNull('extracted_text')
-                        ->orderBy('order')
-                        ->get();
-
-                    if ($courseMaterials->isEmpty() && $assessment->lesson_id) {
-                        $courseMaterials = \App\Models\LessonMaterial::where('lesson_id', $assessment->lesson_id)
-                            ->whereNotNull('extracted_text')
-                            ->orderBy('order')
-                            ->get();
-                    }
-
-                    if ($courseMaterials->isNotEmpty()) {
-                        $referenceText = substr(
-                            $courseMaterials->pluck('extracted_text')->implode("\n\n---\n\n"),
-                            0, 6000
-                        );
-                    }
-                }
-
-                // Without usable instructor-provided references, leave essays ungraded.
-                if ($question->type === 'essay' && ! trim($referenceText ?? '')) {
-                    SubmissionAnswer::updateOrCreate(
-                        ['submission_id' => $submission->id, 'question_id' => $question->id],
-                        [
-                            'answer_text'      => $answerText,
-                            'is_correct'       => null,
-                            'points_earned'    => null,
-                            'ai_feedback'      => null,
-                            'criterion_scores' => null,
-                        ]
-                    );
-                    $allAutoGradable = false;
-                    $totalPoints += $question->points;
-                    continue;
-                }
-
-                // Get rubric criteria if exists
-                $rubricCriteria = [];
-                $rubric = $question->rubric()->with('criteria')->first();
-                if ($rubric && $rubric->criteria->isNotEmpty()) {
-                    foreach ($rubric->criteria as $criterion) {
-                        $rubricCriteria[] = [
-                            'criterion'   => $criterion->criterion,
-                            'description' => $criterion->description,
-                            'max_points'  => $criterion->max_points,
-                        ];
-                    }
-                }
-
-                // Determine grading state
-                $gradingState = 'pending_manual'; // default
-
-                if (! $answerText || ! trim($answerText)) {
-                    // Empty answer — 0 points
-                    $pointsEarned = 0;
-                    $isCorrect    = false;
-                    $aiFeedback   = 'No answer was provided.';
-                    $criterionScores = [];
-                    $gradingState = 'graded';
-                } else {
-                    // Call AI service to grade the essay
-                    try {
-                        $payload = [
-                            'question'         => $question->question_text,
-                            'answer'           => $answerText,
-                            'max_points'       => $question->points,
-                            'reference_material' => $referenceText,
-                            'rubric_criteria'  => $rubricCriteria,
-                        ];
-
-                        $aiResponse = \Illuminate\Support\Facades\Http::timeout(15)
-                            ->post(env('AI_SERVICE_URL', 'http://127.0.0.1:8001') . '/grade-essay', $payload);
-
-                        if ($aiResponse->successful()) {
-                            $aiResult = $aiResponse->json();
-
-                            // Check for explicit failure states from AI
-                            if (isset($aiResult['status']) && $aiResult['status'] === 'ai_failed') {
-                                $gradingState = 'ai_failed';
-                                $aiFeedback   = $aiResult['feedback'] ?? 'AI grading failed. Pending instructor review.';
-                                $criterionScores = [];
-                            } else {
-                                $pointsEarned = $aiResult['points_earned'] ?? null;
-                                $aiFeedback   = $aiResult['feedback'] ?? null;
-                                $criterionScores = $aiResult['criterion_scores'] ?? [];
-                                $isCorrect    = $pointsEarned !== null && $pointsEarned >= ($question->points * 0.5);
-                                $gradingState = 'graded';
-                            }
-                        } else {
-                            $gradingState = 'ai_failed';
-                            $aiFeedback   = 'AI grading service returned an error. Pending instructor review.';
-                            $criterionScores = [];
-                        }
-                    } catch (\Exception $e) {
-                        $gradingState = 'ai_failed';
-                        $aiFeedback   = 'AI grading service is unavailable. Pending instructor review.';
-                        $criterionScores = [];
-                        \Log::warning("Essay grading AI failed: " . $e->getMessage());
-                    }
-                }
-
-                // Only mark as auto-gradable if AI actually succeeded
-                if ($gradingState !== 'graded' || $pointsEarned === null) {
-                    $allAutoGradable = false;
-                }
-
+            elseif ($question->type === 'essay') {
+                $graded = app(EssayGradingService::class)->grade($question, $answerData['answer_text'] ?? null);
                 SubmissionAnswer::updateOrCreate(
-                    ['submission_id' => $submission->id, 'question_id' => $question->id],
-                    [
-                        'answer_text'      => $answerText,
-                        'is_correct'       => $isCorrect ?? null,
-                        'points_earned'    => $pointsEarned ?? null,
-                        'ai_feedback'      => $aiFeedback,
-                        'criterion_scores' => json_encode($criterionScores),
-                    ]
+                    ['submission_id' => $submission->id, 'question_id' => $question->id], $graded
                 );
-
-                if ($pointsEarned !== null) $totalScore += $pointsEarned;
+                if ($graded['points_earned'] === null) $allAutoGradable = false;
+                else $totalScore += $graded['points_earned'];
                 $totalPoints += $question->points;
                 continue;
+            } else {
+                // Short answers without an expected answer await the instructor.
+                $allAutoGradable = false;
             }
 
             // Save the answer
@@ -452,13 +312,13 @@ class SubmissionController extends Controller
         if ($visibility === 'hidden') {
             $submission->makeHidden(['score', 'percentage', 'total_points']);
             $submission->answers->each(function ($answer) {
-                $answer->makeHidden(['points_earned', 'is_correct']);
+                $answer->makeHidden(['points_earned', 'is_correct', 'ai_feedback']);
             });
         } elseif ($visibility === 'instructor_release') {
             // Scores exist but not visible until released
             $submission->makeHidden(['score', 'percentage', 'total_points']);
             $submission->answers->each(function ($answer) {
-                $answer->makeHidden(['points_earned', 'is_correct']);
+                $answer->makeHidden(['points_earned', 'is_correct', 'ai_feedback']);
             });
         }
 
@@ -480,6 +340,8 @@ class SubmissionController extends Controller
      */
     public function show(Request $request, Course $course, Assessment $assessment, Submission $submission): JsonResponse
     {
+        if ($assessment->course_id !== $course->id) abort(404);
+        if ($submission->assessment_id !== $assessment->id) abort(404);
         $user = $request->user();
 
         // Students can only see their own submissions
@@ -492,6 +354,13 @@ class SubmissionController extends Controller
         }
 
         $submission->load(['answers.question', 'user:id,first_name,last_name,email', 'assessment:id,score_visibility,scores_released_at']);
+
+        if (!$user->isStudent()) {
+            $submission->answers->each(fn ($answer) => $answer->makeVisible([
+                'rubric_snapshot', 'reference_snapshot', 'ai_evaluation', 'teacher_criterion_scores',
+                'overridden_by', 'overridden_at', 'criterion_scores',
+            ]));
+        }
 
         // Students see correct answers only AFTER grading
         if ($user->isStudent() && $submission->status !== 'graded') {
@@ -508,14 +377,14 @@ class SubmissionController extends Controller
                 // Hide all score-related fields
                 $submission->makeHidden(['score', 'percentage', 'total_points']);
                 $submission->answers->each(function ($answer) {
-                    $answer->makeHidden(['points_earned', 'is_correct']);
+                    $answer->makeHidden(['points_earned', 'is_correct', 'ai_feedback']);
                 });
             } elseif ($visibility === 'instructor_release') {
                 // Hide scores unless released
                 if (!$assessment->scores_released_at) {
                     $submission->makeHidden(['score', 'percentage', 'total_points']);
                     $submission->answers->each(function ($answer) {
-                        $answer->makeHidden(['points_earned', 'is_correct']);
+                        $answer->makeHidden(['points_earned', 'is_correct', 'ai_feedback']);
                     });
                 }
             }
@@ -534,6 +403,7 @@ class SubmissionController extends Controller
      */
     public function index(Request $request, Course $course, Assessment $assessment): JsonResponse
     {
+        if ($assessment->course_id !== $course->id) abort(404);
         $user = $request->user();
 
         if ($user->isStudent()) {
@@ -581,6 +451,8 @@ class SubmissionController extends Controller
      */
     public function grade(Request $request, Course $course, Assessment $assessment, Submission $submission): JsonResponse
     {
+        if ($assessment->course_id !== $course->id) abort(404);
+        if ($submission->assessment_id !== $assessment->id) abort(404);
         $user = $request->user();
 
         if (! $this->canManageCourse($user, $course)) {
@@ -593,50 +465,64 @@ class SubmissionController extends Controller
 
         $validated = $request->validate([
             'grades'                   => ['required', 'array', 'min:1'],
-            'grades.*.question_id'     => ['required', 'exists:questions,id'],
-            'grades.*.points_earned'   => ['required', 'numeric', 'min:0'],
+            'grades.*.question_id'     => ['required', 'exists:questions,id', 'distinct'],
+            'grades.*.points_earned'   => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'grades.*.criterion_scores' => ['nullable', 'array'],
+            'grades.*.criterion_scores.*' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'grades.*.ai_feedback'     => ['nullable', 'string'],
         ]);
 
-        // Update each graded answer
+        $updates = [];
         foreach ($validated['grades'] as $gradeData) {
-            $answer = SubmissionAnswer::where('submission_id', $submission->id)
-                ->where('question_id', $gradeData['question_id'])
-                ->first();
-
-            if ($answer) {
-                $question = Question::find($gradeData['question_id']);
-                $pointsEarned = min($gradeData['points_earned'], $question->points);
-                
-                // Prepare criterion scores if provided
-                $criterionScores = null;
-                if (isset($gradeData['criterion_scores']) && is_array($gradeData['criterion_scores'])) {
-                    $criterionScores = json_encode($gradeData['criterion_scores']);
-                }
-                
-                $answer->update([
-                    'points_earned'    => $pointsEarned,
-                    'is_correct'       => $pointsEarned > 0,
-                    'ai_feedback'      => $gradeData['ai_feedback'] ?? null,
-                    'criterion_scores' => $criterionScores,
-                    'instructor_override' => true,
-                ]);
+            $answer = $submission->answers()->with('question')->where('question_id', $gradeData['question_id'])->first();
+            if (!$answer || $answer->question->assessment_id !== $assessment->id) {
+                throw ValidationException::withMessages(['grades' => 'An answer does not belong to this submission.']);
             }
+            $max = $answer->rubric_snapshot['total_points'] ?? (float) $answer->question->points;
+            $points = (float) $gradeData['points_earned'];
+            $criteria = $points === (float) $answer->points_earned ? $answer->teacher_criterion_scores : null;
+            if (isset($gradeData['criterion_scores'])) {
+                $snapshot = $answer->rubric_snapshot;
+                if (!$snapshot) throw ValidationException::withMessages(['criteria' => 'No grading rubric snapshot is available for this answer.']);
+                $rows = [];
+                foreach ($gradeData['criterion_scores'] as $id => $score) {
+                    $rows[] = ['criterion_id' => $id, 'awarded_points' => $score, 'feedback' => 'Teacher override.'];
+                }
+                $evaluation = app(RubricService::class)->evaluation([
+                    'criteria' => $rows, 'overall_feedback' => trim($gradeData['ai_feedback'] ?? '') ?: 'Teacher override.',
+                    'strengths' => [], 'areas_for_improvement' => [],
+                ], $snapshot);
+                $points = $evaluation['total_score'];
+                $criteria = array_column($evaluation['criteria'], 'awarded_points', 'criterion_id');
+            }
+            if (!is_finite($points) || $points > $max) {
+                throw ValidationException::withMessages(['grades' => 'A teacher score exceeds the maximum points.']);
+            }
+            $updates[] = [$answer, [
+                'points_earned' => $points, 'is_correct' => $points > 0,
+                'ai_feedback' => $gradeData['ai_feedback'] ?? null,
+                'teacher_criterion_scores' => $criteria, 'instructor_override' => true,
+                'overridden_by' => $user->id, 'overridden_at' => now(),
+                // ai_evaluation, criterion_scores and snapshots remain immutable.
+            ]];
         }
+        DB::transaction(function () use ($updates) {
+            foreach ($updates as [$answer, $values]) $answer->update($values);
+        });
 
         // Recalculate total score
         $totalEarned = $submission->answers()->sum('points_earned');
-        $totalPoints = $assessment->questions()->sum('points');
+        $totalPoints = $submission->total_points ?? $assessment->questions()->sum('points');
 
+        $hasPending = $submission->answers()->whereNull('points_earned')->exists();
         $submission->update([
             'score'        => $totalEarned,
             'total_points' => $totalPoints,
             'percentage'   => $totalPoints > 0
-                ? round(($totalEarned / $totalPoints) * 100, 2)
-                : 0,
-            'status'       => 'graded',
-            'graded_at'    => now(),
+                && !$hasPending ? round(($totalEarned / $totalPoints) * 100, 2)
+                : null,
+            'status'       => $hasPending ? 'submitted' : 'graded',
+            'graded_at'    => $hasPending ? null : now(),
         ]);
 
         $submission->load('answers.question');

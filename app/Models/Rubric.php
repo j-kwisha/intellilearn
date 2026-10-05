@@ -10,7 +10,15 @@ class Rubric extends Model
         'question_id',
         'title',
         'description',
+        'total_points',
+        'source',
+        'created_by',
     ];
+
+    protected function casts(): array
+    {
+        return ['total_points' => 'decimal:2'];
+    }
 
     public function question()
     {

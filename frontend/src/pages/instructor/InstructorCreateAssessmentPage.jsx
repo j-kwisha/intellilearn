@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import EssayQuestionFields from '../../components/EssayQuestionFields';
+import { rubricError } from '../../services/rubric';
 
 export default function InstructorCreateAssessmentPage() {
   const { courseId } = useParams();
@@ -51,7 +53,7 @@ export default function InstructorCreateAssessmentPage() {
       points: 1,
       matching_pairs: [{ left_item: '', right_item: '' }, { left_item: '', right_item: '' }],
       reference_lesson_id: '',
-      reference_text: '',
+      reference_text: '', reference_file: null, rubric: null,
     };
   }
 
@@ -205,6 +207,10 @@ export default function InstructorCreateAssessmentPage() {
     try {
       const cleaned = questions.map(q => {
         const out = { ...q, points: parseFloat(q.points) };
+        if (q.type === 'essay' && q.rubric) {
+          const error = rubricError(q.rubric, q.points); if (error) throw new Error(error);
+          out.rubric = { ...q.rubric, total_points: Number(q.points) };
+        } else if (q.type !== 'essay') delete out.rubric;
         if (q.type === 'essay') { 
           delete out.options; 
           delete out.correct_answer; 
@@ -242,7 +248,7 @@ export default function InstructorCreateAssessmentPage() {
       setSavedQuestions(prev => [...prev, ...res.data.questions]);
       setQuestions([newQuestion()]);
     } catch (err) {
-      setQError(err.response?.data?.message || 'Failed to save questions.');
+      setQError(err.response?.data?.message || err.message || 'Failed to save questions.');
     } finally {
       setQSaving(false);
     }
@@ -582,91 +588,9 @@ export default function InstructorCreateAssessmentPage() {
                     )}
 
                     {q.type === 'essay' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <p style={{ fontSize: '0.85rem', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: 8, margin: 0 }}>
-                          Essay questions are graded by AI. Optionally set a reference material below so the AI grades based on specific content.
-                        </p>
-                        <div>
-                          <label style={S.label}>📚 Reference Lesson (optional)</label>
-                          <select
-                            style={{ ...S.input, background: 'white' }}
-                            value={q.reference_lesson_id || ''}
-                            onChange={e => updateQuestion(idx, 'reference_lesson_id', e.target.value)}
-                          >
-                            <option value="">— Use all course materials (default) —</option>
-                            {lessons.map(l => (
-                              <option key={l.id} value={l.id}>Lesson {l.order + 1}: {l.title}</option>
-                            ))}
-                          </select>
-                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>AI will use this lesson's uploaded files as reference.</p>
-                        </div>
-                        <div>
-                          <label style={S.label}>📎 Or upload reference file (optional)</label>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <input
-                              type="file"
-                              accept=".pdf,.doc,.docx,.txt"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  // Create FormData and upload file
-                                  const formData = new FormData();
-                                  formData.append('reference_file', file);
-                                  
-                                  // Upload and extract text
-                                  api.post(`/courses/${courseId}/upload-reference-text`, formData, {
-                                    headers: { 'Content-Type': 'multipart/form-data' }
-                                  })
-                                  .then(res => {
-                                    if (res.data.extracted_text) {
-                                      updateQuestion(idx, 'reference_text', res.data.extracted_text);
-                                    }
-                                  })
-                                  .catch(err => {
-                                    console.error('File upload failed:', err);
-                                    alert('File upload failed. Please try again.');
-                                  });
-                                }
-                              }}
-                              style={{
-                                display: 'block',
-                                width: '100%',
-                                fontSize: '0.875rem',
-                                color: '#64748b',
-                                cursor: 'pointer',
-                              }}
-                            />
-                            {q.reference_text && (
-                              <div style={{
-                                fontSize: '0.75rem',
-                                color: '#475569',
-                                background: '#f8fafc',
-                                padding: 8,
-                                borderRadius: 6,
-                                border: '1px solid #e2e8f0'
-                              }}>
-                                <strong>Extracted text preview:</strong>
-                                <div style={{
-                                  marginTop: 4,
-                                  maxHeight: 60,
-                                  overflowY: 'auto',
-                                  fontSize: '0.75rem',
-                                  color: '#64748b'
-                                }}>
-                                  {q.reference_text.substring(0, 200)}
-                                  {q.reference_text.length > 200 && '...'}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>
-                            Upload PDF/DOC to extract text for AI grading. Takes priority over lesson reference above.
-                          </p>
-                        </div>
-                      </div>
+                      <EssayQuestionFields question={q} onChange={patch => setQuestions(prev => prev.map((item, i) => i === idx ? { ...item, ...patch } : item))} courseId={courseId} assessmentId={assessmentId} lessons={lessons} />
                     )}
 
-                    {/* Matching pairs — simplified Term | Definition two-column layout */}
                     {q.type === 'matching' && (
                       <div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, marginBottom: 8, borderRadius: '8px 8px 0 0', overflow: 'hidden', border: '1.5px solid #e2e8f0' }}>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import joblib
@@ -7,6 +7,7 @@ from groq import Groq
 import os
 from dotenv import load_dotenv
 import warnings
+from essay_grading import (validate_rubric, validate_evaluation, request_json, GENERATION_PROMPT, GRADING_PROMPT)
 
 # Suppress sklearn feature name warnings
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
@@ -158,126 +159,47 @@ INTENTS = [
 ]
 
 
+@app.post("/generate-rubric")
+def generate_rubric(data: dict):
+    if not isinstance(data.get("question"), str) or not data["question"].strip():
+        raise HTTPException(status_code=422, detail="Question is required")
+    reference = data.get("reference_material")
+    if not isinstance(reference, str) or not reference.strip() or len(reference) > 24000:
+        raise HTTPException(status_code=422, detail="Readable reference content is required (max 24000 characters)")
+    try:
+        result = request_json(groq_client, "qwen/qwen3.8-27b", GENERATION_PROMPT, data)
+        return validate_rubric(result, data.get("max_points"))
+    except Exception as exc:
+        print(f"Rubric generation failed: {type(exc).__name__}")
+        raise HTTPException(status_code=502, detail="AI returned no valid rubric")
+
+
 @app.post("/grade-essay")
 def grade_essay(data: dict):
-    question = data.get("question", "")
-    answer = data.get("answer", "")
-    # Ensure max_points is a number
+    reference = data.get("reference_material")
+    if not isinstance(reference, str) or not reference.strip() or not data.get("rubric"):
+        return {"status": "pending_manual"}
     try:
-        max_points = float(data.get("max_points", 10))
-    except (ValueError, TypeError):
-        max_points = 10.0
-    reference_material = data.get("reference_material", "")
-    rubric_criteria = data.get("rubric_criteria", [])
-
-    if not answer or not answer.strip():
-        return {
-            "points_earned": 0,
-            "feedback": "No answer was provided.",
-            "score_percentage": 0,
-            "criterion_scores": {},
-            "status": "graded",
-        }
-
-    # Build system prompt with rubric criteria if available
-    if rubric_criteria:
-        # Build rubric section
-        rubric_section = "--- GRADING RUBRIC ---\n"
-        for idx, criterion in enumerate(rubric_criteria, 1):
-            criterion_name = criterion.get("criterion", f"Criterion {idx}")
-            criterion_desc = criterion.get("description", "")
-            criterion_max = criterion.get("max_points", 0)
-            rubric_section += f"\n{idx}. {criterion_name} (max {criterion_max} points)\n"
-            if criterion_desc:
-                rubric_section += f"   {criterion_desc}\n"
-        rubric_section += "\n--- END RUBRIC ---\n\n"
-    else:
-        rubric_section = ""
-
-    if reference_material and reference_material.strip():
-        system_prompt = (
-            f"You are an academic essay grader. Grade the student's answer based on the course materials and grading rubric below.\n\n"
-            f"--- COURSE MATERIALS ---\n{reference_material[:4000]}\n--- END MATERIALS ---\n\n"
-            f"{rubric_section}"
-            f"Question: {question}\n"
-            f"Maximum points: {max_points}\n\n"
-            f"Grading instructions:\n"
-            f"1. Evaluate based on the rubric criteria provided\n"
-            f"2. Award points per criterion based on accuracy and understanding\n"
-            f"3. Consider relevance to course materials\n"
-            f"4. Award full or near-full marks if student correctly explains concepts in their own words\n"
-            f"5. Award partial marks for partially correct or incomplete answers\n"
-            f"6. Award low marks only for clearly incorrect or irrelevant answers\n\n"
-            f"Respond ONLY in this exact JSON format (no markdown, no extra text):\n"
-            f'{{ "points_earned": <number from 0 to {max_points}>, "feedback": "<2-3 sentence feedback>", "criterion_scores": {{ "<criterion_name>": <points>, ... }} }}'
-        )
-    else:
-        system_prompt = (
-            f"You are an academic essay grader. Grade the student's answer to the following question.\n\n"
-            f"{rubric_section}"
-            f"Question: {question}\n"
-            f"Maximum points: {max_points}\n\n"
-            f"Grading instructions:\n"
-            f"1. Evaluate based on the rubric criteria provided\n"
-            f"2. Award points per criterion based on accuracy and understanding\n"
-            f"3. Evaluate based on accuracy, completeness, and clarity\n"
-            f"4. Award credit when the student correctly explains concepts in their own words\n\n"
-            f"Respond ONLY in this exact JSON format (no markdown, no extra text):\n"
-            f'{{ "points_earned": <number from 0 to {max_points}>, "feedback": "<2-3 sentence feedback>", "criterion_scores": {{ "<criterion_name>": <points>, ... }} }}'
-        )
-
-    try:
-        response = groq_client.chat.completions.create(
-            model="qwen/qwen3.8-27b",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Student answer: {answer}"}
-            ],
-            max_tokens=400,
-            temperature=0.2,
-        )
-        import json, re
-        raw = response.choices[0].message.content.strip()
-        # Strip think tags
-        raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
-        # Extract JSON
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if match:
-            result = json.loads(match.group())
-            # Safely convert points_earned to float
-            try:
-                points_earned = float(result.get("points_earned", 0))
-            except (ValueError, TypeError):
-                points_earned = 0.0
-            points = min(points_earned, max_points)
-            
-            # Extract criterion scores
-            criterion_scores = result.get("criterion_scores", {})
-            if not isinstance(criterion_scores, dict):
-                criterion_scores = {}
-            
-            return {
-                "points_earned": round(points, 1),
-                "feedback": result.get("feedback", "No feedback provided."),
-                "score_percentage": round((points / max_points) * 100, 1) if max_points > 0 else 0,
-                "criterion_scores": criterion_scores,
-                "status": "graded",
-                "used_reference": bool(reference_material and reference_material.strip()),
-            }
+        if len(reference) > 24000:
+            raise ValueError("Reference too long")
+        rubric = validate_rubric(data["rubric"], data.get("max_points"), require_ids=True)
+        answer = data.get("answer")
+        if not isinstance(answer, str):
+            raise ValueError("Answer must be text")
+        if not answer.strip():
+            raw = {"criteria": [{"criterion_id": c["id"], "awarded_points": 0,
+                                  "feedback": "No answer was provided."} for c in rubric["criteria"]],
+                   "overall_feedback": "No answer was provided.", "strengths": [], "areas_for_improvement": []}
+            model_name = None
         else:
-            print(f"Could not parse AI response: {raw}")
-            return {
-                "status": "ai_failed",
-                "feedback": "AI grading failed: could not parse response. Pending instructor review.",
-                "criterion_scores": {},
-            }
-    except Exception as e:
-        print(f"Essay grading error: {str(e)}")
-        return {
-            "status": "ai_failed",
-            "feedback": f"AI grading failed: {str(e)}. Pending instructor review.",
-            "criterion_scores": {},
-        }
+            content = {**data, "rubric": rubric}
+            model_name = "qwen/qwen3.8-27b"
+            raw = request_json(groq_client, model_name, GRADING_PROMPT, content)
+        result = validate_evaluation(raw, rubric)
+        return {**result, "status": "graded", "ai_model": model_name}
+    except Exception as exc:
+        print(f"Essay grading failed: {type(exc).__name__}")
+        return {"status": "ai_failed"}
 
 
 @app.post("/chatbot")
