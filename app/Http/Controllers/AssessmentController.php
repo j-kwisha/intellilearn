@@ -719,7 +719,7 @@ class AssessmentController extends Controller
 
             $user = $request->user();
 
-            if (! $user->isInstructorOrAdmin()) {
+            if (! $user->isAdmin() && ! $user->isInstructor()) {
                 \Log::warning('uploadReferenceText: Unauthorized user');
                 return response()->json(['message' => 'Only instructors can upload reference files.'], 403);
             }
