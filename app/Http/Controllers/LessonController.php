@@ -298,6 +298,17 @@ class LessonController extends Controller
                 $timestamp = time();
                 $folder    = "intellilearn/course_{$course->id}/lesson_{$lesson->id}";
 
+                // Use 'raw' resource type for documents (docx, ppt, etc.), 'video' for videos, 'image' for images
+                $ext = strtolower($file->getClientOriginalExtension());
+                $resourceType = 'raw'; // default for docs
+                if (in_array($ext, ['mp4', 'mov', 'avi', 'webm'])) {
+                    $resourceType = 'video';
+                } elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $resourceType = 'image';
+                } elseif ($ext === 'pdf') {
+                    $resourceType = 'auto'; // PDFs work with auto
+                }
+
                 // Signature: alphabetically sorted params, raw (not URL-encoded), appended with api_secret
                 $paramsToSign = [
                     'folder'    => $folder,
@@ -315,17 +326,6 @@ class LessonController extends Controller
                 }
                 $signatureString = implode('&', $signatureParts) . $apiSecret;
                 $signature = sha1($signatureString);
-
-                // Use 'raw' resource type for documents (docx, ppt, etc.), 'video' for videos, 'image' for images
-                $ext = strtolower($file->getClientOriginalExtension());
-                $resourceType = 'raw'; // default for docs
-                if (in_array($ext, ['mp4', 'mov', 'avi', 'webm'])) {
-                    $resourceType = 'video';
-                } elseif (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                    $resourceType = 'image';
-                } elseif ($ext === 'pdf') {
-                    $resourceType = 'auto'; // PDFs work with auto
-                }
 
                 $fileContents = @file_get_contents($file->getRealPath());
                 if ($fileContents === false) {
