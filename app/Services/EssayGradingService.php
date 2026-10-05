@@ -14,21 +14,39 @@ class EssayGradingService
             'answer_text' => $answer, 'points_earned' => null, 'is_correct' => null,
             'ai_feedback' => null, 'criterion_scores' => null, 'ai_evaluation' => null,
             'rubric_snapshot' => null, 'reference_snapshot' => null,
+            'grading_status' => 'pending', 'grading_error_code' => null,
         ];
+        $phase = 'reference_resolution';
+        $diagnostics = ['question_id' => $question->id];
         try {
             $reference = app(EssayReferenceService::class)->resolve([
                 'reference_text' => $question->reference_text,
                 'reference_lesson_id' => $question->reference_lesson_id,
                 'reference_file' => $question->reference_file,
-            ], $question->assessment->course_id);
+            ], $question->assessment->course_id, true);
+            $pending['reference_snapshot'] = $reference;
+            $diagnostics += [
+                'reference_type' => $reference['type'], 'reference_state' => $reference['state'],
+                'reference_lesson_id' => $reference['lesson_id'],
+                'reference_file_path' => $reference['file']['path'] ?? null,
+                'reference_material_ids' => array_column($reference['materials'], 'id'),
+                'reference_material_paths' => array_column($reference['materials'], 'file_path'),
+                'extracted_text_exists' => trim($reference['text']) !== '',
+                'extracted_text_length' => mb_strlen($reference['text']),
+            ];
             $rubric = $question->rubric()->with('criteria.levels')->first();
-            if (!$rubric) return $pending;
+            $diagnostics += ['rubric_id' => $rubric?->id, 'rubric_criteria_count' => $rubric?->criteria->count() ?? 0];
+            Log::info('Essay grading prerequisites', $diagnostics);
+            $phase = 'rubric_configuration';
+            if (!$rubric) throw new \RuntimeException('Missing saved rubric');
             $service = app(RubricService::class);
             $snapshot = $service->snapshot($rubric);
             $service->validate($snapshot, (float) $question->points);
             $pending['rubric_snapshot'] = $snapshot;
             $pending['reference_snapshot'] = $reference;
-            if (trim($reference['text']) === '') return $pending;
+            if (in_array($reference['state'], ['missing', 'unavailable'], true)) return $pending;
+            $phase = 'reference_extraction';
+            if ($reference['state'] !== 'ready') throw new \RuntimeException('Reference text extraction failed');
             if (!trim($answer ?? '')) {
                 $result = [
                     'criteria' => array_map(fn ($c) => [
@@ -38,17 +56,25 @@ class EssayGradingService
                 ];
                 $model = null;
             } else {
-                $result = Http::timeout(60)->post(rtrim(env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/') . '/grade-essay', [
+                $phase = 'ai_service';
+                $response = Http::timeout(60)->post(rtrim(env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/') . '/grade-essay', [
                     'question' => $question->question_text,
                     'instructions' => $question->assessment->description ?? '',
                     'answer' => $answer, 'max_points' => (float) $question->points,
                     'reference_material' => $reference['text'], 'rubric' => $snapshot,
-                ])->throw()->json();
+                ]);
+                $diagnostics['http_status'] = $response->status();
+                Log::info('Essay grading HTTP response', $diagnostics);
+                $response->throw();
+                $phase = 'ai_response_validation';
+                $result = $response->json();
                 if (!is_array($result) || ($result['status'] ?? '') !== 'graded') throw new \RuntimeException('AI grading did not succeed');
                 $model = $result['ai_model'] ?? null;
             }
             // Never trust the model's total, percentage, criterion names or maxima.
+            $phase = 'ai_response_validation';
             $evaluation = $service->evaluation($result, $snapshot);
+            Log::info('Essay grading validated', $diagnostics + ['response_valid' => true]);
             $evaluation['ai_model'] = $model;
             $evaluation['graded_at'] = now()->toIso8601String();
             return array_merge($pending, [
@@ -57,10 +83,11 @@ class EssayGradingService
                 'ai_feedback' => $evaluation['overall_feedback'],
                 'criterion_scores' => json_encode(array_column($evaluation['criteria'], 'awarded_points', 'criterion_id')),
                 'ai_evaluation' => $evaluation,
+                'grading_status' => 'graded',
             ]);
         } catch (\Throwable $e) {
-            Log::warning('Essay grading pending instructor review', ['question_id' => $question->id, 'error' => $e->getMessage()]);
-            return $pending;
+            Log::warning('Essay grading error', $diagnostics + ['error_code' => $phase, 'exception_type' => get_class($e), 'response_valid' => false]);
+            return array_merge($pending, ['grading_status' => 'grading_error', 'grading_error_code' => $phase]);
         }
     }
 }

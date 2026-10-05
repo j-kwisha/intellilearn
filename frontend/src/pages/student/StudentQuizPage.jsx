@@ -190,9 +190,11 @@ export default function StudentQuizPage() {
             </>
           ) : (
             <div className="mt-4 space-y-2">
-              <p className="text-3xl font-bold text-slate-400">⏳ Pending Grade</p>
+              <p className="text-3xl font-bold text-slate-400">{result.grading_status === 'grading_error' ? 'Grading Error' : '⏳ Pending Grade'}</p>
               <p className="text-slate-500 text-sm mt-2">
-                {isPending
+                {result.grading_status === 'grading_error'
+                  ? 'Your submission was saved, but automatic grading failed. Please contact your instructor.'
+                  : isPending
                   ? 'Your answers are pending review by the instructor.'
                   : 'Your score will be visible once the instructor releases the grades.'}
               </p>
@@ -263,7 +265,7 @@ export default function StudentQuizPage() {
                   </p>
                 )}
                 {answer.points_earned === null && answer.question?.type === 'essay' && (
-                  <p className="text-xs mt-1 font-medium text-amber-600">⏳ Pending instructor review</p>
+                  <p className="text-xs mt-1 font-medium text-amber-600">{answer.grading_status === 'grading_error' ? 'Automatic grading failed; contact your instructor.' : '⏳ Pending instructor review'}</p>
                 )}
                 {answer.ai_feedback && (
                   <p className={`text-xs mt-2 p-2 rounded ${

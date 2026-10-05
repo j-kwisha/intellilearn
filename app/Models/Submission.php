@@ -17,6 +17,7 @@ class Submission extends Model
         'total_points',
         'percentage',
         'status',
+        'grading_status',
         'ai_feedback',
         'started_at',
         'submitted_at',

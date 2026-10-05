@@ -1,5 +1,7 @@
 import unittest
-from essay_grading import parse_json, validate_rubric, validate_evaluation
+from unittest.mock import Mock
+from types import SimpleNamespace
+from essay_grading import parse_json, validate_rubric, validate_evaluation, request_json
 
 
 class EssayValidationTests(unittest.TestCase):
@@ -57,6 +59,20 @@ class EssayValidationTests(unittest.TestCase):
     def test_rejects_malformed_json_and_duplicate_keys(self):
         for raw in ['not json', '{"criteria":[],"criteria":[]}', '[]']:
             with self.subTest(raw=raw), self.assertRaises(ValueError): parse_json(raw)
+
+    def test_provider_errors_propagate_instead_of_becoming_pending(self):
+        client = Mock()
+        client.chat.completions.create.side_effect = TimeoutError('Provider timed out')
+        with self.assertRaises(TimeoutError):
+            request_json(client, 'test-model', 'Grade', {})
+
+    def test_provider_malformed_and_truncated_responses_raise_errors(self):
+        for raw, finish in [('{broken json', 'stop'), ('{}', 'length')]:
+            client = Mock()
+            client.chat.completions.create.return_value = SimpleNamespace(choices=[
+                SimpleNamespace(finish_reason=finish, message=SimpleNamespace(content=raw))])
+            with self.subTest(finish=finish), self.assertRaises(ValueError):
+                request_json(client, 'test-model', 'Grade', {})
 
 
 if __name__ == '__main__':

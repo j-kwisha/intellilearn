@@ -144,7 +144,7 @@ export default function StudentCoursePage() {
                     </span>
                   ) : assessment.my_attempts > 0 ? (
                     <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
-                      ⏳ Pending Grade
+                      {assessment.my_grading_status === 'grading_error' ? 'Grading Error' : '⏳ Pending Grade'}
                     </span>
                   ) : null}
                 </div>

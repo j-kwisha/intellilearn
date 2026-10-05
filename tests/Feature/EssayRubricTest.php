@@ -31,6 +31,7 @@ class EssayRubricTest extends TestCase
             '2026_09_26_170424_add_criterion_scores_to_submission_answers.php',
             '2026_10_04_160000_add_reference_fields_to_questions.php',
             '2026_10_06_000001_extend_essay_rubrics_and_grading_audit.php',
+            '2026_10_06_000002_add_essay_grading_states.php',
         ])];
     }
 
@@ -211,6 +212,8 @@ class EssayRubricTest extends TestCase
         ]])->assertOk()->assertJsonPath('submission.status', 'submitted');
         $first = $submission->answers()->where('question_id', $question->id)->first();
         $this->assertNull($first->points_earned); $this->assertNull($first->ai_feedback);
+        $this->assertSame('pending', $first->grading_status);
+        $this->assertSame('pending', $submission->fresh()->grading_status);
         Http::assertSentCount(1);
     }
 
@@ -224,9 +227,11 @@ class EssayRubricTest extends TestCase
         ]])->assertOk()->assertJsonPath('submission.status', 'submitted');
         Http::assertNothingSent();
         $this->assertNull($submission->answers()->first()->ai_feedback);
+        $this->assertSame('grading_error', $submission->fresh()->grading_status);
+        $this->assertSame('rubric_configuration', $submission->answers()->first()->grading_error_code);
     }
 
-    public function test_invalid_ai_scores_leave_answer_pending_without_losing_response(): void
+    public function test_invalid_ai_scores_leave_answer_in_error_without_losing_response(): void
     {
         [$teacher, $student, $course, $assessment, $question] = $this->fixture();
         app(RubricService::class)->save($question, $this->rubric(), $teacher->id);
@@ -241,6 +246,8 @@ class EssayRubricTest extends TestCase
         $this->assertSame('Keep this answer', $answer->answer_text);
         $this->assertNull($answer->points_earned);
         $this->assertNotNull($answer->rubric_snapshot);
+        $this->assertSame('grading_error', $answer->grading_status);
+        $this->assertSame('ai_response_validation', $answer->grading_error_code);
     }
 
     public function test_teacher_criterion_override_preserves_original_ai_and_historical_rubric(): void
@@ -334,7 +341,7 @@ class EssayRubricTest extends TestCase
         Http::fake(['*/grade-essay' => Http::response($this->aiResult($question))]);
         $submission = $this->attempt($student, $assessment);
         Sanctum::actingAs($student);
-        $this->postJson($this->path($course, $assessment) . '/submit', ['submission_id' => $submission->id, 'answers' => [['question_id' => $question->id, 'answer_text' => 'Essay']]])->assertOk();
+        $this->postJson($this->path($course, $assessment) . '/submit', ['submission_id' => $submission->id, 'answers' => [['question_id' => $question->id, 'answer_text' => 'Essay']]])->assertOk()->assertJsonPath('submission.grading_status', 'graded');
         Http::assertSent(fn ($r) => $r['reference_material'] === 'Specific selected reference.');
         $this->assertSame($material->id, $submission->answers()->first()->reference_snapshot['materials'][0]['id']);
     }
@@ -347,6 +354,119 @@ class EssayRubricTest extends TestCase
         $this->postJson($path, ['reference_file' => UploadedFile::fake()->createWithContent('source.txt', 'Real source content.')])
             ->assertOk()->assertJsonPath('extracted_text', 'Real source content.')->assertJsonPath('reference_file.filename', 'source.txt');
         $this->postJson($path, ['reference_file' => UploadedFile::fake()->create('broken.pdf', 1, 'application/pdf')])->assertStatus(422);
+    }
+
+    public function test_uploaded_pdf_text_is_persisted_and_retrieved_for_grading(): void
+    {
+        [$teacher, $student, $course, $assessment, $question] = $this->fixture();
+        $source = 'Privacy, bias and overreliance are the three risks.';
+        $stream = "BT /F1 12 Tf 50 700 Td ($source) Tj ET";
+        $objects = ['<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            '<< /Length ' . strlen($stream) . " >>\nstream\n$stream\nendstream"];
+        $pdf = "%PDF-1.4\n"; $offsets = [];
+        foreach ($objects as $index => $object) {
+            $offsets[] = strlen($pdf);
+            $pdf .= ($index + 1) . " 0 obj\n$object\nendobj\n";
+        }
+        $xref = strlen($pdf);
+        $pdf .= "xref\n0 6\n0000000000 65535 f \n";
+        foreach ($offsets as $offset) $pdf .= sprintf("%010d 00000 n \n", $offset);
+        $pdf .= "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF";
+        Sanctum::actingAs($teacher);
+        $upload = $this->postJson("/api/courses/{$course->id}/upload-reference-text", [
+            'reference_file' => UploadedFile::fake()->createWithContent('source.pdf', $pdf),
+        ])->assertOk();
+        $text = $upload->json('extracted_text');
+        $this->assertStringContainsString($source, $text);
+        $this->putJson($this->path($course, $assessment) . "/questions/{$question->id}", [
+            'reference_text' => $text, 'reference_file' => $upload->json('reference_file'), 'rubric' => $this->rubric(),
+        ])->assertOk();
+        $question->refresh();
+        $this->assertSame($text, $question->reference_text);
+        Http::fake(['*/grade-essay' => Http::response($this->aiResult($question))]);
+        $submission = $this->attempt($student, $assessment);
+        Sanctum::actingAs($student);
+        $this->postJson($this->path($course, $assessment) . '/submit', ['submission_id' => $submission->id,
+            'answers' => [['question_id' => $question->id, 'answer_text' => 'Essay']]])
+            ->assertOk()->assertJsonPath('submission.status', 'graded')->assertJsonPath('submission.grading_status', 'graded');
+        Http::assertSent(fn ($r) => $r['reference_material'] === $text);
+        $this->assertSame($text, $submission->answers()->first()->reference_snapshot['text']);
+    }
+
+    public function test_deleted_lesson_and_deleted_material_stay_pending(): void
+    {
+        [$teacher, $student, $course, $assessment, $question] = $this->fixture();
+        app(RubricService::class)->save($question, $this->rubric(), $teacher->id);
+        $lesson = Lesson::create(['course_id' => $course->id, 'title' => 'Deleted source']);
+        $material = $lesson->materials()->create(['title' => 'Source', 'type' => 'pdf', 'extracted_text' => 'Readable source']);
+        $question->update(['reference_text' => null, 'reference_lesson_id' => $lesson->id]);
+        $material->delete();
+        $result = app(\App\Services\EssayGradingService::class)->grade($question->fresh(), 'Essay');
+        $this->assertSame('pending', $result['grading_status']);
+        $this->assertSame('unavailable', $result['reference_snapshot']['state']);
+        $lesson->delete();
+        $result = app(\App\Services\EssayGradingService::class)->grade($question->fresh(), 'Essay');
+        $this->assertSame('pending', $result['grading_status']);
+        $this->assertNull($result['ai_feedback']);
+        Http::assertNothingSent();
+    }
+
+    public function test_failed_extraction_is_an_error_instead_of_pending(): void
+    {
+        [$teacher, , $course, , $question] = $this->fixture();
+        app(RubricService::class)->save($question, $this->rubric(), $teacher->id);
+        $question->update(['reference_text' => null, 'reference_file' => ['filename' => 'source.pdf']]);
+        $result = app(\App\Services\EssayGradingService::class)->grade($question->fresh(), 'Essay');
+        $this->assertSame('grading_error', $result['grading_status']);
+        $this->assertSame('reference_extraction', $result['grading_error_code']);
+        $lesson = Lesson::create(['course_id' => $course->id, 'title' => 'Unreadable source']);
+        $lesson->materials()->create(['title' => 'Source', 'type' => 'pdf', 'extracted_text' => null]);
+        $question->update(['reference_file' => null, 'reference_lesson_id' => $lesson->id]);
+        $this->assertSame('grading_error', app(\App\Services\EssayGradingService::class)->grade($question->fresh(), 'Essay')['grading_status']);
+        Http::assertNothingSent();
+    }
+
+    public function test_http_failure_timeout_and_malformed_json_persist_error_states(): void
+    {
+        [$teacher, $student, $course, $assessment, $question] = $this->fixture();
+        app(RubricService::class)->save($question, $this->rubric(), $teacher->id);
+        foreach (['http', 'timeout', 'json'] as $failure) {
+            Http::swap(new \Illuminate\Http\Client\Factory);
+            Http::preventStrayRequests();
+            Http::fake(['*/grade-essay' => function () use ($failure) {
+                if ($failure === 'timeout') throw new \Illuminate\Http\Client\ConnectionException('Timed out');
+                return $failure === 'http' ? Http::response([], 500) : Http::response('{broken json', 200);
+            }]);
+            $submission = $this->attempt($student, $assessment);
+            Sanctum::actingAs($student);
+            $this->postJson($this->path($course, $assessment) . '/submit', ['submission_id' => $submission->id,
+                'answers' => [['question_id' => $question->id, 'answer_text' => 'Preserved essay']]])
+                ->assertOk()->assertJsonPath('submission.grading_status', 'grading_error');
+            $answer = $submission->answers()->first();
+            $this->assertSame('grading_error', $answer->grading_status);
+            $this->assertSame('Preserved essay', $answer->answer_text);
+            $this->assertNull($answer->points_earned);
+            $this->assertSame($failure === 'json' ? 'ai_response_validation' : 'ai_service', $answer->grading_error_code);
+            Sanctum::actingAs($teacher);
+            $this->putJson($this->path($course, $assessment) . "/submissions/{$submission->id}/grade", [
+                'grades' => [['question_id' => $question->id, 'points_earned' => 5, 'ai_feedback' => 'Teacher review']],
+            ])->assertOk()->assertJsonPath('submission.grading_status', 'graded');
+            $this->assertNull($answer->fresh()->grading_error_code);
+        }
+    }
+
+    public function test_invalid_saved_rubric_is_a_configuration_error(): void
+    {
+        [$teacher, , , , $question] = $this->fixture();
+        $rubric = app(RubricService::class)->save($question, $this->rubric(), $teacher->id);
+        $rubric->criteria()->first()->update(['max_points' => 7]);
+        $result = app(\App\Services\EssayGradingService::class)->grade($question->fresh(), 'Essay');
+        $this->assertSame('grading_error', $result['grading_status']);
+        $this->assertSame('rubric_configuration', $result['grading_error_code']);
+        Http::assertNothingSent();
     }
 
     public function test_partial_manual_grading_does_not_finalize_ungraded_answers(): void

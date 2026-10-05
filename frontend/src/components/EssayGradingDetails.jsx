@@ -1,7 +1,8 @@
 export default function EssayGradingDetails({ answer, grade, onChange }) {
   const evaluation = answer.ai_evaluation;
   const snapshot = answer.rubric_snapshot;
-  if (!snapshot) return null;
+  const gradingError = answer.grading_status === 'grading_error';
+  if (!snapshot) return gradingError ? <p role="alert">Automatic grading failed ({answer.grading_error_code}). Review the essay configuration or grade manually.</p> : null;
   const scores = grade?.criterion_scores;
   const setCriterion = (id, value) => {
     const initial = answer.teacher_criterion_scores || Object.fromEntries(snapshot.criteria.map(c => [c.id, evaluation?.criteria?.find(r => r.criterion_id === c.id)?.awarded_points ?? 0]));
@@ -12,6 +13,7 @@ export default function EssayGradingDetails({ answer, grade, onChange }) {
   return (
     <div style={{ border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: 10, padding: 14, margin: '12px 0', color: '#334155' }}>
       <h4 style={{ margin: '0 0 8px' }}>{snapshot.title}</h4>
+      {gradingError && <p role="alert">Automatic grading failed ({answer.grading_error_code}). Review the configuration or grade manually.</p>}
       <p><strong>Original AI score: {evaluation?.total_score ?? 'Pending'} / {snapshot.total_points}</strong></p>
       <p>Final score: {answer.points_earned ?? 'Pending'}{answer.instructor_override ? ' (teacher override)' : ''}</p>
       {snapshot.criteria.map(c => {

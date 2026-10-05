@@ -2,8 +2,9 @@
 
 IntelliLearn now uses its existing `Rubric`, `RubricCriterion`, `Question` and
 `SubmissionAnswer` architecture. A saved teacher rubric and usable question reference
-are required for AI essay grading. Without either, the student response is retained,
-points and feedback stay null, and the assessment waits for instructor grading.
+are required for AI essay grading. Missing/deleted references leave points and feedback
+null with `grading_status=pending`. Invalid rubrics, failed extraction, provider failures
+and invalid AI responses retain the answer with `grading_status=grading_error`.
 
 ## Teacher workflow
 
@@ -18,7 +19,7 @@ In the essay section of all question creation forms and the question edit modal:
 The template is optional and scaled to the question maximum. It never silently replaces
 an existing rubric. References remain optional for manual grading; a rubric is required
 for publication. Existing published essays without valid rubrics remain available but
-their new answers wait for manual grading until an instructor supplies a valid rubric.
+their new answers report a rubric configuration error until an instructor supplies a valid rubric.
 
 ## Files and architecture
 
@@ -65,7 +66,7 @@ rubric configuration or mutate it.
 | POST / PUT | Existing question and bulk question routes | Accept nested `rubric` and `reference_file`; save the question/rubric together; bulk validation prevents partial writes |
 | PUT | Existing assessment route | Blocks publication if any essay rubric is missing or invalid |
 | POST | Existing `/upload-reference-text` route | Reuses extraction pipeline; supports readable PDF, DOCX and TXT; rejects extraction failure instead of returning fake reference text |
-| POST | Existing assessment `/submit` route | Grades criteria using approved rubric/reference; saves audits and leaves failures pending |
+| POST | Existing assessment `/submit` route | Grades criteria using approved rubric/reference; saves audits and distinguishes pending from grading errors |
 | PUT | Existing submission `/grade` route | Accepts overall final points/feedback, or `criterion_scores` keyed by snapshot criterion ID; preserves original AI audit |
 | POST | AI service `/generate-rubric` | New: JSON rubric generation with validation |
 | POST | AI service `/grade-essay` | Changed: requires saved rubric, reference, question and answer; returns every criterion's score and feedback |
@@ -97,9 +98,19 @@ Scores use hundredths of a point. Negative, nonfinite, overly precise, unknown, 
 missing or over-maximum scores are rejected. Rubric criterion maxima must sum exactly to
 question points; ranges must be ordered, non-overlapping and within criterion maxima.
 
-Failures retain the student answer and leave it pending. A later successful essay cannot
+Failures retain the student answer and record `grading_error` with a safe error code. A later successful essay cannot
 finalize a submission containing an ungraded answer. Blank essays receive zero only when
 both valid rubric and usable reference are present.
+
+`2026_10_06_000002_add_essay_grading_states.php` adds answer `grading_status` and
+`grading_error_code`, plus submission `grading_status`. The existing submission lifecycle
+`status` remains `submitted` until all answers have scores. Clients display `grading_status`
+to distinguish errors from instructor review. Teacher overrides clear grading errors.
+FastAPI rejects missing prerequisites with HTTP 422 and grading failures with HTTP 502.
+Diagnostics log IDs, metadata paths, extracted text lengths, HTTP status and validation
+outcomes, never essay/reference content or provider response bodies. Uploads return extracted
+text and filename/hash metadata; question save persists it in `questions.reference_text`.
+There is no separately stored upload path to retrieve; grading uses the saved text.
 
 ## Audit and overrides
 
@@ -128,7 +139,7 @@ No new environment variables or credentials are required:
 
 Deploy Laravel, the React frontend and the AI service from the same commit. Railway's existing
 Laravel start command already runs `php artisan migrate --force`. During a staggered rollout,
-an older AI service response will fail validation and answers safely wait for manual grading.
+an older AI service response will fail validation and answers report a grading error.
 
 After installing locked Composer/npm dependencies:
 

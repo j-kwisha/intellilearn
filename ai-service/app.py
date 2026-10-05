@@ -178,7 +178,7 @@ def generate_rubric(data: dict):
 def grade_essay(data: dict):
     reference = data.get("reference_material")
     if not isinstance(reference, str) or not reference.strip() or not data.get("rubric"):
-        return {"status": "pending_manual"}
+        raise HTTPException(status_code=422, detail="Readable reference and saved rubric are required")
     try:
         if len(reference) > 24000:
             raise ValueError("Reference too long")
@@ -199,7 +199,7 @@ def grade_essay(data: dict):
         return {**result, "status": "graded", "ai_model": model_name}
     except Exception as exc:
         print(f"Essay grading failed: {type(exc).__name__}")
-        return {"status": "ai_failed"}
+        raise HTTPException(status_code=502, detail="Essay grading failed; retry or contact the instructor") from exc
 
 
 @app.post("/chatbot")

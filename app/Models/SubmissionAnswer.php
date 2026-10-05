@@ -15,6 +15,8 @@ class SubmissionAnswer extends Model
         'submission_id',
         'question_id',
         'answer_text',
+        'grading_status',
+        'grading_error_code',
         'file_url',
         'is_correct',
         'points_earned',

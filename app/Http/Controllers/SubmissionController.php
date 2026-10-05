@@ -233,6 +233,8 @@ class SubmissionController extends Controller
         // Update submission status
         $submission->submitted_at = now();
         $submission->total_points = $totalPoints;
+        $submission->grading_status = $submission->answers()->where('grading_status', 'grading_error')->exists()
+            ? 'grading_error' : ($allAutoGradable ? 'graded' : 'pending');
 
         if ($allAutoGradable) {
             // Everything was auto-graded — mark as graded
@@ -323,9 +325,11 @@ class SubmissionController extends Controller
         }
 
         return response()->json([
-            'message'    => $allAutoGradable
+            'message'    => $submission->grading_status === 'grading_error'
+                ? 'Assessment submitted. Automatic essay grading encountered an error; contact the instructor.'
+                : ($allAutoGradable
                 ? 'Assessment submitted and graded!'
-                : 'Assessment submitted. Some answers are waiting to be graded by the instructor.',
+                : 'Assessment submitted. Some answers are waiting to be graded by the instructor.'),
             'submission' => $submission,
         ]);
     }
@@ -500,6 +504,7 @@ class SubmissionController extends Controller
             }
             $updates[] = [$answer, [
                 'points_earned' => $points, 'is_correct' => $points > 0,
+                'grading_status' => 'graded', 'grading_error_code' => null,
                 'ai_feedback' => $gradeData['ai_feedback'] ?? null,
                 'teacher_criterion_scores' => $criteria, 'instructor_override' => true,
                 'overridden_by' => $user->id, 'overridden_at' => now(),
@@ -517,6 +522,7 @@ class SubmissionController extends Controller
         $hasPending = $submission->answers()->whereNull('points_earned')->exists();
         $submission->update([
             'score'        => $totalEarned,
+            'grading_status' => $submission->answers()->where('grading_status', 'grading_error')->exists() ? 'grading_error' : ($hasPending ? 'pending' : 'graded'),
             'total_points' => $totalPoints,
             'percentage'   => $totalPoints > 0
                 && !$hasPending ? round(($totalEarned / $totalPoints) * 100, 2)

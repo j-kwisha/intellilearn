@@ -60,6 +60,7 @@ class AssessmentController extends Controller
                     ($visibility === 'instructor_release' && $assessment->scores_released_at !== null);
 
                 $assessment->my_attempts   = $submissions->count();
+                $assessment->my_grading_status = $submissions->sortByDesc('id')->first()?->grading_status;
                 $assessment->my_best_score = $scoresVisible ? $submissions->max('percentage') : null;
                 $assessment->can_retake    = $submissions->count() < $assessment->max_attempts;
             });
@@ -793,7 +794,7 @@ class AssessmentController extends Controller
 
             $extractedText = app(DocumentTextService::class)->extract($file);
 
-            \Log::info('uploadReferenceText: Preparing response');
+            \Log::info('uploadReferenceText: Extraction complete', ['course_id' => $course->id, 'extracted_text_length' => mb_strlen($extractedText)]);
             return response()->json([
                 'success' => true,
                 'extracted_text' => $extractedText,
