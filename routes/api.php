@@ -71,6 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/password', [ProfileController::class, 'changePassword']);
 
     // --- GOOGLE OAUTH (Protected) ---
+    Route::get('/auth/google/link/redirect', [\App\Http\Controllers\SocialAuthController::class, 'redirectToGoogleLink']);
     Route::post('/auth/google/link', [\App\Http\Controllers\SocialAuthController::class, 'linkGoogleAccount']);
     Route::post('/auth/google/unlink', [\App\Http\Controllers\SocialAuthController::class, 'unlinkGoogleAccount']);
 

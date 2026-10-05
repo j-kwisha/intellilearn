@@ -1,16 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import api from '../../services/api';
 
 export default function GoogleCallback() {
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState(null);
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     const handleCallback = async () => {
       try {
-        // Get the full URL with query parameters
-        const fullUrl = window.location.href;
+        const params = new URLSearchParams(location.search);
+        const pendingLink = JSON.parse(sessionStorage.getItem('googleProfileLink') || 'null');
+        if (params.get('state')?.startsWith('link_')) {
+          if (!pendingLink || params.get('state') !== pendingLink.state) {
+            throw new Error('Google connection could not be verified. Please try again.');
+          }
+          sessionStorage.removeItem('googleProfileLink');
+          if (params.get('error')) throw new Error('Google connection was cancelled. Your existing profile is unchanged.');
+          const { data } = await api.post('/auth/google/link', {
+            code: params.get('code'), state: params.get('state'),
+          }).catch((err) => { throw new Error(err.response?.data?.message || 'Failed to import Google profile.'); });
+          localStorage.setItem('user', JSON.stringify(data.user));
+          const returnTo = pendingLink.returnTo;
+          window.location.replace(returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/login');
+          return;
+        }
+        sessionStorage.removeItem('googleProfileLink');
         
         // Call backend callback endpoint with the full URL
         const response = await fetch(

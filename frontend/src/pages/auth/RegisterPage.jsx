@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { connectGoogleProfile } from '../../services/googleProfile';
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -11,14 +12,16 @@ export default function RegisterPage() {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [registered, setRegistered] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrors({});
     setLoading(true);
     try {
-      await register(form);
-      navigate('/student');
+      const result = await register(form);
+      if (result.requires_verification) setRegistered(true);
+      else navigate('/student');
     } catch (err) {
       if (err.response?.data?.errors) setErrors(err.response.data.errors);
       else setErrors({ general: [err.response?.data?.message || 'Registration failed.'] });
@@ -62,6 +65,28 @@ export default function RegisterPage() {
       )}
     </div>
   );
+
+  if (registered) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card" style={{ width: '100%', maxWidth: 480 }}>
+          <h2>Check your email</h2>
+          <p>Your account is created. Open the verification email before signing in.</p>
+          <p>Optionally connect the Google account for {form.email} to use its name and profile photo.</p>
+          {errors.general && <p role="alert">{errors.general[0]}</p>}
+          <button className="btn-primary" disabled={loading} onClick={async () => {
+            setLoading(true);
+            try { await connectGoogleProfile('/login'); }
+            catch (err) {
+              setErrors({ general: [err.response?.data?.message || 'Could not connect Google. Please try again.'] });
+              setLoading(false);
+            }
+          }}>{loading ? 'Connecting...' : 'Connect Google'}</button>
+          <p><Link to="/login">Skip for now and go to sign in</Link></p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-page">

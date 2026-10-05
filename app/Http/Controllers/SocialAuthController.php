@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -33,6 +34,9 @@ class SocialAuthController extends Controller
      */
     public function handleGoogleCallback(Request $request): JsonResponse
     {
+        if (str_starts_with((string) $request->input('state'), 'link_')) {
+            return response()->json(['message' => 'Complete profile import from the account that started it.'], 422);
+        }
         try {
             // Get user from Google
             $googleUser = Socialite::driver('google')->stateless()->user();
@@ -84,8 +88,27 @@ class SocialAuthController extends Controller
      * 
      * POST /api/auth/google/link
      */
+    public function redirectToGoogleLink(Request $request): JsonResponse
+    {
+        $state = 'link_' . Str::random(64);
+        Cache::put('google_profile_link:' . $state, $request->user()->id, now()->addMinutes(10));
+        $url = Socialite::driver('google')->stateless()->redirect()->getTargetUrl();
+
+        return response()->json(['url' => $url . '&' . http_build_query([
+            'state' => $state,
+            'prompt' => 'select_account',
+            'login_hint' => $request->user()->email,
+        ])]);
+    }
+
     public function linkGoogleAccount(Request $request): JsonResponse
     {
+        $request->validate(['code' => ['required', 'string'], 'state' => ['required', 'string', 'max:128']]);
+        $stateKey = 'google_profile_link:' . $request->input('state');
+        if ((string) Cache::get($stateKey) !== (string) $request->user()->id) {
+            return response()->json(['message' => 'Google connection expired. Please connect again.'], 422);
+        }
+        Cache::forget($stateKey);
         try {
             $user = $request->user();
 
@@ -95,6 +118,11 @@ class SocialAuthController extends Controller
 
             // Get user from Google
             $googleUser = Socialite::driver('google')->stateless()->user();
+
+            if (!($googleUser->user['email_verified'] ?? $googleUser->user['verified_email'] ?? false)
+                || strcasecmp((string) $googleUser->getEmail(), $user->email) !== 0) {
+                return response()->json(['message' => 'Choose the verified Google account with the same email as your IntelliLearn account.'], 422);
+            }
 
             // Check if Google account is already linked to another user
             $existingUser = User::where('google_id', $googleUser->getId())
@@ -111,6 +139,8 @@ class SocialAuthController extends Controller
             $user->update([
                 'google_id' => $googleUser->getId(),
                 'avatar' => $googleUser->getAvatar(),
+                'first_name' => $googleUser->user['given_name'] ?? $user->first_name,
+                'last_name' => $googleUser->user['family_name'] ?? $user->last_name,
             ]);
 
             return response()->json([
@@ -121,7 +151,6 @@ class SocialAuthController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Failed to link Google account',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

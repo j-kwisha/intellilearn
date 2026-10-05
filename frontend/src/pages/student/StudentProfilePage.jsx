@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { connectGoogleProfile } from '../../services/googleProfile';
 
 export default function StudentProfilePage() {
   const { user, logout } = useAuth();
@@ -91,6 +92,19 @@ export default function StudentProfilePage() {
       {error && <div style={{ background:'#fef2f2', color:'#dc2626', fontSize:'14px', padding:'12px 16px', borderRadius:'10px', border:'1px solid #fecaca', marginBottom:'16px', fontFamily:'Inter,sans-serif' }}>{error}</div>}
 
       {/* Personal info */}
+      <div style={panelStyle}>
+        <h3 style={headingStyle}>Google Profile</h3>
+        <p style={{ color: mutedStyle }}>Import your name and photo from the Google account with the same email. This will replace your current name and photo.</p>
+        <PrimaryBtn disabled={saving} onClick={async () => {
+          setSaving(true); setError('');
+          try { await connectGoogleProfile(window.location.pathname); }
+          catch (err) {
+            setError(err.response?.data?.message || 'Could not connect Google. Please try again.');
+            setSaving(false);
+          }
+        }}>Connect Google</PrimaryBtn>
+      </div>
+
       <div style={panelStyle}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
           <h3 style={headingStyle}>Personal Information</h3>
