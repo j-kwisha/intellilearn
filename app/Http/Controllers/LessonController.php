@@ -291,7 +291,7 @@ class LessonController extends Controller
 
             // For non-PDF files, store locally to avoid Cloudinary complexity with Office docs
             $ext = strtolower($file->getClientOriginalExtension());
-            $usesCloudinary = in_array($ext, ['pdf', 'mp4', 'mov', 'avi', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
+            $usesCloudinary = in_array($ext, ['pdf', 'docx', 'pptx', 'xlsx', 'mp4', 'mov', 'avi', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
 
             if ($usesCloudinary && $cloudName && $apiKey && $apiSecret) {
                 // Upload to Cloudinary
