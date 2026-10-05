@@ -95,14 +95,14 @@ export default function StudentProfilePage() {
       <div style={panelStyle}>
         <h3 style={headingStyle}>Google Profile</h3>
         <p style={{ color: mutedStyle }}>Import your name and photo from the Google account with the same email. This will replace your current name and photo.</p>
-        <PrimaryBtn disabled={saving} onClick={async () => {
+        <PrimaryBtn style={{ background: isInstructor ? '#166534' : '#7655d9', color: '#fff', opacity: saving ? 0.65 : 1, cursor: saving ? 'wait' : 'pointer' }} disabled={saving} onClick={async () => {
           setSaving(true); setError('');
           try { await connectGoogleProfile(window.location.pathname); }
           catch (err) {
             setError(err.response?.data?.message || 'Could not connect Google. Please try again.');
             setSaving(false);
           }
-        }}>Connect Google</PrimaryBtn>
+        }}>{saving ? 'Connecting...' : 'Connect Google'}</PrimaryBtn>
       </div>
 
       <div style={panelStyle}>
