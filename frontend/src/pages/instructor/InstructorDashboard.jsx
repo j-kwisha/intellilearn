@@ -515,7 +515,7 @@ export default function InstructorDashboard() {
           {/* At-Risk */}
           <div className="instr-insight-panel">
             <div className="instr-insight-panel-header">
-              <h3>Predictive Analytics — At-Risk Students</h3>
+              <h3>Predictive Analytics — At-Risk Students by Course</h3>
               <Link to="/instructor/students" className="instr-view-all-link">
                 View all
                 <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -540,43 +540,76 @@ export default function InstructorDashboard() {
               </div>
             ) : (
               <div className="instr-risk-list">
-                {atRisk.map((student) => {
-                  const isHigh = student.risk_level === 'High Risk';
-                  const barColor = isHigh ? '#e0453c' : '#f0a020';
-                  const badgeStyle = isHigh
-                    ? { background: '#fdecec', color: '#e0453c' }
-                    : { background: '#fbf0d9', color: '#b9790f' };
-                  return (
-                    <Link to="/instructor/students" key={student.id} className="instr-risk-row">
-                      <div className="instr-risk-avatar">{student.initials}</div>
-                      <div className="instr-risk-body">
-                        <div className="instr-risk-top">
-                          <span className="instr-risk-name">{student.name}</span>
-                          <span className="instr-risk-score">Risk Score: {student.risk_score}%</span>
-                        </div>
-                        <span className="instr-risk-course">{student.course}</span>
-                        <div className="instr-risk-bar-row">
-                          <div className="instr-risk-bar-track">
-                            <div style={{ width: `${student.risk_score}%`, height: '100%', background: barColor, borderRadius: '999px' }} />
-                          </div>
-                          <span className="instr-risk-badge" style={badgeStyle}>{student.risk_level}</span>
-                        </div>
-                        {student.reasons && student.reasons.length > 0 && (
-                          <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {student.reasons.map((r, i) => (
-                              <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: '#fef9c3', color: '#854d0e', fontFamily: 'Inter,sans-serif' }}>
-                                {r}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                {(() => {
+                  // Group at-risk students by course
+                  const groupedByCourse = atRisk.reduce((groups, student) => {
+                    const course = student.course;
+                    if (!groups[course]) groups[course] = [];
+                    groups[course].push(student);
+                    return groups;
+                  }, {});
+
+                  return Object.entries(groupedByCourse).map(([courseName, students]) => (
+                    <div key={courseName} style={{ marginBottom: '20px' }}>
+                      {/* Course header */}
+                      <div style={{ 
+                        padding: '8px 12px', 
+                        background: 'linear-gradient(135deg, #f0f7f3 0%, #e6f3ea 100%)',
+                        borderRadius: '8px',
+                        marginBottom: '8px',
+                        border: '1px solid #d1e7d7'
+                      }}>
+                        <h4 style={{ 
+                          margin: 0, 
+                          fontSize: '13px', 
+                          fontWeight: 600, 
+                          color: '#065f46',
+                          fontFamily: 'Poppins, sans-serif'
+                        }}>
+                          {courseName} ({students.length} student{students.length !== 1 ? 's' : ''})
+                        </h4>
                       </div>
-                      <svg className="instr-risk-chevron" viewBox="0 0 24 24" fill="none">
-                        <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </Link>
-                  );
-                })}
+                      
+                      {/* Students in this course */}
+                      {students.map((student) => {
+                        const isHigh = student.risk_level === 'High Risk';
+                        const barColor = isHigh ? '#e0453c' : '#f0a020';
+                        const badgeStyle = isHigh
+                          ? { background: '#fdecec', color: '#e0453c' }
+                          : { background: '#fbf0d9', color: '#b9790f' };
+                        return (
+                          <Link to="/instructor/students" key={student.id} className="instr-risk-row">
+                            <div className="instr-risk-avatar">{student.initials}</div>
+                            <div className="instr-risk-body">
+                              <div className="instr-risk-top">
+                                <span className="instr-risk-name">{student.name}</span>
+                                <span className="instr-risk-score">Risk Score: {student.risk_score}%</span>
+                              </div>
+                              <div className="instr-risk-bar-row">
+                                <div className="instr-risk-bar-track">
+                                  <div style={{ width: `${student.risk_score}%`, height: '100%', background: barColor, borderRadius: '999px' }} />
+                                </div>
+                                <span className="instr-risk-badge" style={badgeStyle}>{student.risk_level}</span>
+                              </div>
+                              {student.reasons && student.reasons.length > 0 && (
+                                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                  {student.reasons.map((r, i) => (
+                                    <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: '#fef9c3', color: '#854d0e', fontFamily: 'Inter,sans-serif' }}>
+                                      {r}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <svg className="instr-risk-chevron" viewBox="0 0 24 24" fill="none">
+                              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
               </div>
             )}
           </div>
