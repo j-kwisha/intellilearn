@@ -710,41 +710,72 @@ class AssessmentController extends Controller
      */
     public function uploadReferenceText(Request $request, Course $course): JsonResponse
     {
-        $user = $request->user();
-
-        if (! $user->isInstructorOrAdmin()) {
-            return response()->json(['message' => 'Only instructors can upload reference files.'], 403);
-        }
-
-        $validated = $request->validate([
-            'reference_file' => ['required', 'file', 'mimes:pdf,doc,docx,txt', 'max:10240'], // 10MB max
-        ]);
-
-        $file = $validated['reference_file'];
-        $extractedText = '';
-
         try {
+            \Log::info('uploadReferenceText: Request received', [
+                'course_id' => $course->id,
+                'user_id' => $request->user()->id,
+                'has_file' => $request->hasFile('reference_file')
+            ]);
+
+            $user = $request->user();
+
+            if (! $user->isInstructorOrAdmin()) {
+                \Log::warning('uploadReferenceText: Unauthorized user');
+                return response()->json(['message' => 'Only instructors can upload reference files.'], 403);
+            }
+
+            \Log::info('uploadReferenceText: Starting file validation');
+            $validated = $request->validate([
+                'reference_file' => ['required', 'file', 'mimes:pdf,doc,docx,txt', 'max:10240'], // 10MB max
+            ]);
+            \Log::info('uploadReferenceText: File validation passed');
+
+            $file = $validated['reference_file'];
+            \Log::info('uploadReferenceText: File details', [
+                'name' => $file->getClientOriginalName(),
+                'size' => $file->getSize(),
+                'mime' => $file->getMimeType(),
+                'extension' => $file->getClientOriginalExtension()
+            ]);
+
+            $extractedText = '';
+
             // Extract text based on file type
             $extension = strtolower($file->getClientOriginalExtension());
+            \Log::info('uploadReferenceText: Processing file type', ['extension' => $extension]);
             
             if ($extension === 'pdf') {
+                \Log::info('uploadReferenceText: Starting PDF parsing');
                 try {
                     // Extract text from PDF using existing parser
                     $parser = new \Smalot\PdfParser\Parser();
+                    \Log::info('uploadReferenceText: PDF parser created');
+                    
                     $pdf = $parser->parseFile($file->getRealPath());
+                    \Log::info('uploadReferenceText: PDF file parsed');
+                    
                     $extractedText = $pdf->getText();
+                    \Log::info('uploadReferenceText: PDF text extracted', ['length' => strlen($extractedText)]);
                 } catch (\Exception $e) {
-                    \Log::error('PDF parsing failed', ['error' => $e->getMessage()]);
+                    \Log::error('uploadReferenceText: PDF parsing failed', [
+                        'error' => $e->getMessage(),
+                        'class' => get_class($e),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
                     $extractedText = "PDF file uploaded: " . $file->getClientOriginalName() . ". Text extraction failed. Please try a different PDF or paste text manually.";
                 }
             } elseif ($extension === 'txt') {
-                // Read plain text file
+                \Log::info('uploadReferenceText: Processing TXT file');
                 $extractedText = file_get_contents($file->getRealPath());
+                \Log::info('uploadReferenceText: TXT file read', ['length' => strlen($extractedText)]);
             } elseif (in_array($extension, ['doc', 'docx'])) {
-                // For DOC/DOCX files, we'll return a message for now
-                // Full DOCX extraction would require phpoffice/phpword package
+                \Log::info('uploadReferenceText: Processing DOCX file');
                 $extractedText = "DOCX file uploaded: " . $file->getClientOriginalName() . ". Text extraction for DOCX files not yet implemented. Please convert to PDF or paste text manually.";
             }
+
+            \Log::info('uploadReferenceText: Text processing complete');
 
             // Clean and limit text
             $extractedText = trim($extractedText);
@@ -752,6 +783,7 @@ class AssessmentController extends Controller
                 $extractedText = substr($extractedText, 0, 8000) . '... [truncated]';
             }
 
+            \Log::info('uploadReferenceText: Preparing response');
             return response()->json([
                 'success' => true,
                 'extracted_text' => $extractedText,
@@ -759,14 +791,33 @@ class AssessmentController extends Controller
                 'file_size' => $file->getSize(),
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('uploadReferenceText: Validation exception', [
+                'errors' => $e->errors(),
+                'message' => $e->getMessage()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'File validation failed',
+                'debug_error' => $e->getMessage(),
+                'debug_errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
-            \Log::error("Reference file text extraction failed: " . $e->getMessage());
+            \Log::error('uploadReferenceText: General exception', [
+                'error' => $e->getMessage(),
+                'class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
             
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to extract text from file. Please try again or paste text manually.',
-                'error' => $e->getMessage(),
-            ], 422);
+                'debug_error' => $e->getMessage(),
+                'debug_class' => get_class($e),
+                'debug_location' => $e->getFile() . ':' . $e->getLine()
+            ], 500);
         }
     }
 }
