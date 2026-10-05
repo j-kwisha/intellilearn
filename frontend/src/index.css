@@ -3549,13 +3549,15 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 .instr-course-hero-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; color: #d9f0e4; font-family: "Inter", sans-serif; }
 
 /* tab bar */
-.instr-tab-bar {
+.instr-tab-bar,
+.std-course-tab-bar {
   display: inline-flex; flex-wrap: wrap; gap: 4px;
   background: var(--instr-panel); border: 1px solid var(--instr-line);
   border-radius: 999px; padding: 5px;
   box-shadow: 0 6px 22px rgba(15,35,25,0.10);
 }
-.instr-tab-btn {
+.instr-tab-btn,
+.std-course-tab-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 9px 18px; border-radius: 999px;
   font-size: 14px; font-weight: 600; color: var(--instr-ink-soft);
@@ -3826,12 +3828,28 @@ body:has(.sidebar.role-admin) .btn-primary:hover,
 }
 
 /* ── Full-width tab bar (course detail page) ── */
-.instr-tab-bar--full {
+.instr-tab-bar--full,
+.std-course-tab-bar {
   display: flex;
   width: 100%;
   border-radius: 999px;
 }
-.instr-tab-bar--full .instr-tab-btn { flex: 1; justify-content: center; }
+.instr-tab-bar--full .instr-tab-btn,
+.std-course-tab-bar .std-course-tab-btn { flex: 1; justify-content: center; }
+
+.std-course-tab-bar {
+  background: var(--bg-card);
+  border-color: var(--border);
+  box-shadow: 0 6px 22px rgba(118,85,217,0.10);
+}
+.std-course-tab-btn { color: var(--text-body); }
+.std-course-tab-btn:hover { color: var(--purple-dark); }
+.std-course-tab-btn--active,
+.std-course-tab-btn--active:hover {
+  background: linear-gradient(90deg, var(--purple-primary), var(--purple-mid));
+  color: #fff;
+  box-shadow: 0 6px 14px var(--accent-shadow);
+}
 
 /* ── Course hero: guarantee text is white ── */
 .instr-course-hero,
