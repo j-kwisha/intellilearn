@@ -285,28 +285,24 @@ class LessonController extends Controller
             try {
                 $file = $request->file('file');
 
-                $cloudName = env('CLOUDINARY_CLOUD_NAME');
-            $apiKey    = env('CLOUDINARY_API_KEY');
-            $apiSecret = env('CLOUDINARY_API_SECRET');
-
-            // Store all files locally for now - simpler and more reliable
-            $folder = "materials/course_{$course->id}/lesson_{$lesson->id}";
-            $stored = $file->store($folder, 'public');
-            $filePath = Storage::disk('public')->url($stored);
+                // Store all files locally for now - simpler and more reliable
+                $folder = "materials/course_{$course->id}/lesson_{$lesson->id}";
+                $stored = $file->store($folder, 'public');
+                $filePath = Storage::disk('public')->url($stored);
+                
+                // Extract text from PDF for AI chatbot
+                if ($validated['type'] === 'pdf') {
+                    try {
+                        $parser = new PdfParser();
+                        $pdf = $parser->parseFile($file->getRealPath());
+                        $extractedText = substr($pdf->getText(), 0, 8000);
+                    } catch (\Exception $e) {
+                        $extractedText = null;
+                    }
+                }
             } catch (\Exception $e) {
                 \Log::error('File upload error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
                 return response()->json(['message' => 'File upload failed: ' . $e->getMessage()], 500);
-            }
-
-            // Extract text from PDF for AI chatbot
-            if ($validated['type'] === 'pdf') {
-                try {
-                    $parser = new PdfParser();
-                    $pdf = $parser->parseFile($file->getRealPath());
-                    $extractedText = substr($pdf->getText(), 0, 8000);
-                } catch (\Exception $e) {
-                    $extractedText = null;
-                }
             }
         }
 
