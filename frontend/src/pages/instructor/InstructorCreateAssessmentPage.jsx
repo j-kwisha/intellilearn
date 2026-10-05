@@ -601,16 +601,66 @@ export default function InstructorCreateAssessmentPage() {
                           <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>AI will use this lesson's uploaded files as reference.</p>
                         </div>
                         <div>
-                          <label style={S.label}>📝 Or paste reference text directly (optional)</label>
-                          <textarea
-                            style={{ ...S.input, resize: 'vertical', minHeight: 80 }}
-                            rows={4}
-                            placeholder="Paste text content here that the AI should use to evaluate the student's answer..."
-                            value={q.reference_text || ''}
-                            onChange={e => updateQuestion(idx, 'reference_text', e.target.value)}
-                          />
+                          <label style={S.label}>📎 Or upload reference file (optional)</label>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,.txt"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  // Create FormData and upload file
+                                  const formData = new FormData();
+                                  formData.append('reference_file', file);
+                                  
+                                  // Upload and extract text
+                                  api.post(`/courses/${courseId}/upload-reference-text`, formData, {
+                                    headers: { 'Content-Type': 'multipart/form-data' }
+                                  })
+                                  .then(res => {
+                                    if (res.data.extracted_text) {
+                                      updateQuestion(idx, 'reference_text', res.data.extracted_text);
+                                    }
+                                  })
+                                  .catch(err => {
+                                    console.error('File upload failed:', err);
+                                    alert('File upload failed. Please try again.');
+                                  });
+                                }
+                              }}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                fontSize: '0.875rem',
+                                color: '#64748b',
+                                cursor: 'pointer',
+                              }}
+                            />
+                            {q.reference_text && (
+                              <div style={{
+                                fontSize: '0.75rem',
+                                color: '#475569',
+                                background: '#f8fafc',
+                                padding: 8,
+                                borderRadius: 6,
+                                border: '1px solid #e2e8f0'
+                              }}>
+                                <strong>Extracted text preview:</strong>
+                                <div style={{
+                                  marginTop: 4,
+                                  maxHeight: 60,
+                                  overflowY: 'auto',
+                                  fontSize: '0.75rem',
+                                  color: '#64748b'
+                                }}>
+                                  {q.reference_text.substring(0, 200)}
+                                  {q.reference_text.length > 200 && '...'}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>
-                            If filled, this takes priority over the lesson reference above.
+                            Upload PDF/DOC to extract text for AI grading. Takes priority over lesson reference above.
                           </p>
                         </div>
                       </div>

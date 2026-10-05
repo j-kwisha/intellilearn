@@ -178,12 +178,52 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">📝 Or paste reference text</label>
-                <textarea rows={4} style={{ ...inputStyle, resize: 'vertical' }}
-                  placeholder="Paste text the AI should use to grade this question..."
-                  value={form.reference_text || ''}
-                  onChange={e => setForm(f => ({ ...f, reference_text: e.target.value }))} />
-                <p className="text-xs text-slate-400 mt-1">Takes priority over the lesson reference above.</p>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">📎 Or upload reference file</label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Create FormData and upload file
+                        const formData = new FormData();
+                        formData.append('reference_file', file);
+                        
+                        // Upload and extract text
+                        api.post(`/courses/${courseId}/upload-reference-text`, formData, {
+                          headers: { 'Content-Type': 'multipart/form-data' }
+                        })
+                        .then(res => {
+                          if (res.data.extracted_text) {
+                            setForm(f => ({ ...f, reference_text: res.data.extracted_text }));
+                          }
+                        })
+                        .catch(err => {
+                          console.error('File upload failed:', err);
+                          alert('File upload failed. Please try again.');
+                        });
+                      }
+                    }}
+                    className="block w-full text-sm text-slate-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-lg file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-indigo-50 file:text-indigo-700
+                      hover:file:bg-indigo-100
+                      cursor-pointer"
+                  />
+                  {form.reference_text && (
+                    <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded border">
+                      <strong>Extracted text preview:</strong>
+                      <div className="mt-1 max-h-24 overflow-y-auto text-xs text-slate-500">
+                        {form.reference_text.substring(0, 200)}
+                        {form.reference_text.length > 200 && '...'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Upload PDF/DOC to extract text for AI grading. Takes priority over lesson reference above.</p>
               </div>
             </div>
           )}

@@ -729,4 +729,69 @@ class AssessmentController extends Controller
         $stored = $file->store("assessments/course_{$courseId}", 'public');
         return \Illuminate\Support\Facades\Storage::disk('public')->url($stored);
     }
+
+    /**
+     * UPLOAD REFERENCE FILE FOR ESSAY QUESTIONS
+     *
+     * POST /api/courses/{course}/upload-reference-text
+     * Body: { reference_file }
+     *
+     * Uploads file, extracts text, and returns extracted text for AI grading reference.
+     */
+    public function uploadReferenceText(Request $request, Course $course): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isInstructorOrAdmin()) {
+            return response()->json(['message' => 'Only instructors can upload reference files.'], 403);
+        }
+
+        $validated = $request->validate([
+            'reference_file' => ['required', 'file', 'mimes:pdf,doc,docx,txt', 'max:10240'], // 10MB max
+        ]);
+
+        $file = $validated['reference_file'];
+        $extractedText = '';
+
+        try {
+            // Extract text based on file type
+            $extension = strtolower($file->getClientOriginalExtension());
+            
+            if ($extension === 'pdf') {
+                // Extract text from PDF using existing parser
+                $parser = new \Smalot\PdfParser\Parser();
+                $pdf = $parser->parseFile($file->getRealPath());
+                $extractedText = $pdf->getText();
+            } elseif ($extension === 'txt') {
+                // Read plain text file
+                $extractedText = file_get_contents($file->getRealPath());
+            } elseif (in_array($extension, ['doc', 'docx'])) {
+                // For DOC/DOCX files, we'll return a message for now
+                // Full DOCX extraction would require phpoffice/phpword package
+                $extractedText = "DOCX file uploaded: " . $file->getClientOriginalName() . ". Text extraction for DOCX files not yet implemented. Please convert to PDF or paste text manually.";
+            }
+
+            // Clean and limit text
+            $extractedText = trim($extractedText);
+            if (strlen($extractedText) > 8000) {
+                $extractedText = substr($extractedText, 0, 8000) . '... [truncated]';
+            }
+
+            return response()->json([
+                'success' => true,
+                'extracted_text' => $extractedText,
+                'filename' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize(),
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Reference file text extraction failed: " . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to extract text from file. Please try again or paste text manually.',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
 }
