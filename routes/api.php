@@ -432,6 +432,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // --- ADMIN USER MANAGEMENT ---
+    Route::get('/admin/reports', [\App\Http\Controllers\AdminReportController::class, 'index']);
     Route::get('/admin/users', [AdminController::class, 'listUsers']);
     Route::post('/admin/users', [AdminController::class, 'createUser']);
     Route::put('/admin/users/{user}', [AdminController::class, 'updateUser']);

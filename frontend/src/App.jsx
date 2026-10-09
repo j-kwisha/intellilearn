@@ -42,10 +42,11 @@ import InstructorCreateAssessmentPage from './pages/instructor/InstructorCreateA
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
+import AdminReportsPage from './pages/admin/AdminReportsPage';
 import AdminCreateCoursePage from './pages/admin/AdminCreateCoursePage';
 
 // Utility
-import { PlaceholderPage, UnauthorizedPage } from './pages/PlaceholderPage';
+import { UnauthorizedPage } from './pages/PlaceholderPage';
 
 function RoleRedirect() {
   const { user, loading } = useAuth();
@@ -206,7 +207,7 @@ export default function App() {
           } />
           <Route path="/admin/reports" element={
             <ProtectedRoute roles={['admin']}>
-              <AdminLayout><PlaceholderPage title="Reports" /></AdminLayout>
+              <AdminLayout><AdminReportsPage /></AdminLayout>
             </ProtectedRoute>
           } />
 
