@@ -11,3 +11,7 @@ export function toLocalInput(value) {
   const pad = number => String(number).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
+
+export function assessmentPublication(form) {
+  return Boolean(form.available_from || form.is_published);
+}

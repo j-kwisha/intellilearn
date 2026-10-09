@@ -251,6 +251,83 @@ class PresentationSeederTest extends TestCase
             ->assertJsonPath('assessment.available_from', null)->assertJsonPath('assessment.due_date', null);
     }
 
+    public function test_scheduled_creation_publishes_without_checkbox_and_preserves_opening_time(): void
+    {
+        $this->dataset();
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-06 00:30:00', 'UTC'));
+        $course = Course::where('code', 'IT 321')->firstOrFail();
+        $path = "/api/courses/{$course->id}/assessments";
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $today = $this->postJson($path, ['title' => 'Today security quiz', 'type' => 'quiz', 'max_attempts' => 1,
+            'available_from' => '2026-10-05T16:00:00.000Z', 'due_date' => '2026-10-06T15:59:59.000Z', 'is_published' => false,
+        ])->assertCreated()->assertJsonPath('assessment.is_published', true)->json('assessment.id');
+        $future = $this->postJson($path, ['title' => 'Tomorrow security quiz', 'type' => 'quiz', 'max_attempts' => 1,
+            'available_from' => '2026-10-06T16:00:00.000Z', 'is_published' => false,
+        ])->assertCreated()->assertJsonPath('assessment.is_published', true)->json('assessment.id');
+        $draft = $this->postJson($path, ['title' => 'Unscheduled draft', 'type' => 'quiz', 'max_attempts' => 1,
+            'is_published' => false,
+        ])->assertCreated()->assertJsonPath('assessment.is_published', false)->json('assessment.id');
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $ids = array_column($this->getJson($path)->assertOk()->json('assessments'), 'id');
+        $this->assertContains($today, $ids);
+        $this->assertContains($future, $ids);
+        $this->assertNotContains($draft, $ids);
+        $this->postJson($path . "/{$today}/start")->assertCreated();
+        $this->postJson($path . "/{$future}/start")->assertForbidden();
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-06 16:00:00', 'UTC'));
+        $this->postJson($path . "/{$future}/start")->assertCreated();
+    }
+
+    public function test_multi_step_scheduled_creation_stays_private_until_questions_and_rubrics_are_saved(): void
+    {
+        $this->dataset();
+        $course = Course::where('code', 'IT 321')->firstOrFail();
+        $path = "/api/courses/{$course->id}/assessments";
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $id = $this->postJson($path, ['title' => 'Scheduled essay', 'type' => 'quiz', 'max_attempts' => 1,
+            'available_from' => '2026-10-05T16:00:00Z', 'is_published' => true, 'defer_publication' => true,
+        ])->assertCreated()->assertJsonPath('assessment.is_published', false)->json('assessment.id');
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $this->getJson($path . "/{$id}")->assertForbidden();
+        $this->postJson($path . "/{$id}/start")->assertForbidden();
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $question = Assessment::findOrFail($id)->questions()->create(['type' => 'essay', 'question_text' => 'Explain responsible data handling.', 'points' => 10]);
+        $this->putJson($path . "/{$id}", ['is_published' => true])->assertUnprocessable();
+        $this->assertFalse(Assessment::findOrFail($id)->is_published);
+        app(RubricService::class)->save($question, ['title' => 'Security reasoning', 'source' => 'manual', 'total_points' => 10,
+            'criteria' => [['criterion' => 'Accuracy', 'description' => 'Explains the concepts correctly.', 'max_points' => 10,
+                'levels' => [['label' => 'Response', 'description' => 'Evaluates the accuracy of the explanation.', 'min_points' => 0, 'max_points' => 10]]]],
+        ], $this->user('adrian.mendoza')->id);
+        $this->putJson($path . "/{$id}", ['is_published' => true])->assertOk()->assertJsonPath('assessment.is_published', true);
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $this->getJson($path . "/{$id}")->assertOk();
+        $this->postJson($path . "/{$id}/start")->assertCreated();
+    }
+
+    public function test_scheduled_paper_assessment_stays_private_during_upload_then_publishes_on_completion(): void
+    {
+        // The production migration updates this constraint only on PostgreSQL.
+        \Illuminate\Support\Facades\Schema::table('assessments', function (\Illuminate\Database\Schema\Blueprint $table) {
+            $table->enum('type', ['quiz', 'long_exam', 'individual_activity', 'paper_based'])->change();
+        });
+        $this->dataset();
+        $course = Course::where('code', 'IT 321')->firstOrFail();
+        $path = "/api/courses/{$course->id}/assessments";
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $id = $this->postJson($path, ['title' => 'Scheduled security worksheet', 'type' => 'paper_based', 'max_attempts' => 1,
+            'available_from' => '2026-10-05T16:00:00Z', 'is_published' => false, 'defer_publication' => true,
+        ])->assertCreated()->assertJsonPath('assessment.is_published', false)->json('assessment.id');
+        $this->post($path . "/{$id}/upload-file", ['file' => \Illuminate\Http\UploadedFile::fake()->create('Security worksheet.pdf', 10, 'application/pdf')],
+            ['Accept' => 'application/json'])->assertOk()->assertJsonStructure(['file_url']);
+        $this->assertNotNull(Assessment::findOrFail($id)->file_path);
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $this->getJson($path . "/{$id}")->assertForbidden();
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $this->putJson($path . "/{$id}", ['is_published' => true])->assertOk();
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $this->getJson($path . "/{$id}")->assertOk()->assertJsonPath('assessment.is_published', true);
+    }
+
     public function test_office_material_downloads_keep_original_names_and_enforce_access(): void
     {
         $this->dataset();

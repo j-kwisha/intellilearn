@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import { toApiDate } from '../../services/assessmentDates';
+import { assessmentPublication, toApiDate } from '../../services/assessmentDates';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
 import { rubricError } from '../../services/rubric';
 
@@ -22,6 +22,8 @@ export default function InstructorCreateAssessmentPage() {
   const [addToCalendar, setAddToCalendar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [finishing, setFinishing] = useState(false);
+  const publishOnCompletion = assessmentPublication(form);
 
   // Questions
   const [questions, setQuestions] = useState([newQuestion()]);
@@ -78,6 +80,9 @@ export default function InstructorCreateAssessmentPage() {
       data.available_from = toApiDate(data.available_from);
       data.due_date = toApiDate(data.due_date, true);
       data.lesson_id = data.lesson_id || null;
+      // Keep setup private; Done publishes the completed assessment automatically.
+      data.is_published = false;
+      if (!assessmentId) data.defer_publication = true;
 
       let created;
       if (assessmentId) {
@@ -256,6 +261,24 @@ export default function InstructorCreateAssessmentPage() {
     }
   };
 
+  const handleFinish = async () => {
+    const setFinishError = step === 'upload_file' ? setPaperUploadError : setQError;
+    setFinishError('');
+    if (publishOnCompletion && (step === 'upload_file' ? !paperFileUrl : savedQuestions.length === 0)) {
+      setFinishError(step === 'upload_file' ? 'Upload the assessment file before publishing.' : 'Save at least one question before publishing.');
+      return;
+    }
+    setFinishing(true);
+    try {
+      await api.put(`/courses/${courseId}/assessments/${assessmentId}`, { is_published: publishOnCompletion });
+      navigate(`/instructor/courses/${courseId}`);
+    } catch (err) {
+      setFinishError(err.response?.data?.message || 'Failed to finish assessment. Please try again.');
+    } finally {
+      setFinishing(false);
+    }
+  };
+
   const S = {
     input: {
       width: '100%', padding: '11px 14px',
@@ -402,9 +425,11 @@ export default function InstructorCreateAssessmentPage() {
             </div>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.is_published} onChange={e => setForm({ ...form, is_published: e.target.checked })}
+              <input type="checkbox" checked={publishOnCompletion} disabled={Boolean(form.available_from)} onChange={e => setForm({ ...form, is_published: e.target.checked })}
                 style={{ width: 16, height: 16, accentColor: '#0d9488' }} />
-              <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>Publish immediately (visible to students)</span>
+              <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>
+                {form.available_from ? 'Scheduled assessment — publishes automatically when you finish' : 'Publish when finished (visible to students)'}
+              </span>
             </label>
 
             {/* Score Visibility */}
@@ -446,7 +471,7 @@ export default function InstructorCreateAssessmentPage() {
                   <label style={S.label}>Available From</label>
                   <input style={S.input} type="datetime-local" value={form.available_from}
                     onChange={e => setForm({ ...form, available_from: e.target.value })} />
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>When students can start, in your local time.</p>
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>When students can start, in your local time. Setting this publishes automatically when you finish.</p>
                 </div>
                 <div>
                   <label style={S.label}>Due Date</label>
@@ -674,8 +699,8 @@ export default function InstructorCreateAssessmentPage() {
 
           {/* Done */}
           <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={() => navigate(`/instructor/courses/${courseId}`)} style={S.btn}>
-              ✓ Done — Back to Course
+            <button onClick={handleFinish} disabled={finishing || qSaving} style={S.btn}>
+              {finishing ? 'Saving...' : '✓ Done — Back to Course'}
             </button>
             <button onClick={() => setStep('form')} style={S.btnGhost}>
               ← Edit Assessment Details
@@ -754,8 +779,8 @@ export default function InstructorCreateAssessmentPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={() => navigate(`/instructor/courses/${courseId}`)} style={S.btn}>
-              ✓ Done — Back to Course
+            <button onClick={handleFinish} disabled={finishing || paperUploading} style={S.btn}>
+              {finishing ? 'Saving...' : '✓ Done — Back to Course'}
             </button>
             <button onClick={() => setStep('form')} style={S.btnGhost}>
               ← Edit Assessment Details

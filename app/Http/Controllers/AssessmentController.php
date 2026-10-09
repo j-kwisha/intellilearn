@@ -96,10 +96,17 @@ class AssessmentController extends Controller
             'available_from'     => ['nullable', 'date'],
             'due_date'           => ['nullable', 'date'],
             'is_published'       => ['nullable', 'boolean'],
+            'defer_publication'  => ['sometimes', 'boolean'],
             'score_visibility'   => ['nullable', 'in:immediate,instructor_release,hidden'],
         ]);
 
         $this->validateSchedule($validated);
+
+        // A scheduled assessment is published without a separate checkbox.
+        // The multi-step creator defers publication until questions/files are saved.
+        $publish = !empty($validated['available_from']) || ($validated['is_published'] ?? false);
+        $validated['is_published'] = $publish && !($validated['defer_publication'] ?? false);
+        unset($validated['defer_publication']);
 
         // Total points will be calculated from questions, set to 0 initially
         $validated['total_points'] = 0;
