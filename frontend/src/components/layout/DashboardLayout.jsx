@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
+import useStudentNotifications from '../../hooks/useStudentNotifications';
+import { notificationId, notificationPath } from '../../services/studentNotifications';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import MenuIcon from '@mui/icons-material/Menu';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -62,56 +64,47 @@ const typeColor = {
 };
 
 /* ── Notification Panel ── */
-function NotificationPanel({ onClose }) {
-  const [feed, setFeed] = useState([]);
-  const [loading, setLoading] = useState(true);
+function NotificationPanel({ onClose, feed, loading, error, onRetry, triggerRef }) {
   const panelRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/student/feed')
-      .then(res => setFeed(res.data.feed || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
     const handler = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) onClose();
+      if (panelRef.current && !panelRef.current.contains(e.target) && !triggerRef.current?.contains(e.target)) onClose();
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  }, [onClose, triggerRef]);
 
   const handleClick = (item) => {
     onClose();
-    if (item.type === 'assessment' && item.course_id && item.item_id) {
-      navigate(`/student/courses/${item.course_id}/assessments/${item.item_id}`);
-    } else if (item.course_id) {
-      navigate(`/student/courses/${item.course_id}`);
-    }
+    navigate(notificationPath(item));
   };
 
   return (
     <div
       ref={panelRef}
-      className="absolute right-0 top-12 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden"
+      className="absolute right-0 top-12 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden"
     >
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <span className="font-semibold text-slate-800 text-sm">Notifications</span>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
       </div>
       <div className="overflow-y-auto" style={{ maxHeight: '420px' }}>
+        {error && <div role="alert" className="px-4 py-3 text-sm text-red-600">
+          <p>{error}</p>
+          <button onClick={onRetry} className="mt-2 font-semibold underline">Retry</button>
+        </div>}
         {loading ? (
           <div className="flex items-center justify-center py-10">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
           </div>
         ) : feed.length === 0 ? (
-          <p className="text-slate-500 text-sm text-center py-10">No recent activity.</p>
+          !error && <p className="text-slate-500 text-sm text-center py-10">No recent activity.</p>
         ) : (
-          feed.map((item, idx) => (
+          feed.map(item => (
             <button
-              key={idx}
+              key={notificationId(item)}
               onClick={() => handleClick(item)}
               className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
             >
@@ -205,7 +198,9 @@ export default function DashboardLayout({ children }) {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const notifButtonRef = useRef(null);
+  const notifications = useStudentNotifications(user, notifOpen);
+  const { unreadCount } = notifications;
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -213,29 +208,8 @@ export default function DashboardLayout({ children }) {
   const [allCourses, setAllCourses] = useState([]);
   const searchRef = useRef(null);
 
-  // Load feed and compute unread count vs last seen
-  useEffect(() => {
-    if (user?.role !== 'student') return;
-    api.get('/student/feed')
-      .then(res => {
-        const feed = res.data.feed || [];
-        const lastSeen = parseInt(localStorage.getItem('notif_last_seen_count') || '0', 10);
-        const newCount = Math.max(0, feed.length - lastSeen);
-        setUnreadCount(newCount);
-      })
-      .catch(() => {});
-  }, [user]);
-
   const handleOpenNotif = () => {
     setNotifOpen(v => !v);
-    // Mark all as seen — store current total so badge resets
-    api.get('/student/feed')
-      .then(res => {
-        const total = (res.data.feed || []).length;
-        localStorage.setItem('notif_last_seen_count', String(total));
-        setUnreadCount(0);
-      })
-      .catch(() => {});
   };
 
   const items = navItems[user?.role] || [];
@@ -520,7 +494,7 @@ export default function DashboardLayout({ children }) {
 
           {user?.role === 'student' && (
             <div className="relative">
-              <button className="topbar-icon-btn" title="Notifications" onClick={handleOpenNotif}>
+              <button ref={notifButtonRef} className="topbar-icon-btn" title="Notifications" aria-label="Notifications" aria-expanded={notifOpen} onClick={handleOpenNotif}>
                 <NotificationsIcon fontSize="small" />
                 {unreadCount > 0 && (
                   <span style={{
@@ -535,7 +509,7 @@ export default function DashboardLayout({ children }) {
                   </span>
                 )}
               </button>
-              {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
+              {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} {...notifications} onRetry={notifications.refresh} triggerRef={notifButtonRef} />}
             </div>
           )}
 

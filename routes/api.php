@@ -249,8 +249,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Announcements
         \App\Models\Announcement::whereIn('course_id', $courseIds)
-            ->orderBy('created_at', 'desc')->take(20)->get()
+            ->orderBy('created_at', 'desc')->take(30)->get()
             ->each(fn($a) => $feed->push([
+                'id'         => 'announcement:' . $a->id,
+                'item_id'    => $a->id,
                 'type'       => 'announcement',
                 'title'      => $a->title,
                 'body'       => $a->content,
@@ -262,8 +264,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // New assessments
         \App\Models\Assessment::whereIn('course_id', $courseIds)
             ->where('is_published', true)
-            ->orderBy('created_at', 'desc')->take(20)->get()
+            ->orderBy('created_at', 'desc')->take(30)->get()
             ->each(fn($a) => $feed->push([
+                'id'         => 'assessment:' . $a->id,
                 'type'       => 'assessment',
                 'title'      => $a->title,
                 'body'       => ucfirst(str_replace('_', ' ', $a->type)) . ' · ' . $a->total_points . ' pts',
@@ -276,8 +279,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // New lesson materials
         \App\Models\LessonMaterial::whereHas('lesson', fn($q) => $q->whereIn('course_id', $courseIds)->where('is_published', true))
             ->with('lesson:id,title,course_id')
-            ->orderBy('created_at', 'desc')->take(20)->get()
+            ->orderBy('created_at', 'desc')->take(30)->get()
             ->each(fn($m) => $feed->push([
+                'id'         => 'material:' . $m->id,
+                'item_id'    => $m->id,
                 'type'       => 'material',
                 'title'      => $m->title,
                 'body'       => strtoupper($m->type) . ' uploaded to ' . ($m->lesson->title ?? ''),

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import PushPinIcon from '@mui/icons-material/PushPin';
 
@@ -9,7 +9,14 @@ export default function StudentCoursePage() {
   const [lessons, setLessons] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
-  const [tab, setTab] = useState('lessons');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const tab = ['lessons', 'assessments', 'announcements'].includes(requestedTab) ? requestedTab : 'lessons';
+  const setTab = value => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    next.set('tab', value);
+    return next;
+  }, { replace: true });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
