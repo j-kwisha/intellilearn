@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import AssessmentSchedule from '../../components/AssessmentSchedule';
 import { useNavigationGuard } from '../../context/NavigationGuardContextStore';
 
 export default function StudentQuizPage() {
@@ -129,6 +130,7 @@ export default function StudentQuizPage() {
           <div>
             <h2 className="text-lg font-bold text-slate-800">{assessment.title}</h2>
             <p className="text-sm text-slate-500 mt-1">📄 Paper-based assessment — view the file below and answer on paper.</p>
+            <AssessmentSchedule assessment={assessment} />
           </div>
           {fileUrl && (
             <a href={fileUrl} target="_blank" rel="noopener noreferrer" download
@@ -319,6 +321,7 @@ export default function StudentQuizPage() {
           {assessment.description && (
             <p className="text-sm text-slate-600 mt-4">{assessment.description}</p>
           )}
+          <AssessmentSchedule assessment={assessment} className="mt-4 justify-center text-sm text-slate-600" />
           {(error || dateMessage) && (
             <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg mt-4 border border-red-100">
               {error || dateMessage}
@@ -356,6 +359,7 @@ export default function StudentQuizPage() {
         <p className="text-sm text-slate-500 mt-1">
           Answer all questions, then click Submit.
         </p>
+        <AssessmentSchedule assessment={assessment} />
       </div>
 
       {error && (

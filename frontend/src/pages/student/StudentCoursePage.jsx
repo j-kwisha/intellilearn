@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
+import AssessmentSchedule from '../../components/AssessmentSchedule';
 import PushPinIcon from '@mui/icons-material/PushPin';
 
 export default function StudentCoursePage() {
@@ -141,6 +142,7 @@ export default function StudentCoursePage() {
                         </span>
                       )}
                     </div>
+                    <AssessmentSchedule assessment={assessment} />
                   </div>
                   {assessment.my_best_score !== null && assessment.my_best_score !== undefined ? (
                     <span className={`text-sm font-bold ${

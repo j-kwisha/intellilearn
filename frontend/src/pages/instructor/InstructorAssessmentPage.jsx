@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import AssessmentSchedule from '../../components/AssessmentSchedule';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
 import { rubricError } from '../../services/rubric';
 import EssayGradingDetails from '../../components/EssayGradingDetails';
@@ -533,6 +534,7 @@ export default function InstructorAssessmentPage() {
                 {assessment.is_published ? 'Published' : 'Draft'}
               </span>
             </div>
+            <AssessmentSchedule assessment={assessment} />
           </div>
           <button onClick={togglePublish}
             className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors shrink-0 ${

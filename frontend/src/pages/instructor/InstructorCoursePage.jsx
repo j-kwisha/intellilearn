@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import AssessmentSchedule from '../../components/AssessmentSchedule';
 import { toApiDate, toLocalInput } from '../../services/assessmentDates';
 import { downloadMaterial } from '../../services/materialDownload';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
@@ -381,6 +382,7 @@ export default function InstructorCoursePage() {
                   <span style={{ fontSize:'13.5px', color:'var(--instr-ink-soft)' }}>{a.questions_count || 0} questions · {a.total_points} pts</span>
                   <span className={`instr-tag-pill ${a.is_published ? 'instr-tag-pill--published' : ''}`}>{a.is_published ? 'Published' : 'Draft'}</span>
                 </div>
+                <AssessmentSchedule assessment={a} />
               </div>
             </div>
           ))}
