@@ -1,10 +1,12 @@
 #!/bin/sh
 set -eu
 
-# Apply upload limits only at runtime. Preserve Nixpacks' extension scan paths.
-export PHP_INI_SCAN_DIR="${PHP_INI_SCAN_DIR:-}:$(pwd)/php/conf.d"
-
 php artisan optimize:clear
 php artisan storage:link --force
 php artisan migrate --force
-exec php artisan serve --host=0.0.0.0 --port="$PORT"
+
+# Pass limits to the actual HTTP process without changing PHP's extension paths.
+# Use the same router as artisan serve, from its expected public directory.
+cd public
+exec php -d upload_max_filesize=100M -d post_max_size=110M \
+    -S "0.0.0.0:$PORT" ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php
