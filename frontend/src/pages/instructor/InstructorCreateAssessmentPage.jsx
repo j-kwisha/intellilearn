@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { toApiDate } from '../../services/assessmentDates';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
 import { rubricError } from '../../services/rubric';
 
@@ -14,7 +15,7 @@ export default function InstructorCreateAssessmentPage() {
 
   // Assessment form — total_points removed (auto-calculated from questions)
   const [form, setForm] = useState({
-    title: '', type: 'quiz', topic: '',
+    title: '', description: '', lesson_id: '', type: 'quiz', topic: '',
     time_limit_minutes: '', max_attempts: 1, is_published: false,
     available_from: '', due_date: '', score_visibility: 'immediate',
   });
@@ -74,8 +75,9 @@ export default function InstructorCreateAssessmentPage() {
     try {
       const data = { ...form };
       if (!data.time_limit_minutes) delete data.time_limit_minutes;
-      if (!data.available_from) delete data.available_from;
-      if (!data.due_date) delete data.due_date;
+      data.available_from = toApiDate(data.available_from);
+      data.due_date = toApiDate(data.due_date, true);
+      data.lesson_id = data.lesson_id || null;
 
       let created;
       if (assessmentId) {
@@ -92,7 +94,7 @@ export default function InstructorCreateAssessmentPage() {
         await api.post(`/courses/${courseId}/calendar`, {
           title: `📝 ${created.title}`,
           event_type: form.type === 'long_exam' ? 'exam' : 'quiz',
-          start_date: form.due_date,
+          start_date: data.due_date,
           description: `${form.type.replace(/_/g, ' ')}`,
           color: form.type === 'long_exam' ? '#ef4444' : '#f59e0b',
         });
@@ -365,6 +367,15 @@ export default function InstructorCreateAssessmentPage() {
               </div>
             </div>
 
+            <label style={S.label}>Instructions / description
+              <textarea style={S.input} rows={3} value={form.description} onChange={e => setForm({...form, description:e.target.value})} />
+            </label>
+            <label style={S.label}>Linked lesson
+              <select style={S.input} value={form.lesson_id} onChange={e => setForm({...form, lesson_id:e.target.value})}>
+                <option value="">No linked lesson</option>
+                {lessons.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
+              </select>
+            </label>
             {/* Total Points removed — auto-calculated from question points */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
@@ -435,7 +446,7 @@ export default function InstructorCreateAssessmentPage() {
                   <label style={S.label}>Available From</label>
                   <input style={S.input} type="datetime-local" value={form.available_from}
                     onChange={e => setForm({ ...form, available_from: e.target.value })} />
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>When students can start taking this.</p>
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>When students can start, in your local time.</p>
                 </div>
                 <div>
                   <label style={S.label}>Due Date</label>

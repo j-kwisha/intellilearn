@@ -90,14 +90,16 @@ class AssessmentController extends Controller
             'description'        => ['nullable', 'string'],
             'type'               => ['required', 'in:quiz,long_exam,individual_activity,paper_based'],
             'topic'              => ['nullable', 'string', 'max:255'],
-            'lesson_id'          => ['nullable', 'exists:lessons,id'],
+            'lesson_id'          => ['nullable', \Illuminate\Validation\Rule::exists('lessons', 'id')->where('course_id', $course->id)],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
             'max_attempts'       => ['required', 'integer', 'min:1'],
             'available_from'     => ['nullable', 'date'],
-            'due_date'           => ['nullable', 'date', 'after:available_from'],
+            'due_date'           => ['nullable', 'date'],
             'is_published'       => ['nullable', 'boolean'],
             'score_visibility'   => ['nullable', 'in:immediate,instructor_release,hidden'],
         ]);
+
+        $this->validateSchedule($validated);
 
         // Total points will be calculated from questions, set to 0 initially
         $validated['total_points'] = 0;
@@ -187,7 +189,7 @@ class AssessmentController extends Controller
             'description'        => ['nullable', 'string'],
             'type'               => ['sometimes', 'in:quiz,long_exam,individual_activity,paper_based'],
             'topic'              => ['nullable', 'string', 'max:255'],
-            'lesson_id'          => ['nullable', 'exists:lessons,id'],
+            'lesson_id'          => ['nullable', \Illuminate\Validation\Rule::exists('lessons', 'id')->where('course_id', $course->id)],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
             'max_attempts'       => ['sometimes', 'integer', 'min:1'],
             'available_from'     => ['nullable', 'date'],
@@ -195,6 +197,8 @@ class AssessmentController extends Controller
             'is_published'       => ['sometimes', 'boolean'],
             'score_visibility'   => ['sometimes', 'in:immediate,instructor_release,hidden'],
         ]);
+
+        $this->validateSchedule($validated, $assessment);
 
         if ($validated['is_published'] ?? false) {
             foreach ($assessment->questions()->where('type', 'essay')->with('rubric.criteria.levels')->get() as $essay) {
@@ -828,4 +832,13 @@ class AssessmentController extends Controller
             ], 500);
         }
     }
+    private function validateSchedule(array $values, ?Assessment $assessment = null): void
+    {
+        $open = array_key_exists('available_from', $values) ? $values['available_from'] : $assessment?->available_from;
+        $due = array_key_exists('due_date', $values) ? $values['due_date'] : $assessment?->due_date;
+        if ($open && $due && \Carbon\Carbon::parse($due)->lte(\Carbon\Carbon::parse($open))) {
+            throw ValidationException::withMessages(['due_date' => 'The due date must be after the opening date.']);
+        }
+    }
+
 }

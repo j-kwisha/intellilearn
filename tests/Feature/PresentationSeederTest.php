@@ -224,6 +224,64 @@ class PresentationSeederTest extends TestCase
         $this->postJson($path . '/start')->assertCreated();
     }
 
+    public function test_assessment_details_and_local_day_scheduling_can_be_updated(): void
+    {
+        $this->dataset();
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-06 00:30:00', 'UTC'));
+        $course = Course::where('code', 'IT 321')->firstOrFail();
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $path = "/api/courses/{$course->id}/assessments";
+        // Midnight in Manila is 16:00 UTC on the preceding day.
+        $created = $this->postJson($path, ['title' => 'Local day assessment', 'type' => 'quiz', 'max_attempts' => 1,
+            'available_from' => '2026-10-05T16:00:00.000Z', 'due_date' => '2026-10-06T15:59:59.000Z', 'is_published' => true,
+        ])->assertCreated()->json('assessment.id');
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $this->postJson($path . "/{$created}/start")->assertCreated();
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $this->putJson($path . "/{$created}", ['title' => 'Updated title', 'description' => 'Updated instructions',
+            'type' => 'individual_activity', 'topic' => 'Updated topic', 'lesson_id' => $course->lessons()->first()->id,
+            'time_limit_minutes' => 40, 'max_attempts' => 3, 'score_visibility' => 'hidden', 'is_published' => false,
+        ])->assertOk()->assertJsonPath('assessment.description', 'Updated instructions')
+            ->assertJsonPath('assessment.time_limit_minutes', 40)->assertJsonPath('assessment.score_visibility', 'hidden');
+        $this->putJson($path . "/{$created}", ['due_date' => '2026-10-05T15:00:00Z'])->assertUnprocessable();
+        $otherLesson = Course::where('code', 'IT 323')->first()->lessons()->first();
+        $this->putJson($path . "/{$created}", ['lesson_id' => $otherLesson->id])->assertUnprocessable();
+        $this->putJson($path . "/{$created}", ['time_limit_minutes' => null, 'available_from' => null,
+            'due_date' => null, 'lesson_id' => null])->assertOk()->assertJsonPath('assessment.time_limit_minutes', null)
+            ->assertJsonPath('assessment.available_from', null)->assertJsonPath('assessment.due_date', null);
+    }
+
+    public function test_office_material_downloads_keep_original_names_and_enforce_access(): void
+    {
+        $this->dataset();
+        // The harness skips the PostgreSQL-only DOCX constraint migration.
+        // Reproduce its production type list using SQLite's table rebuild.
+        \Illuminate\Support\Facades\Schema::table('lesson_materials', function (\Illuminate\Database\Schema\Blueprint $table) {
+            $table->enum('type', ['pdf', 'video', 'ppt', 'docx', 'pptx', 'xlsx', 'link', 'other'])->default('pdf')->change();
+        });
+        $course = Course::where('code', 'IT 321')->firstOrFail();
+        $lesson = $course->lessons()->firstOrFail();
+        $path = "/api/courses/{$course->id}/lessons/{$lesson->id}/materials";
+        foreach (['docx' => 'Week 1 Reading.docx', 'ppt' => 'Chapter 1 Slides.pptx'] as $type => $name) {
+            Sanctum::actingAs($this->user('adrian.mendoza'));
+            $material = $this->postJson($path, ['title' => 'Assigned reading', 'type' => $type,
+                'file' => \Illuminate\Http\UploadedFile::fake()->create($name, 10),
+            ])->assertCreated()->assertJsonPath('material.original_filename', $name)->json('material');
+            Sanctum::actingAs($this->user('isabella.santos'));
+            $this->get($path . "/{$material['id']}/download")->assertOk()->assertDownload($name);
+            Sanctum::actingAs($this->user('lara.villanueva'));
+            $this->getJson($path . "/{$material['id']}/download")->assertForbidden();
+            Sanctum::actingAs($this->user('adrian.mendoza'));
+            $record = LessonMaterial::findOrFail($material['id']);
+            // Old uploads stored full storage URLs and did not retain their original name.
+            $record->update(['original_filename' => null, 'file_path' => Storage::disk('public')->url($record->file_path)]);
+            $extension = pathinfo($name, PATHINFO_EXTENSION);
+            $this->get($path . "/{$record->id}/download")->assertOk()->assertDownload('Assigned reading.' . $extension);
+            Storage::disk('public')->delete($material['file_path']);
+            $this->getJson($path . "/{$record->id}/download")->assertNotFound();
+        }
+    }
+
     public function test_material_context_and_filtered_calendar_respect_course_access(): void
     {
         $this->dataset();

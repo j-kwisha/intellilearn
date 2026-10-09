@@ -102,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- LESSON MATERIALS ---
     Route::post('/courses/{course}/lessons/{lesson}/materials', [LessonController::class, 'uploadMaterial']);
+    Route::get('/courses/{course}/lessons/{lesson}/materials/{material}/download', [LessonController::class, 'downloadMaterial']);
     Route::delete('/courses/{course}/lessons/{lesson}/materials/{material}', [LessonController::class, 'deleteMaterial']);
 
     // --- LESSON PROGRESS ---

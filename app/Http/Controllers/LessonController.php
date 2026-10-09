@@ -288,7 +288,7 @@ class LessonController extends Controller
                 // Store all files locally for now - simpler and more reliable
                 $folder = "materials/course_{$course->id}/lesson_{$lesson->id}";
                 $stored = $file->store($folder, 'public');
-                $filePath = Storage::disk('public')->url($stored);
+                $filePath = $stored;
                 
                 // Extract text from PDF for AI chatbot
                 if (in_array($validated['type'], ['pdf', 'docx'])) {
@@ -309,6 +309,7 @@ class LessonController extends Controller
             'title'          => $validated['title'],
             'type'           => $validated['type'],
             'file_path'      => $filePath,
+            'original_filename' => $request->hasFile('file') ? mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', basename(str_replace('\\', '/', $request->file('file')->getClientOriginalName()))), 0, 255) : null,
             'url'            => $validated['url'] ?? null,
             'order'          => $validated['order'] ?? ($lesson->materials()->max('order') + 1),
             'extracted_text' => $extractedText,
@@ -318,6 +319,22 @@ class LessonController extends Controller
             'message'  => 'Material uploaded successfully.',
             'material' => $material,
         ], 201);
+    }
+
+    public function downloadMaterial(Request $request, Course $course, Lesson $lesson, LessonMaterial $material)
+    {
+        abort_unless($lesson->course_id === $course->id && $material->lesson_id === $lesson->id, 404);
+        abort_unless($this->canAccessCourse($request->user(), $course), 403);
+        abort_if($request->user()->isStudent() && !$lesson->is_published, 403);
+        $path = $material->file_path;
+        if ($path && (str_starts_with($path, 'http') || str_starts_with($path, '/storage/'))) {
+            $path = parse_url($path, PHP_URL_PATH);
+            abort_unless(str_starts_with($path ?? '', '/storage/'), 404);
+            $path = substr($path, strlen('/storage/'));
+        }
+        abort_if(!$path || str_contains($path, '..') || str_starts_with($path, '/') || str_contains($path, '\\'), 404);
+        abort_unless(Storage::disk('public')->exists($path), 404);
+        return Storage::disk('public')->download($path, $material->download_name);
     }
 
     /**

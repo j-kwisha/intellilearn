@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
+import { downloadMaterial } from '../../services/materialDownload';
 import chatbotAvatar from '../../assets/mascot_chathead.jpg';
 
 // Simple markdown renderer — handles bold, italic, bullets, numbered lists
@@ -148,10 +149,12 @@ export default function StudentMaterialViewerPage() {
           <span className="text-sm font-medium text-slate-800">{material.title}</span>
           <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase">{material.type}</span>
         </div>
-        <a href={fileUrl} target="_blank" rel="noopener noreferrer" download={material.type !== 'link'}
-          className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors">
-          {material.type === 'link' ? 'Open in new tab' : 'Download'}
-        </a>
+        {material.type === 'link' ? (
+          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg">Open in new tab</a>
+        ) : (
+          <button type="button" onClick={() => downloadMaterial(courseId, lessonId, material).catch(() => alert('Could not download the material.'))}
+            className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700">Download</button>
+        )}
       </div>
 
       <div className="flex-1">

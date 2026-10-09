@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { toApiDate, toLocalInput } from '../../services/assessmentDates';
+import { downloadMaterial } from '../../services/materialDownload';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
 import { rubricError } from '../../services/rubric';
 import PushPinIcon from '@mui/icons-material/PushPin';
@@ -338,7 +340,8 @@ export default function InstructorCoursePage() {
                           </span>
                         </div>
                         <div className="instr-file-row-links">
-                          {(m.file_url || m.url) && <a href={m.file_url || m.url} rel="noopener noreferrer" className="instr-link-action">View</a>}
+                          {(m.file_url || m.url) && <a href={m.file_url || m.url} target="_blank" rel="noopener noreferrer" className="instr-link-action">View</a>}
+                          {m.file_path && <button type="button" className="instr-link-action" onClick={() => downloadMaterial(courseId, lesson.id, m).catch(() => alert('Could not download the material.'))}>Download</button>}
                           <button onClick={async () => { if (!confirm('Delete this material?')) return; await api.delete(`/courses/${courseId}/lessons/${lesson.id}/materials/${m.id}`); fetchData(); }} className="instr-link-action instr-link-action--danger">Delete</button>
                         </div>
                       </div>
@@ -357,8 +360,8 @@ export default function InstructorCoursePage() {
           <div style={{ display:'flex', justifyContent:'flex-end' }}>
             <button onClick={() => navigate(`/instructor/courses/${courseId}/assessments/create`)} className="instr-pill-btn">+ New Assessment</button>
           </div>
-          {showAssessmentForm && <AssessmentForm courseId={courseId} editAssessment={null} onClose={() => { setShowAssessmentForm(false); }} onSuccess={() => { setShowAssessmentForm(false); fetchData(); }} />}
-          {editingAssessment && <AssessmentForm courseId={courseId} editAssessment={editingAssessment} onClose={() => { setEditingAssessment(null); }} onSuccess={() => { setEditingAssessment(null); fetchData(); }} />}
+          {showAssessmentForm && <AssessmentForm lessons={lessons} courseId={courseId} editAssessment={null} onClose={() => { setShowAssessmentForm(false); }} onSuccess={() => { setShowAssessmentForm(false); fetchData(); }} />}
+          {editingAssessment && <AssessmentForm key={editingAssessment.id} lessons={lessons} courseId={courseId} editAssessment={editingAssessment} onClose={() => { setEditingAssessment(null); }} onSuccess={() => { setEditingAssessment(null); fetchData(); }} />}
           {assessments.length === 0 ? <div className="instr-tab-empty">No assessments yet.</div> : assessments.map((a) => (
             <div key={a.id} className="instr-item-card instr-item-card--amber">
               <div className="instr-item-icon instr-item-icon--amber">
@@ -533,16 +536,22 @@ function BtnRow({ children }) {
   return <div style={{ display:'flex', gap:'10px', paddingTop:'4px' }}>{children}</div>;
 }
 
-function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
+function AssessmentForm({ courseId, lessons, onClose, onSuccess, editAssessment }) {
   const isEdit = !!editAssessment;
   const [form, setForm] = useState(isEdit ? {
     title: editAssessment.title || '',
+    description: editAssessment.description || '',
+    lesson_id: editAssessment.lesson_id || '',
+    available_from: toLocalInput(editAssessment.available_from),
+    due_date: toLocalInput(editAssessment.due_date),
+    score_visibility: editAssessment.score_visibility || 'immediate',
     type: editAssessment.type || 'quiz',
     topic: editAssessment.topic || '',
     time_limit_minutes: editAssessment.time_limit_minutes || '',
     max_attempts: editAssessment.max_attempts || 1,
     is_published: editAssessment.is_published || false,
-  } : { title: '', type: 'quiz', topic: '', time_limit_minutes: '', max_attempts: 1, is_published: false });
+  } : { title: '', description: '', lesson_id: '', available_from: '', due_date: '', score_visibility: 'immediate', type: 'quiz', topic: '', time_limit_minutes: '', max_attempts: 1, is_published: false });
+  const [paperFile, setPaperFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   
@@ -567,7 +576,10 @@ function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
     setError('');
     try {
       const data = { ...form };
-      if (!data.time_limit_minutes) delete data.time_limit_minutes;
+      data.time_limit_minutes = data.time_limit_minutes || null;
+      data.lesson_id = data.lesson_id || null;
+      data.available_from = toApiDate(data.available_from);
+      data.due_date = toApiDate(data.due_date, true);
       // Remove total_points - will be calculated from questions
       delete data.total_points;
       
@@ -575,6 +587,11 @@ function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
         await api.put(`/courses/${courseId}/assessments/${editAssessment.id}`, data);
       } else {
         await api.post(`/courses/${courseId}/assessments`, data);
+      }
+      if (isEdit && paperFile && form.type === 'paper_based') {
+        const upload = new FormData();
+        upload.append('file', paperFile);
+        await api.post(`/courses/${courseId}/assessments/${editAssessment.id}/upload-file`, upload);
       }
       onSuccess();
     }
@@ -587,7 +604,7 @@ function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
         <input type="text" placeholder="Assessment title *" value={form.title} required onChange={e => setForm({...form, title:e.target.value})} className={FI} />
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
           <select value={form.type} onChange={e => setForm({...form, type:e.target.value})} className={FI} required>
-            <option value="quiz">Quiz</option><option value="long_exam">Long Exam</option><option value="individual_activity">Individual Activity</option>
+            <option value="quiz">Quiz</option><option value="long_exam">Long Exam</option><option value="individual_activity">Individual Activity</option>{isEdit && <option value="paper_based">Paper-Based</option>}
           </select>
           <input type="text" placeholder="Topic tag (optional)" value={form.topic} onChange={e => setForm({...form, topic:e.target.value})} className={FI} />
         </div>
@@ -595,6 +612,31 @@ function AssessmentForm({ courseId, onClose, onSuccess, editAssessment }) {
           <div><label className="instr-form-label">Time limit (minutes)</label><input type="number" value={form.time_limit_minutes} placeholder="No limit" min={1} onChange={e => setForm({...form, time_limit_minutes:e.target.value})} className={FI} /></div>
           <div><label className="instr-form-label">Max attempts *</label><input type="number" value={form.max_attempts} min={1} required onChange={e => setForm({...form, max_attempts:parseInt(e.target.value)||1})} className={FI} /></div>
         </div>
+        <label className="instr-form-label">Instructions / description
+          <textarea value={form.description} rows={3} onChange={e => setForm({...form, description:e.target.value})} className={FI} />
+        </label>
+        <label className="instr-form-label">Linked lesson
+          <select value={form.lesson_id} onChange={e => setForm({...form, lesson_id:e.target.value})} className={FI}>
+            <option value="">No linked lesson</option>
+            {lessons.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
+          </select>
+        </label>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12}}>
+          <label className="instr-form-label">Available from (your local time)
+            <input type="datetime-local" value={form.available_from} onChange={e => setForm({...form, available_from:e.target.value})} className={FI} />
+          </label>
+          <label className="instr-form-label">Due date (your local time)
+            <input type="datetime-local" value={form.due_date} onChange={e => setForm({...form, due_date:e.target.value})} className={FI} />
+          </label>
+        </div>
+        <label className="instr-form-label">Score visibility
+          <select value={form.score_visibility} onChange={e => setForm({...form, score_visibility:e.target.value})} className={FI}>
+            <option value="immediate">Show immediately</option><option value="instructor_release">Release manually</option><option value="hidden">Hidden</option>
+          </select>
+        </label>
+        {isEdit && form.type === 'paper_based' && <label className="instr-form-label">Replace assessment file (optional)
+          <input type="file" accept=".pdf,.doc,.docx" onChange={e => setPaperFile(e.target.files[0] || null)} className={FI} />
+        </label>}
         <label className="instr-form-check"><input type="checkbox" checked={form.is_published} onChange={e => setForm({...form, is_published:e.target.checked})} /> Publish immediately</label>
         <p style={{ fontSize:'12px', color:'var(--instr-muted)', background:'var(--instr-bg)', padding:'8px 12px', borderRadius:'6px', margin:0 }}>
           ℹ️ Total points will be calculated based on the questions you add.

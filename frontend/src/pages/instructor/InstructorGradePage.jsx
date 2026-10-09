@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { formatGrade, escapeHtml } from '../../services/gradePrint';
 import EssayGradingDetails from '../../components/EssayGradingDetails';
 
 export default function InstructorGradePage() {
@@ -58,20 +59,22 @@ export default function InstructorGradePage() {
             <button
               className="instr-pill-btn"
               onClick={async () => {
-                const courseName = courses.find(c => c.id === selectedCourse)?.name || 'Course';
+                const printWindow = window.open('', '_blank');
+                if (!printWindow) { alert('Please allow popups to print course grades.'); return; }
+                printWindow.document.body.textContent = 'Loading course grades...';
+                const courseName = escapeHtml(courses.find(c => c.id === selectedCourse)?.name || 'Course');
                 const course = courses.find(c => c.id === selectedCourse);
                 try {
-                  // Fetch data FIRST before opening any window
+                  // The window is opened during the click so popup blockers allow it.
                   const res = await api.get(`/courses/${selectedCourse}/grades`);
                   const rows = (res.data.grades || []).map(g =>
-                    `<tr><td>${g.user?.first_name} ${g.user?.last_name}</td><td>${g.quiz_average!=null?g.quiz_average.toFixed(2):'—'}</td><td>${g.exam_average!=null?g.exam_average.toFixed(2):'—'}</td><td>${g.activity_average!=null?g.activity_average.toFixed(2):'—'}</td><td class="${g.overall_grade>=75?'grade-high':g.overall_grade>=60?'grade-fair':'grade-low'}">${g.overall_grade!=null?g.overall_grade.toFixed(2):'—'}</td><td>${g.remarks||'—'}</td></tr>`
+                    `<tr><td>${escapeHtml(g.user?.first_name)} ${escapeHtml(g.user?.last_name)}</td><td>${formatGrade(g.quiz_average)}</td><td>${formatGrade(g.exam_average)}</td><td>${formatGrade(g.activity_average)}</td><td class="${g.overall_grade>=75?'grade-high':g.overall_grade>=60?'grade-fair':'grade-low'}">${formatGrade(g.overall_grade)}</td><td>${escapeHtml(g.remarks || '\u2014')}</td></tr>`
                   ).join('');
                   const html = `<!DOCTYPE html><html><head><title>${courseName} - Course Grades</title>
                     <style>body{font-family:system-ui,sans-serif;margin:40px;color:#333}h1{font-size:28px;margin-bottom:5px}.meta{color:#666;margin-bottom:20px;font-size:14px}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#f3f4f6;padding:12px;text-align:left;font-weight:600;border-bottom:2px solid #d1d5db}td{padding:12px;border-bottom:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.grade-high{color:#10b981;font-weight:600}.grade-low{color:#ef4444;font-weight:600}.grade-fair{color:#f59e0b;font-weight:600}</style>
-                    </head><body><h1>${courseName}</h1><div class="meta">${course?.code} · ${course?.section}</div><div class="meta">Printed on: ${new Date().toLocaleString('en-PH')}</div>
+                    </head><body><h1>${courseName}</h1><div class="meta">${escapeHtml(course?.code)} · ${escapeHtml(course?.section || '')}</div><div class="meta">Printed on: ${new Date().toLocaleString('en-PH')}</div>
                     <table><thead><tr><th>Student</th><th>Quiz Avg</th><th>Exam Avg</th><th>Activity Avg</th><th>Overall Grade</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
-                  // Open window and write synchronously after data is ready
-                  const printWindow = window.open('', '_blank');
+                  // Write the fetched grades into the already-open print window.
                   if (printWindow) {
                     printWindow.document.open();
                     printWindow.document.write(html);
@@ -80,6 +83,7 @@ export default function InstructorGradePage() {
                     setTimeout(() => printWindow.print(), 500);
                   }
                 } catch (err) {
+                  printWindow.close();
                   console.error('Print failed:', err);
                   alert('Failed to load grades for printing. Please try again.');
                 }
@@ -110,14 +114,15 @@ export default function InstructorGradePage() {
         {selectedAssessment && (
           <button className="instr-pill-btn" style={{ marginLeft:'auto' }}
             onClick={() => {
-              const courseName = courses.find(c=>c.id===selectedCourse)?.name||'Course';
-              const assessmentName = assessments.find(a=>a.id===selectedAssessment)?.title||'Assessment';
+              const courseName = escapeHtml(courses.find(c=>c.id===selectedCourse)?.name||'Course');
+              const assessmentName = escapeHtml(assessments.find(a=>a.id===selectedAssessment)?.title||'Assessment');
               const printWindow = window.open('','_blank');
+              if (!printWindow) { alert('Please allow popups to print grades.'); return; }
               const html = `<!DOCTYPE html><html><head><title>${courseName} - ${assessmentName}</title>
                 <style>body{font-family:system-ui,sans-serif;margin:40px;color:#333}h1{font-size:24px}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#f3f4f6;padding:12px;text-align:left;font-weight:600;border-bottom:2px solid #d1d5db}td{padding:12px;border-bottom:1px solid #e5e7eb}.score-high{color:#10b981;font-weight:600}.score-low{color:#ef4444;font-weight:600}</style>
                 </head><body><h1>${courseName}</h1><div style="color:#666;font-size:14px;margin-bottom:20px">Assessment: ${assessmentName} · Printed: ${new Date().toLocaleString('en-PH')}</div>
                 <table><thead><tr><th>Student</th><th>Attempt</th><th>Score</th><th>Status</th><th>Submitted</th></tr></thead>
-                <tbody>${submissions.map(sub=>`<tr><td>${sub.user?.first_name} ${sub.user?.last_name}</td><td>#${sub.attempt_number}</td><td class="${sub.percentage>=75?'score-high':'score-low'}">${sub.percentage!=null?sub.percentage+'%':'—'}</td><td>${sub.status}</td><td>${sub.submitted_at?new Date(sub.submitted_at).toLocaleDateString('en-PH'):'—'}</td></tr>`).join('')}
+                <tbody>${submissions.map(sub=>`<tr><td>${escapeHtml(sub.user?.first_name)} ${escapeHtml(sub.user?.last_name)}</td><td>#${sub.attempt_number}</td><td class="${sub.percentage>=75?'score-high':'score-low'}">${sub.percentage!=null?sub.percentage+'%':'—'}</td><td>${sub.status}</td><td>${sub.submitted_at?new Date(sub.submitted_at).toLocaleDateString('en-PH'):'—'}</td></tr>`).join('')}
                 </tbody></table></body></html>`;
               printWindow.document.write(html);
               printWindow.document.close();
