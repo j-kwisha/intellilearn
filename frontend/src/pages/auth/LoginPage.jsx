@@ -80,7 +80,6 @@ export default function LoginPage() {
       const data = err.response?.data;
       if (data?.requires_verification) {
         setUnverifiedEmail(data.email);
-        if (data.token) localStorage.setItem('token', data.token);
       } else {
         setLoginError(data?.message || 'Login failed.');
       }

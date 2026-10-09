@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../services/api';
+import { getAuthSession } from '../../services/authSession';
 
 export default function GoogleCallback() {
   const navigate = useNavigate();
@@ -11,6 +12,8 @@ export default function GoogleCallback() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    const session = getAuthSession();
+    const captured = session.snapshot();
     const handleCallback = async () => {
       try {
         const params = new URLSearchParams(location.search);
@@ -24,7 +27,7 @@ export default function GoogleCallback() {
           const { data } = await api.post('/auth/google/link', {
             code: params.get('code'), state: params.get('state'),
           }).catch((err) => { throw new Error(err.response?.data?.message || 'Failed to import Google profile.'); });
-          localStorage.setItem('user', JSON.stringify(data.user));
+          if (!session.updateUser(data.user, captured)) throw new Error('Your login changed. Please connect Google again.');
           const returnTo = pendingLink.returnTo;
           window.location.replace(returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/login');
           return;
@@ -50,18 +53,15 @@ export default function GoogleCallback() {
 
         // Store token and user data
         if (data.token) {
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-
-          // Small delay to ensure localStorage is written
-          await new Promise(resolve => setTimeout(resolve, 100));
+          if (!session.isCurrent(captured)) throw new Error('Your login changed. Please sign in again.');
+          session.set(data.token, data.user);
 
           // Force reload to ensure auth context picks up the new token
-          window.location.href = data.user.role === 'admin' 
+          window.location.replace(data.user.role === 'admin'
             ? '/admin' 
             : data.user.role === 'instructor' 
             ? '/instructor' 
-            : '/student';
+            : '/student');
         } else {
           throw new Error('No token received from server');
         }

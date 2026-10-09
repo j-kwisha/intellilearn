@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import { connectGoogleProfile } from '../../services/googleProfile';
+import { getAuthSession } from '../../services/authSession';
 
 export default function StudentProfilePage() {
   const { user, logout } = useAuth();
@@ -17,11 +18,13 @@ export default function StudentProfilePage() {
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault(); setSaving(true); setMessage(''); setError('');
+    const session = getAuthSession();
+    const captured = session.snapshot();
     try {
       const res = await api.put('/profile', form);
       setMessage('Profile updated successfully.');
       setEditing(false);
-      localStorage.setItem('user', JSON.stringify({ ...user, ...res.data.user }));
+      session.updateUser({ ...user, ...res.data.user }, captured);
     } catch (err) { setError(err.response?.data?.message || 'Failed to update profile.'); }
     finally { setSaving(false); }
   };

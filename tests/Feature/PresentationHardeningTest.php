@@ -44,6 +44,31 @@ class PresentationHardeningTest extends TestCase
         ])];
     }
 
+    public function test_instructor_and_student_bearer_sessions_remain_independent_and_logout_only_revokes_its_token(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor']);
+        $student = User::factory()->create(['role' => 'student']);
+        $course = $this->course($instructor);
+        $teacherToken = $this->postJson('/api/login', ['email' => $instructor->email, 'password' => 'password'])
+            ->assertOk()->assertJsonPath('user.id', $instructor->id)->json('token');
+        $studentToken = $this->postJson('/api/login', ['email' => $student->email, 'password' => 'password'])
+            ->assertOk()->assertJsonPath('user.id', $student->id)->json('token');
+        // Each HTTP request starts with freshly resolved guards in production.
+        $request = function ($method, $uri, $token) {
+            app('auth')->forgetGuards();
+            return $this->json($method, $uri, [], ['Authorization' => 'Bearer ' . $token]);
+        };
+        $request('GET', '/api/me', $teacherToken)->assertOk()->assertJsonPath('user.id', $instructor->id)->assertJsonPath('user.role', 'instructor');
+        $request('GET', '/api/me', $studentToken)->assertOk()->assertJsonPath('user.id', $student->id)->assertJsonPath('user.role', 'student');
+        $request('GET', "/api/courses/{$course->id}", $teacherToken)->assertOk();
+        $request('GET', "/api/courses/{$course->id}", $studentToken)->assertForbidden();
+        $request('GET', '/api/me', $teacherToken)->assertOk()->assertJsonPath('user.id', $instructor->id);
+        $request('POST', '/api/logout', $studentToken)->assertOk();
+        $request('GET', '/api/me', $studentToken)->assertUnauthorized();
+        $request('GET', '/api/me', $teacherToken)->assertOk()->assertJsonPath('user.id', $instructor->id);
+        $request('GET', '/api/me', 'invalid-token')->assertUnauthorized();
+    }
+
     private function google(User $user, bool $verified = true, string $id = 'google-account'): void
     {
         $google = (new GoogleUser)->map(['id' => $id, 'email' => $user->email,
