@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
+import ProfileAvatar from '../shared/ProfileAvatar';
 import logo from '../../assets/intellilearn-mark.png';
 
 const NAV = [
@@ -92,10 +93,7 @@ export default function InstructorLayout({ children, pageTitle }) {
     navigate(`/instructor/courses/${course.id}`);
   };
 
-  const initials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`;
-  const avatarContent = user?.avatar
-    ? <img src={user.avatar} alt={initials} referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
-    : <>{initials}</>;
+  const avatarContent = <ProfileAvatar user={user} />;
 
   // Active nav: exact match first, then prefix match for sub-routes
   const activePath = NAV.slice().reverse().find(n => location.pathname.startsWith(n.path))?.path || '/instructor';

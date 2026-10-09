@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
+import ProfileAvatar from '../shared/ProfileAvatar';
 import useStudentNotifications from '../../hooks/useStudentNotifications';
 import { notificationId, notificationPath } from '../../services/studentNotifications';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -415,10 +416,7 @@ export default function DashboardLayout({ children }) {
         {/* Profile card */}
         <div className="std-account-card">
           <div className="std-avatar">
-            {user?.avatar
-              ? <img src={user.avatar} alt="" referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
-              : <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>
-            }
+            <ProfileAvatar user={user} />
           </div>
           <div className="std-account-text">
             <span className="std-account-name">{user?.first_name} {user?.last_name}</span>
@@ -515,10 +513,7 @@ export default function DashboardLayout({ children }) {
 
           <div className="topbar-user">
             <div className="std-avatar" style={{width:40,height:40,fontSize:'13px'}}>
-              {user?.avatar
-                ? <img src={user.avatar} alt="" referrerPolicy="no-referrer" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
-                : <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>
-              }
+              <ProfileAvatar user={user} />
             </div>
             <div>
               <div className="topbar-user-name">{user?.first_name} {user?.last_name}</div>

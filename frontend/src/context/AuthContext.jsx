@@ -111,8 +111,17 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateUser = (profile, captured) => {
+    const session = getAuthSession();
+    if (!captured || !session.isCurrent(captured)) return false;
+    const updated = { ...session.read().user, ...profile };
+    if (!session.updateUser(updated, captured)) return false;
+    setUser(updated);
+    return true;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

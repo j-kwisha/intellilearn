@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
+import ProfileAvatar from '../../components/shared/ProfileAvatar';
 import logo from '../../assets/intellilearn-mark.png';
 
 const courseIconColors = [
@@ -80,7 +81,6 @@ function InstructorSidebar({ user, onLogout, location }) {
       </svg>
     )},
   ];
-  const initials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`;
   return (
     <aside className="instr-sidebar">
       <svg className="instr-sidebar-waves" viewBox="0 0 264 900" preserveAspectRatio="none" aria-hidden="true">
@@ -92,7 +92,7 @@ function InstructorSidebar({ user, onLogout, location }) {
         <span className="instr-brand-name">Intellilearn</span>
       </div>
       <div className="instr-account-card">
-        <div className="instr-avatar instr-avatar--sidebar">{initials}</div>
+        <div className="instr-avatar instr-avatar--sidebar"><ProfileAvatar user={user} /></div>
         <div className="instr-account-text">
           <span className="instr-account-name">{user?.first_name} {user?.last_name}</span>
           <span className="instr-account-role">Instructor</span>
@@ -159,7 +159,6 @@ export default function InstructorCoursesListPage() {
     );
   }
 
-  const initials = `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`;
 
   return (
     <div className="instr-app">
@@ -178,7 +177,7 @@ export default function InstructorCoursesListPage() {
               <input type="text" placeholder="Search courses..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
             <div className="instr-topbar-user">
-              <div className="instr-avatar instr-avatar--topbar">{initials}</div>
+              <div className="instr-avatar instr-avatar--topbar"><ProfileAvatar user={user} /></div>
               <div className="instr-account-text">
                 <span className="instr-account-name instr-account-name--dark">{user?.first_name} {user?.last_name}</span>
                 <span className="instr-account-email">{user?.email}</span>
