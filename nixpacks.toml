@@ -1,3 +1,7 @@
+[variables]
+# Keep PHP's default extension configuration and load our upload limits last.
+PHP_INI_SCAN_DIR = ":/app/php/conf.d"
+
 [phases.setup]
 nixPkgs = ["php84", "php84Extensions.pdo", "php84Extensions.pdo_pgsql", "php84Extensions.mbstring", "php84Extensions.xml", "php84Extensions.curl", "php84Extensions.zip", "php84Extensions.gd"]
 
