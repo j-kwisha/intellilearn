@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
-import logo from '../../assets/logo copy.png';
+import logo from '../../assets/intellilearn-mark.png';
 
 const courseIconColors = [
   { bg: '#dbeafe', color: '#1d4ed8' },

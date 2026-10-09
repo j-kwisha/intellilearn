@@ -21,7 +21,7 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import ScienceIcon from '@mui/icons-material/Science';
-import logo from '../../assets/logo copy.png';
+import logo from '../../assets/intellilearn-mark.png';
 import { useNavigationGuard } from '../../context/NavigationGuardContextStore';
 
 const navItems = {

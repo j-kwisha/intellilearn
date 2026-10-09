@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import heroImg from '../../assets/Student_LandingPage.png';
-import logo from '../../assets/logo copy.png';
+import logo from '../../assets/intellilearn-mark.png';
 
 import imgLearningPath from '../../assets/Personalized_Learning_Path.png';
 import imgFeedback     from '../../assets/Instant_Feedback_System.png';
@@ -211,7 +211,7 @@ export default function LoginPage() {
         display:'flex',alignItems:'center',padding:'0 40px',boxSizing:'border-box'
       }}>
         <div style={{ marginRight:'auto',display:'flex',alignItems:'center',gap:10,cursor:'pointer' }} onClick={()=>scrollTo(0)}>
-          <img src={logo} alt="IntelliLearn" style={{ height:57,objectFit:'contain' }} />
+          <span className="landing-logo-tile"><img src={logo} alt="" /></span>
           <span style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", fontWeight:800, fontSize:18, color:'#1e1b4b', letterSpacing:'.04em' }}>INTELLILEARN</span>
         </div>
         <button className="nav-link active" onClick={()=>scrollTo(0)}>HOME</button>
@@ -601,7 +601,7 @@ export default function LoginPage() {
 
             {/* brand — logo + text once */}
             <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:28,position:'relative',zIndex:2 }}>
-              <img src={logo} alt="IntelliLearn" style={{ height:48,objectFit:'contain' }} />
+              <span className="landing-logo-tile landing-logo-tile--hero"><img src={logo} alt="" /></span>
               <span style={{ fontWeight:800,fontSize:18,color:'var(--navy)',letterSpacing:'.02em' }}>INTELLILEARN</span>
             </div>
 

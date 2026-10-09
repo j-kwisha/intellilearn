@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
-import logo from '../../assets/logo copy.png';
+import logo from '../../assets/intellilearn-mark.png';
 
 /* ── Course search dropdown (reused from DashboardLayout) ── */
 function CourseSearchDropdown({ query, courses, onSelect, onClose }) {
