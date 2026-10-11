@@ -16,6 +16,7 @@ function levels(max) {
 
 export default function RubricEditor({ value, onChange, question, courseId, assessmentId, disabled = false }) {
   const [busy, setBusy] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState(null);
   const [error, setError] = useState('');
   const [objective, setObjective] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -28,6 +29,8 @@ export default function RubricEditor({ value, onChange, question, courseId, asse
     change({ ...value, criteria });
   };
   const template = () => {
+    setSelectedMethod('template');
+    setError('');
     const specs = [
       ['Content Accuracy', 25, 'Accurately explains the concepts relevant to the question in the reference.'],
       ['Use of Source Evidence', 25, 'Uses specific, relevant evidence from the attached source and connects it to claims.'],
@@ -45,6 +48,7 @@ export default function RubricEditor({ value, onChange, question, courseId, asse
     change({ title: 'Essay Grading Rubric', source: 'manual', criteria });
   };
   const generate = async () => {
+    setSelectedMethod('ai_generated');
     setBusy(true); setError('');
     try {
       const { data } = await api.post(`/courses/${courseId}/assessments/${assessmentId}/rubric/generate`, {
@@ -59,14 +63,22 @@ export default function RubricEditor({ value, onChange, question, courseId, asse
   };
   const validation = rubricError(value, question.points);
   const total = value?.criteria?.reduce((sum, c) => sum + Number(c.max_points || 0), 0) || 0;
+  const activeMethod = selectedMethod || (value ? value.source === 'ai_generated' ? 'ai_generated' : 'manual' : null);
+  const methodButton = (method) => activeMethod === method
+    ? { ...button, background: '#166534', borderColor: '#166534', color: '#fff' }
+    : button;
 
   return (
     <fieldset disabled={disabled || busy} style={{ border: '1px solid #cbd5e1', borderRadius: 12, padding: 14, color: '#334155', background: '#f8fafc', minWidth: 0 }}>
       <legend style={{ fontWeight: 700, padding: '0 6px' }}>Grading Rubric</legend>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        <button type="button" style={button} onClick={() => change({ title: 'Essay Grading Rubric', source: 'manual', criteria: [{ criterion: '', description: '', max_points: Number(question.points), levels: levels(Number(question.points)) }] })}>Create Rubric Manually</button>
-        <button type="button" style={{ ...button, background: '#166534', color: '#fff' }} onClick={generate}>{busy ? 'Generating...' : value?.source === 'ai_generated' ? 'Regenerate Rubric with AI' : 'Generate Rubric with AI'}</button>
-        <button type="button" style={button} onClick={template}>Use Default Template</button>
+        <button type="button" style={methodButton('manual')} aria-pressed={activeMethod === 'manual'} onClick={() => {
+          setSelectedMethod('manual');
+          setError('');
+          change({ title: 'Essay Grading Rubric', source: 'manual', criteria: [{ criterion: '', description: '', max_points: Number(question.points), levels: levels(Number(question.points)) }] });
+        }}>Create Rubric Manually</button>
+        <button type="button" style={methodButton('ai_generated')} aria-pressed={activeMethod === 'ai_generated'} onClick={generate}>{busy ? 'Generating...' : value?.source === 'ai_generated' ? 'Regenerate Rubric with AI' : 'Generate Rubric with AI'}</button>
+        <button type="button" style={methodButton('template')} aria-pressed={activeMethod === 'template'} onClick={template}>Use Default Template</button>
       </div>
       <details style={{ marginBottom: 10, fontSize: 13 }}>
         <summary>Optional instructions and learning objective for AI generation</summary>
@@ -107,7 +119,7 @@ export default function RubricEditor({ value, onChange, question, courseId, asse
           </div>
         ))}
         <button type="button" style={button} onClick={() => change({ ...value, criteria: [...value.criteria, { criterion: '', description: '', max_points: 1, levels: levels(1) }] })}>Add criterion</button>
-        <button type="button" style={{ ...button, marginLeft: 8 }} onClick={() => onChange(null)}>Remove rubric from draft</button>
+        <button type="button" style={{ ...button, marginLeft: 8 }} onClick={() => { setSelectedMethod(null); setError(''); onChange(null); }}>Remove rubric from draft</button>
         {validation && <p role="alert" style={{ color: '#b91c1c', fontSize: 13 }}>{validation}</p>}
       </>}
     </fieldset>
