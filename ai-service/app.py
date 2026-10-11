@@ -8,6 +8,7 @@ import os
 from dotenv import load_dotenv
 import warnings
 from essay_grading import (validate_rubric, validate_evaluation, request_json, generate_rubric_draft, GRADING_PROMPT)
+from chat_intents import matches_keyword
 
 # Suppress sklearn feature name warnings
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
@@ -214,7 +215,7 @@ def chatbot(data: ChatRequest):
 
     if not data.lesson_context:
         for intent in INTENTS:
-            if any(kw in message_lower for kw in intent["keywords"]):
+            if any(matches_keyword(message_lower, kw) for kw in intent["keywords"]):
                 return {"response": intent["response"], "in_scope": True}
 
     try:

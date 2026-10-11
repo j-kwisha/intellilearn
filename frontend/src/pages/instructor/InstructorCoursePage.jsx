@@ -4,6 +4,7 @@ import api from '../../services/api';
 import AssessmentSchedule from '../../components/AssessmentSchedule';
 import { toApiDate, toLocalInput } from '../../services/assessmentDates';
 import { downloadMaterial } from '../../services/materialDownload';
+import { materialPreviewUrl } from '../../services/materialPreview';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
 import { rubricError } from '../../services/rubric';
 import PushPinIcon from '@mui/icons-material/PushPin';
@@ -341,7 +342,7 @@ export default function InstructorCoursePage() {
                           </span>
                         </div>
                         <div className="instr-file-row-links">
-                          {(m.file_url || m.url) && <a href={m.file_url || m.url} target="_blank" rel="noopener noreferrer" className="instr-link-action">View</a>}
+                          {(m.file_url || m.url) && <a href={materialPreviewUrl(m)} target="_blank" rel="noopener noreferrer" className="instr-link-action">View</a>}
                           {m.file_path && <button type="button" className="instr-link-action" onClick={() => downloadMaterial(courseId, lesson.id, m).catch(() => alert('Could not download the material.'))}>Download</button>}
                           <button onClick={async () => { if (!confirm('Delete this material?')) return; await api.delete(`/courses/${courseId}/lessons/${lesson.id}/materials/${m.id}`); fetchData(); }} className="instr-link-action instr-link-action--danger">Delete</button>
                         </div>

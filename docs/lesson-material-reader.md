@@ -1,0 +1,8 @@
+# Lesson material previews and AI reading
+
+- Student **View** opens DOCX files inside IntelliLearn using an authenticated file request and `docx-preview`. The separate **Download** action keeps the original filename. Legacy DOC files and PowerPoint previews use Google's viewer and require a publicly accessible file URL.
+- Text-based PDF, DOCX and PPTX uploads persist readable text in `lesson_materials.extracted_text`. Extraction follows the uploaded extension, not the presentation label (`ppt` may contain PPTX).
+- Previously uploaded local files without cached text are extracted and saved when an authorized user opens the material assistant. PPTX text follows the presentation's slide order. Full lesson lists do not expose extracted text.
+- Extraction is limited to 24,000 characters; the assistant currently uses the first 6,000 characters as context. Text in images is not OCR'd. Convert legacy DOC/PPT documents to DOCX/PPTX for AI reading.
+- When text is unavailable, the material assistant explains the problem and disables sending rather than answering without the document. Greetings match whole words: “summarize this” no longer matches “hi”.
+- No migration, environment variable or manual document backfill is required. Laravel needs its existing ZIP/XML extensions and persistent public storage. Deploy the Python service as well as Laravel/frontend for the greeting fix.

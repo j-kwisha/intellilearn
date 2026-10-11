@@ -290,8 +290,8 @@ class LessonController extends Controller
                 $stored = $file->store($folder, 'public');
                 $filePath = $stored;
                 
-                // Extract text from PDF for AI chatbot
-                if (in_array($validated['type'], ['pdf', 'docx'])) {
+                // Extraction follows the actual Office/PDF extension, including PPTX uploads.
+                if (in_array(strtolower($file->getClientOriginalExtension()), ['pdf', 'docx', 'pptx'], true)) {
                     try {
                         $extractedText = app(\App\Services\DocumentTextService::class)->extract($file);
                     } catch (\Exception $e) {

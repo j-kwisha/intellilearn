@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import { downloadMaterial } from '../../services/materialDownload';
+import { materialFormat, materialPreviewUrl } from '../../services/materialPreview';
+import DocxViewer from '../../components/DocxViewer';
 import chatbotAvatar from '../../assets/mascot_chathead.jpg';
 
 // Simple markdown renderer — handles bold, italic, bullets, numbered lists
@@ -64,7 +66,11 @@ export default function StudentMaterialViewerPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [lessonContext, setLessonContext] = useState(null);
+  const [contextStatus, setContextStatus] = useState('loading');
+  const [loadedContextId, setLoadedContextId] = useState(null);
   const bottomRef = useRef(null);
+  const contextMaterialId = materialId || material?.id;
+  const contextReady = loadedContextId === String(contextMaterialId);
 
   // Fetch material from API if state was lost (page reload)
   useEffect(() => {
@@ -82,20 +88,32 @@ export default function StudentMaterialViewerPage() {
 
   // Fetch extracted text for AI — use materialId directly so it works even before material loads
   useEffect(() => {
-    const id = materialId || material?.id;
+    const id = contextMaterialId;
     if (!id) return;
     let active = true;
     api.get(`/ai/materials/${id}/context`)
       .then(res => {
         if (!active) return;
+        setLoadedContextId(String(id));
         setLessonContext(res.data.has_text ? res.data.extracted_text : null);
+        setContextStatus(res.data.has_text ? 'ready' : res.data.context_status || 'unavailable');
         if (res.data.has_text) {
           setMessages([{ from: 'bot', text: 'Hi! I have read this lesson material. Ask me anything about it!' }]);
+        } else {
+          setMessages([{ from: 'bot', text: res.data.context_status === 'unsupported'
+            ? 'I cannot read this file format. Ask your instructor to upload a text-based PDF, DOCX or PPTX. Legacy DOC/PPT files need conversion to DOCX/PPTX.'
+            : 'I could not read this material. It may be unavailable or contain only images. Ask your instructor for a text-based PDF, DOCX or PPTX.' }]);
         }
       })
-      .catch(() => { if (active) setLessonContext(null); });
+      .catch(() => {
+        if (!active) return;
+        setLoadedContextId(String(id));
+        setLessonContext(null);
+        setContextStatus('unavailable');
+        setMessages([{ from: 'bot', text: 'I could not load the material content. Please reopen the material or contact your instructor.' }]);
+      });
     return () => { active = false; };
-  }, [materialId, material?.id]);
+  }, [contextMaterialId]);
 
   useEffect(() => {
     if (chatOpen) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -103,7 +121,7 @@ export default function StudentMaterialViewerPage() {
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || loading || !contextReady || contextStatus !== 'ready' || !lessonContext) return;
     setMessages(prev => [...prev, { from: 'user', text }]);
     setInput('');
     setLoading(true);
@@ -136,6 +154,8 @@ export default function StudentMaterialViewerPage() {
   }
 
   const fileUrl = material.file_url || material.url;
+  const previewUrl = materialPreviewUrl(material);
+  const format = materialFormat(material);
 
   return (
     <div className="flex flex-col h-full" style={{ minHeight: 'calc(100vh - 64px)' }}>
@@ -158,23 +178,11 @@ export default function StudentMaterialViewerPage() {
       </div>
 
       <div className="flex-1">
-        {material.type === 'pdf' && fileUrl ? (
+        {format === 'docx' ? (
+          <DocxViewer key={`${courseId}/${lessonId}/${materialId}`} courseId={courseId} lessonId={lessonId} materialId={materialId} />
+        ) : ['pdf', 'doc', 'ppt', 'pptx'].includes(format) && previewUrl ? (
           <iframe
-            src={fileUrl}
-            title={material.title}
-            className="w-full h-full"
-            style={{ minHeight: 'calc(100vh - 112px)', border: 'none' }}
-          />
-        ) : material.type === 'docx' && fileUrl ? (
-          <iframe
-            src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`}
-            title={material.title}
-            className="w-full h-full"
-            style={{ minHeight: 'calc(100vh - 112px)', border: 'none' }}
-          />
-        ) : material.type === 'ppt' && fileUrl ? (
-          <iframe
-            src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`}
+            src={previewUrl}
             title={material.title}
             className="w-full h-full"
             style={{ minHeight: 'calc(100vh - 112px)', border: 'none' }}
@@ -233,7 +241,7 @@ export default function StudentMaterialViewerPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
                   <p style={{ color: '#c7d2fe', fontSize: 11, margin: 0 }}>
-                    {lessonContext ? 'Reading this material' : 'Ask about your courses'}
+                  {!contextReady || contextStatus === 'loading' ? 'Reading material...' : lessonContext ? 'Reading this material' : 'Material content unavailable'}
                   </p>
                 </div>
               </div>
@@ -274,8 +282,8 @@ export default function StudentMaterialViewerPage() {
               <input className="mc-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
                 placeholder="Ask about this material..."
                 style={{ flex: 1, padding: '9px 13px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 13, outline: 'none', fontFamily: "'DM Sans', sans-serif", background: 'white', transition: 'border-color 0.2s, box-shadow 0.2s' }} />
-              <button onClick={sendMessage} disabled={loading || !input.trim()}
-                style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 700, opacity: loading || !input.trim() ? 0.45 : 1, transition: 'opacity 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              <button onClick={sendMessage} disabled={loading || !input.trim() || !contextReady || contextStatus !== 'ready'}
+                style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 700, opacity: loading || !input.trim() || !contextReady || contextStatus !== 'ready' ? 0.45 : 1, transition: 'opacity 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                 Send
               </button>
             </div>
