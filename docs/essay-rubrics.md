@@ -89,6 +89,10 @@ student scores or saves/activates a rubric automatically. Provider rate limits/t
 return a retryable 503 response, while an invalid final draft returns 502. Failure
 diagnostics omit full reference content, AI response bodies and provider secrets.
 
+The AI service's `railpack.json` explicitly starts `uvicorn app:app` to match
+`ai-service/app.py`. This also supports Railway services using Railpack instead of
+the older Nixpacks configuration. See the [Railpack configuration reference](https://railpack.com/config/file/).
+
 The grading request includes the essay question, assessment instructions, student response,
 explicit reference content, and a saved rubric snapshot with criterion IDs, descriptions,
 point maxima and performance levels. The prompt treats answers/source content as data,
