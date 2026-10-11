@@ -123,11 +123,11 @@ def validate_evaluation(data, rubric):
             'criteria': result, 'overall_feedback': text(data.get('overall_feedback')), **notes}
 
 
-def request_json(client, model, prompt, content, *, timeout=50):
+def request_json(client, model, prompt, content, *, timeout=50, max_tokens=6000):
     response = client.chat.completions.create(
         model=model, messages=[{'role': 'system', 'content': prompt},
                                {'role': 'user', 'content': json.dumps(content, ensure_ascii=False)}],
-        response_format={'type': 'json_object'}, max_tokens=6000, temperature=0.1,
+        response_format={'type': 'json_object'}, max_tokens=max_tokens, temperature=0.1,
         reasoning_effort='none', timeout=timeout,
     )
     if response.choices[0].finish_reason != 'stop':
@@ -145,7 +145,8 @@ def generate_rubric_draft(client, model, content):
         draft = None
         try:
             # Two bounded attempts must fit inside Laravel's 60-second request timeout.
-            draft = request_json(client, model, GENERATION_PROMPT, request, timeout=20)
+            # The deployed provider enforces a separate 1,000 output-token/minute cap.
+            draft = request_json(client, model, GENERATION_PROMPT, request, timeout=20, max_tokens=900)
             return validate_rubric(draft, str(maximum))
         except ValueError as exc:
             logging.getLogger(__name__).warning(
@@ -174,7 +175,9 @@ Do not require exact wording; allow accurate paraphrases. Return ONLY a JSON obj
 {"title":"...","total_points":100,"source":"ai_generated","criteria":[
 {"criterion":"...","description":"...","max_points":25,"levels":[
 {"label":"Excellent","min_points":22,"max_points":25,"description":"..."}]}]}.
-Replace example numbers with the actual question maximum. Prefer 3-6 criteria and 4 levels per
+Keep the complete JSON under 850 output tokens. Keep every description to at most 8 words
+and use concise criterion names while preserving source-specific expectations.
+Replace example numbers with the actual question maximum. Prefer 3 criteria and 4 levels per
 criterion, from Beginning to Excellent; ranges must be ordered, non-overlapping and within
 the criterion maximum. Cover zero through maximum points. Use fewer criteria if the question's
 point budget cannot give every criterion at least 0.01 points. previous_draft, if present, is

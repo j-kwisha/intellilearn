@@ -93,6 +93,7 @@ class EssayValidationTests(unittest.TestCase):
         self.assertEqual(correction['previous_draft'], invalid)
         self.assertIn('Criterion totals', correction['validation_feedback'])
         self.assertEqual(request.call_args.kwargs['timeout'], 20)
+        self.assertEqual(request.call_args.kwargs['max_tokens'], 900)
         self.assertNotIn('previous_draft', data)
 
     @patch('essay_grading.request_json')
@@ -143,6 +144,15 @@ class EssayValidationTests(unittest.TestCase):
         rubric = self.rubric()
         rubric['criteria'][0]['levels'] = [None]
         with self.assertRaises(ValueError): validate_rubric(rubric, 10)
+
+    def test_rubric_output_budget_is_sent_to_provider_without_changing_grading_default(self):
+        client = Mock()
+        client.chat.completions.create.return_value = SimpleNamespace(choices=[
+            SimpleNamespace(finish_reason='stop', message=SimpleNamespace(content='{}'))])
+        request_json(client, 'test-model', 'Generate', {}, timeout=20, max_tokens=900)
+        self.assertEqual(client.chat.completions.create.call_args.kwargs['max_tokens'], 900)
+        request_json(client, 'test-model', 'Grade', {})
+        self.assertEqual(client.chat.completions.create.call_args.kwargs['max_tokens'], 6000)
 
 
 if __name__ == '__main__':

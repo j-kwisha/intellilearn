@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { rubricError } from '../services/rubric';
 
@@ -17,9 +17,16 @@ function levels(max) {
 export default function RubricEditor({ value, onChange, question, courseId, assessmentId, disabled = false }) {
   const [busy, setBusy] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState(null);
+  const [retrySeconds, setRetrySeconds] = useState(0);
   const [error, setError] = useState('');
   const [objective, setObjective] = useState('');
   const [instructions, setInstructions] = useState('');
+  const coolingDown = retrySeconds > 0;
+  useEffect(() => {
+    if (!coolingDown) return;
+    const timer = window.setInterval(() => setRetrySeconds(seconds => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [coolingDown]);
   const change = (next) => onChange({ ...next, total_points: Number(question.points) });
   const update = (index, patch) => change({ ...value, criteria: value.criteria.map((c, i) => i === index ? { ...c, ...patch } : c) });
   const updateLevel = (ci, li, patch) => update(ci, { levels: value.criteria[ci].levels.map((l, i) => i === li ? { ...l, ...patch } : l) });
@@ -48,6 +55,7 @@ export default function RubricEditor({ value, onChange, question, courseId, asse
     change({ title: 'Essay Grading Rubric', source: 'manual', criteria });
   };
   const generate = async () => {
+    if (busy || coolingDown) return;
     setSelectedMethod('ai_generated');
     setBusy(true); setError('');
     try {
@@ -57,8 +65,12 @@ export default function RubricEditor({ value, onChange, question, courseId, asse
         instructions, learning_objective: objective,
       });
       change(data.rubric);
+      setRetrySeconds(60);
       if (data.reference_truncated) setError('The source is longer than the supported limit. Review the rubric against the full document before saving.');
-    } catch (err) { setError(err.response?.data?.message || 'Could not generate a rubric.'); }
+    } catch (err) {
+      if ([429, 503].includes(err.response?.status)) setRetrySeconds(60);
+      setError(err.response?.data?.message || 'Could not generate a rubric.');
+    }
     finally { setBusy(false); }
   };
   const validation = rubricError(value, question.points);
@@ -77,7 +89,7 @@ export default function RubricEditor({ value, onChange, question, courseId, asse
           setError('');
           change({ title: 'Essay Grading Rubric', source: 'manual', criteria: [{ criterion: '', description: '', max_points: Number(question.points), levels: levels(Number(question.points)) }] });
         }}>Create Rubric Manually</button>
-        <button type="button" style={methodButton('ai_generated')} aria-pressed={activeMethod === 'ai_generated'} onClick={generate}>{busy ? 'Generating...' : value?.source === 'ai_generated' ? 'Regenerate Rubric with AI' : 'Generate Rubric with AI'}</button>
+        <button type="button" style={{ ...methodButton('ai_generated'), ...(coolingDown ? { opacity: 0.7, cursor: 'not-allowed' } : {}) }} aria-pressed={activeMethod === 'ai_generated'} disabled={coolingDown} onClick={generate}>{busy ? 'Generating...' : coolingDown ? `Try AI again in ${retrySeconds}s` : value?.source === 'ai_generated' ? 'Regenerate Rubric with AI' : 'Generate Rubric with AI'}</button>
         <button type="button" style={methodButton('template')} aria-pressed={activeMethod === 'template'} onClick={template}>Use Default Template</button>
       </div>
       <details style={{ marginBottom: 10, fontSize: 13 }}>

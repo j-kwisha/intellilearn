@@ -150,6 +150,16 @@ No new environment variables or credentials are required:
 - The AI service uses existing `GROQ_API_KEY`.
 - DOCX extraction needs PHP ZIP, already listed in `nixpacks.toml`.
 
+The deployed Groq allowance includes a separate 1,000 output-token-per-minute cap even
+though the dashboard shows 8,000 combined tokens per minute. Rubric generation requests
+at most 900 output tokens and asks for concise, source-based descriptions. Strict JSON,
+point-total and performance-level validation still apply; incomplete drafts are never saved.
+The editor shows a 60-second cooldown after success or a provider-busy response. Manual
+creation, template selection and editing remain available during the cooldown. The allowance
+is shared across users, so simultaneous requests can still receive a retryable busy response.
+This change does not increase provider quota or change the essay-grading output budget;
+larger grading responses and sustained concurrent use need adequate provider capacity.
+
 Deploy Laravel, the React frontend and the AI service from the same commit. Railway's existing
 Laravel start command already runs `php artisan migrate --force`. During a staggered rollout,
 an older AI service response will fail validation and answers report a grading error.
