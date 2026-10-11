@@ -80,6 +80,15 @@ The existing Groq model `qwen/qwen3.8-27b` is used with JSON object output, temp
 0.1 and instruct mode. These modes are documented in [Groq's model documentation](https://console.groq.com/docs/model/qwen/qwen3.8-27b).
 Generation and grading responses are independently validated in Python and Laravel.
 
+Rubric generation explicitly budgets fractional question points to two decimal places.
+If a draft has malformed JSON, incorrect totals, or invalid performance levels, the AI
+gets one correction attempt with the validation reason and original source context.
+Each provider attempt has a 20-second timeout, with SDK retries disabled for this
+endpoint; an invalid second draft is still rejected. Draft generation never adjusts
+student scores or saves/activates a rubric automatically. Provider rate limits/timeouts
+return a retryable 503 response, while an invalid final draft returns 502. Failure
+diagnostics omit full reference content, AI response bodies and provider secrets.
+
 The grading request includes the essay question, assessment instructions, student response,
 explicit reference content, and a saved rubric snapshot with criterion IDs, descriptions,
 point maxima and performance levels. The prompt treats answers/source content as data,

@@ -3,11 +3,11 @@ from pydantic import BaseModel
 from typing import Optional
 import joblib
 import numpy as np
-from groq import Groq
+from groq import Groq, RateLimitError, APITimeoutError
 import os
 from dotenv import load_dotenv
 import warnings
-from essay_grading import (validate_rubric, validate_evaluation, request_json, GENERATION_PROMPT, GRADING_PROMPT)
+from essay_grading import (validate_rubric, validate_evaluation, request_json, generate_rubric_draft, GRADING_PROMPT)
 
 # Suppress sklearn feature name warnings
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
@@ -167,8 +167,14 @@ def generate_rubric(data: dict):
     if not isinstance(reference, str) or not reference.strip() or len(reference) > 24000:
         raise HTTPException(status_code=422, detail="Readable reference content is required (max 24000 characters)")
     try:
-        result = request_json(groq_client, "qwen/qwen3.8-27b", GENERATION_PROMPT, data)
-        return validate_rubric(result, data.get("max_points"))
+        return generate_rubric_draft(groq_client.with_options(max_retries=0), "qwen/qwen3.8-27b", data)
+    except RateLimitError as exc:
+        print("Rubric generation unavailable: provider_rate_limit")
+        raise HTTPException(status_code=503, detail="AI rubric generation is busy. Please try again shortly.",
+                            headers={"Retry-After": "60"}) from exc
+    except APITimeoutError as exc:
+        print("Rubric generation unavailable: provider_timeout")
+        raise HTTPException(status_code=503, detail="AI rubric generation timed out. Please try again.") from exc
     except Exception as exc:
         print(f"Rubric generation failed: {type(exc).__name__}")
         raise HTTPException(status_code=502, detail="AI returned no valid rubric")

@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\{Assessment, Course, Lesson, Question, Submission, User};
 use App\Services\RubricService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\{Http, Log};
 use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -127,6 +127,73 @@ class EssayRubricTest extends TestCase
         $this->postJson($this->path($course, $assessment) . '/rubric/generate', [
             'question_text' => $question->question_text, 'points' => 10, 'reference_text' => $question->reference_text,
         ])->assertStatus(502);
+        $this->assertDatabaseCount('rubrics', 0);
+    }
+
+    public function test_one_point_ai_rubric_accepts_valid_fractional_allocations(): void
+    {
+        [$teacher, , $course, $assessment, $question] = $this->fixture();
+        Sanctum::actingAs($teacher);
+        $draft = $this->rubric();
+        $draft['total_points'] = 1;
+        foreach ($draft['criteria'] as &$criterion) {
+            $criterion['max_points'] /= 10;
+            foreach ($criterion['levels'] as &$level) {
+                $level['min_points'] /= 10;
+                $level['max_points'] /= 10;
+            }
+            unset($level);
+        }
+        unset($criterion);
+        Http::fake(['*/generate-rubric' => Http::response($draft)]);
+        $this->postJson($this->path($course, $assessment).'/rubric/generate', [
+            'question_text' => $question->question_text, 'points' => 1, 'reference_text' => $question->reference_text,
+        ])->assertOk()->assertJsonPath('rubric.total_points', 1)->assertJsonPath('rubric.source', 'ai_generated');
+        $this->assertDatabaseCount('rubrics', 0);
+    }
+
+    public function test_ai_generation_failure_logs_only_safe_diagnostics_and_preserves_saved_rubrics(): void
+    {
+        [$teacher, , $course, $assessment, $question] = $this->fixture();
+        $saved = app(RubricService::class)->save($question, $this->rubric(), $teacher->id);
+        Sanctum::actingAs($teacher);
+        Log::spy();
+        Http::fake(['*/generate-rubric' => Http::response(['detail' => 'Sensitive provider response must stay private'], 502)]);
+        $this->postJson($this->path($course, $assessment).'/rubric/generate', [
+            'question_text' => $question->question_text, 'points' => 10, 'reference_text' => $question->reference_text,
+        ])->assertStatus(502)->assertExactJson(['message' => 'AI could not generate a valid rubric. Try again or create one manually.']);
+        Log::shouldHaveReceived('warning')->once()->with('Rubric generation failed', \Mockery::on(
+            fn ($context) => $context['ai_http_status'] === 502
+                && $context['reference_length'] === mb_strlen($question->reference_text)
+                && !array_key_exists('error', $context) && !array_key_exists('reference_text', $context)
+                && !str_contains(json_encode($context), 'Sensitive provider response')
+        ));
+        $this->assertSame($saved->id, $question->fresh()->rubric->id);
+        $this->assertDatabaseCount('rubric_criteria', 2);
+    }
+
+    public function test_malformed_ai_response_is_not_saved_or_exposed(): void
+    {
+        [$teacher, , $course, $assessment, $question] = $this->fixture();
+        Sanctum::actingAs($teacher);
+        Http::fake(['*/generate-rubric' => Http::response('{invalid json', 200, ['Content-Type' => 'application/json'])]);
+        $this->postJson($this->path($course, $assessment).'/rubric/generate', [
+            'question_text' => $question->question_text, 'points' => 10, 'reference_text' => $question->reference_text,
+        ])->assertStatus(502);
+        $this->assertDatabaseCount('rubrics', 0);
+    }
+
+    public function test_busy_ai_service_returns_a_retry_message_without_exposing_provider_details(): void
+    {
+        [$teacher, , $course, $assessment, $question] = $this->fixture();
+        Sanctum::actingAs($teacher);
+        foreach ([429, 503] as $status) {
+            Http::fake(['*/generate-rubric' => Http::response(['detail' => 'Private provider quota details'], $status)]);
+            $this->postJson($this->path($course, $assessment).'/rubric/generate', [
+                'question_text' => $question->question_text, 'points' => 10, 'reference_text' => $question->reference_text,
+            ])->assertStatus(503)->assertHeader('Retry-After', '60')
+                ->assertExactJson(['message' => 'AI rubric generation is temporarily unavailable or busy. Please try again shortly.']);
+        }
         $this->assertDatabaseCount('rubrics', 0);
     }
 

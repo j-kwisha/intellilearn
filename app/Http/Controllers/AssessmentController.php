@@ -612,19 +612,30 @@ class AssessmentController extends Controller
         if (trim($reference['text']) === '') {
             throw ValidationException::withMessages(['reference' => 'Attach readable reference content before generating a rubric.']);
         }
+        $aiResponse = null;
         try {
-            $response = Http::timeout(60)->post(rtrim(env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/') . '/generate-rubric', [
+            $aiResponse = Http::timeout(60)->post(rtrim(env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/') . '/generate-rubric', [
                 'question' => $data['question_text'], 'max_points' => $data['points'],
                 'reference_material' => $reference['text'],
                 'instructions' => $data['instructions'] ?? $assessment->description ?? '',
                 'learning_objective' => $data['learning_objective'] ?? '',
-            ])->throw()->json();
+            ]);
+            $response = $aiResponse->throw()->json();
             $response['source'] = 'ai_generated';
             $draft = app(RubricService::class)->validate($response, (float) $data['points']);
             // A generated draft is never saved or activated until the teacher saves it.
             return response()->json(['rubric' => $draft, 'reference_truncated' => $reference['truncated']]);
         } catch (\Throwable $e) {
-            \Log::warning('Rubric generation failed', ['error' => $e->getMessage()]);
+            \Log::warning('Rubric generation failed', [
+                'course_id' => $course->id, 'assessment_id' => $assessment->id,
+                'reference_type' => $reference['type'], 'reference_length' => mb_strlen($reference['text']),
+                'ai_http_status' => $aiResponse?->status(), 'exception_type' => get_class($e),
+                'invalid_fields' => $e instanceof ValidationException ? array_keys($e->errors()) : [],
+            ]);
+            if (in_array($aiResponse?->status(), [429, 503], true)) {
+                return response()->json(['message' => 'AI rubric generation is temporarily unavailable or busy. Please try again shortly.'], 503)
+                    ->header('Retry-After', '60');
+            }
             return response()->json(['message' => 'AI could not generate a valid rubric. Try again or create one manually.'], 502);
         }
     }
