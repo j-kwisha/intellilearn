@@ -216,6 +216,15 @@ class AiController extends Controller
             return response()->json(['message' => 'Submission not found.'], 404);
         }
 
+        $visibility = $submission->assessment?->score_visibility ?? 'immediate';
+        if ($visibility === 'hidden' || ($visibility === 'instructor_release' && ! $submission->assessment?->scores_released_at)) {
+            return response()->json(['message' => 'Scores and feedback are not available for this assessment.'], 403);
+        }
+        if ($submission->status !== 'graded' || in_array($submission->grading_status, ['pending', 'grading_error'], true)
+            || $submission->percentage === null) {
+            return response()->json(['message' => 'Feedback is available after grading is complete.'], 409);
+        }
+
         $percentage = $submission->percentage ?? 0;
         $incorrectAnswers = $submission->answers->filter(fn($a) => $a->is_correct === false);
 

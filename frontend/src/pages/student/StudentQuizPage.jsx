@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import AssessmentSchedule from '../../components/AssessmentSchedule';
+import { canViewSubmissionScore } from '../../services/submissionResults';
 import { useNavigationGuard } from '../../context/NavigationGuardContextStore';
 
 export default function StudentQuizPage() {
@@ -166,15 +167,18 @@ export default function StudentQuizPage() {
 
   // Show results
   if (result) {
-    const scoreHidden = result.percentage === null;
     const isPending = result.status === 'submitted' || result.status === 'in_progress';
     // Only show answer correctness if score is visible to the student
-    const answersVisible = !scoreHidden && !isPending;
+    const answersVisible = canViewSubmissionScore(result);
+    const hiddenTitle = result.grading_status === 'grading_error' ? 'Grading Error'
+      : isPending ? 'Pending Grade'
+      : assessment.score_visibility === 'hidden' ? 'Score Hidden'
+      : assessment.score_visibility === 'instructor_release' ? 'Awaiting Grade Release' : 'Score Unavailable';
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className={`rounded-2xl p-8 text-center ${
-          scoreHidden || isPending
+          !answersVisible
             ? 'bg-slate-50 border border-slate-200'
             : result.percentage >= 75
               ? 'bg-emerald-50 border border-emerald-200'
@@ -183,7 +187,7 @@ export default function StudentQuizPage() {
           <h2 className="text-2xl font-bold text-slate-800">
             {isPending ? 'Submitted!' : 'Results'}
           </h2>
-          {!scoreHidden ? (
+          {answersVisible ? (
             <>
               <p className={`text-5xl font-bold mt-4 ${
                 result.percentage >= 75 ? 'text-emerald-600' : 'text-red-500'
@@ -199,13 +203,17 @@ export default function StudentQuizPage() {
             </>
           ) : (
             <div className="mt-4 space-y-2">
-              <p className="text-3xl font-bold text-slate-400">{result.grading_status === 'grading_error' ? 'Grading Error' : '⏳ Pending Grade'}</p>
+              <p className="text-3xl font-bold text-slate-400">{hiddenTitle}</p>
               <p className="text-slate-500 text-sm mt-2">
                 {result.grading_status === 'grading_error'
                   ? 'Your submission was saved, but automatic grading failed. Please contact your instructor.'
                   : isPending
                   ? 'Your answers are pending review by the instructor.'
-                  : 'Your score will be visible once the instructor releases the grades.'}
+                  : assessment.score_visibility === 'hidden'
+                  ? 'Your submission has been graded. Scores and feedback are hidden by your instructor.'
+                  : assessment.score_visibility === 'instructor_release'
+                  ? 'Your score will be visible once the instructor releases the grades.'
+                  : 'Your score is currently unavailable. Please contact your instructor.'}
               </p>
             </div>
           )}
@@ -268,7 +276,7 @@ export default function StudentQuizPage() {
                     Your answer: <span className="font-medium">{answer.answer_text}</span>
                   </p>
                 )}
-                {answer.is_correct !== null && (
+                {typeof answer.is_correct === 'boolean' && (
                   <p className={`text-xs mt-1 font-medium ${answer.is_correct ? 'text-emerald-600' : 'text-red-500'}`}>
                     {answer.is_correct ? '✓ Correct' : '✗ Incorrect'} — {answer.points_earned ?? 0} pts
                   </p>

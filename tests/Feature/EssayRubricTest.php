@@ -398,6 +398,40 @@ class EssayRubricTest extends TestCase
             ->assertJsonMissingPath('submission.answers.0.rubric_snapshot');
     }
 
+    public function test_quiz_feedback_respects_hidden_and_unreleased_scores(): void
+    {
+        [, $student, , $assessment] = $this->fixture();
+        $submission = $this->attempt($student, $assessment);
+        $submission->update(['status' => 'graded', 'grading_status' => 'graded', 'score' => 7, 'total_points' => 10, 'percentage' => 70]);
+        Sanctum::actingAs($student);
+        foreach (['hidden', 'instructor_release'] as $visibility) {
+            $assessment->update(['score_visibility' => $visibility]);
+            $this->postJson('/api/ai/quiz-feedback', ['submission_id' => $submission->id])
+                ->assertForbidden()->assertExactJson(['message' => 'Scores and feedback are not available for this assessment.']);
+        }
+        $assessment->update(['scores_released_at' => now()]);
+        $this->postJson('/api/ai/quiz-feedback', ['submission_id' => $submission->id])
+            ->assertOk()->assertJsonPath('percentage', '70.00');
+        $assessment->update(['score_visibility' => 'immediate']);
+        $this->postJson('/api/ai/quiz-feedback', ['submission_id' => $submission->id])->assertOk();
+        Http::assertNothingSent();
+    }
+
+    public function test_quiz_feedback_does_not_describe_pending_or_failed_grading_as_poor_performance(): void
+    {
+        [, $student, , $assessment] = $this->fixture();
+        $submission = $this->attempt($student, $assessment);
+        Sanctum::actingAs($student);
+        foreach (['pending', 'grading_error'] as $state) {
+            $submission->update(['status' => 'submitted', 'grading_status' => $state, 'score' => 0, 'percentage' => null]);
+            $this->postJson('/api/ai/quiz-feedback', ['submission_id' => $submission->id])
+                ->assertStatus(409)->assertExactJson(['message' => 'Feedback is available after grading is complete.']);
+        }
+        $submission->update(['status' => 'graded', 'grading_status' => 'graded', 'score' => 0, 'percentage' => 0]);
+        $this->postJson('/api/ai/quiz-feedback', ['submission_id' => $submission->id])
+            ->assertOk()->assertJsonPath('percentage', '0.00');
+    }
+
     public function test_selected_lesson_uses_its_document_content_without_implicit_course_fallback(): void
     {
         [$teacher, $student, $course, $assessment, $question] = $this->fixture();
