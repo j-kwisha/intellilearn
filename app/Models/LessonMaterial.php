@@ -32,9 +32,32 @@ class LessonMaterial extends Model
             if (str_starts_with($this->file_path, 'http')) {
                 return $this->file_path;
             }
-            return Storage::disk('public')->url($this->file_path);
+            return Storage::disk('public')->url($this->publicStoragePath() ?? $this->file_path);
         }
         return $this->url ?? null;
+    }
+
+    /** Resolve relative paths and legacy URLs belonging to our public storage. */
+    public function publicStoragePath(): ?string
+    {
+        $path = $this->file_path;
+        if (!$path) return null;
+        $prefix = rtrim(parse_url(Storage::disk('public')->url(''), PHP_URL_PATH) ?: '/storage', '/').'/';
+        if (preg_match('#^https?://#i', $path)) {
+            $url = parse_url($path);
+            $storageUrl = parse_url(Storage::disk('public')->url(''));
+            if (!$url || strcasecmp($url['host'] ?? '', $storageUrl['host'] ?? '') !== 0
+                || ($url['port'] ?? null) !== ($storageUrl['port'] ?? null)) return null;
+            $path = $url['path'] ?? '';
+            if (!str_starts_with($path, $prefix)) return null;
+            $path = substr($path, strlen($prefix));
+        } elseif (str_starts_with($path, $prefix)) {
+            $path = substr($path, strlen($prefix));
+        }
+        $path = rawurldecode($path);
+        if ($path === '' || str_contains($path, '..') || str_starts_with($path, '/')
+            || str_contains($path, '\\') || preg_match('/[\x00-\x1F\x7F]/', $path)) return null;
+        return $path;
     }
 
     public function getDownloadNameAttribute(): string

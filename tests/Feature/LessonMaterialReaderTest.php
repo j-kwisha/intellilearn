@@ -120,6 +120,48 @@ class LessonMaterialReaderTest extends TestCase
         $this->assertNull($material->fresh()->extracted_text);
     }
 
+    public function test_legacy_storage_urls_support_download_and_ai_extraction(): void
+    {
+        $lesson = $this->lesson();
+        foreach (['full', 'root_relative'] as $format) {
+            $path = 'lessons/'.$format.'.pptx';
+            $material = $this->material($lesson, $path, $this->presentation());
+            $url = Storage::disk('public')->url($path);
+            $material->update(['file_path' => $format === 'full' ? $url : parse_url($url, PHP_URL_PATH)]);
+            $this->getJson("/api/ai/materials/{$material->id}/context")->assertOk()
+                ->assertJsonPath('has_text', true)->assertJsonPath('file_available', true)->assertJsonPath('context_status', 'ready');
+            $this->assertStringContainsString('Results & discussion', $material->fresh()->extracted_text);
+            $this->assertSame($url, $material->fresh()->file_url);
+            $this->get("/api/courses/{$lesson->course_id}/lessons/{$lesson->id}/materials/{$material->id}/download")
+                ->assertOk()->assertDownload('Results and discussion.pptx');
+        }
+    }
+
+    public function test_missing_legacy_file_is_explicitly_unavailable_even_with_cached_text(): void
+    {
+        $lesson = $this->lesson();
+        $material = $this->material($lesson, Storage::disk('public')->url('lessons/deleted.pptx'));
+        $material->update(['extracted_text' => 'Old cached content']);
+        $this->getJson("/api/ai/materials/{$material->id}/context")->assertOk()
+            ->assertJsonPath('file_available', false)->assertJsonPath('has_text', false)
+            ->assertJsonPath('extracted_text', null)->assertJsonPath('context_status', 'unavailable');
+        $this->get("/api/courses/{$lesson->course_id}/lessons/{$lesson->id}/materials/{$material->id}/download")->assertNotFound();
+        $this->assertSame('Old cached content', $material->fresh()->extracted_text);
+    }
+
+    public function test_external_urls_and_unsafe_paths_cannot_read_local_storage(): void
+    {
+        $lesson = $this->lesson();
+        Storage::disk('public')->put('lessons/research.pptx', $this->presentation());
+        $this->mock(DocumentTextService::class)->shouldNotReceive('extract');
+        foreach (['https://external.example/storage/lessons/research.pptx', '../research.pptx', '/storage/%2e%2e/research.pptx', 'lessons/%2f..%2fresearch.pptx'] as $path) {
+            $material = $this->material($lesson, $path);
+            $this->assertNull($material->publicStoragePath());
+            $this->getJson("/api/ai/materials/{$material->id}/context")->assertOk()->assertJsonPath('has_text', false);
+            $this->get("/api/courses/{$lesson->course_id}/lessons/{$lesson->id}/materials/{$material->id}/download")->assertNotFound();
+        }
+    }
+
     public function test_unreadable_missing_and_legacy_files_report_explicit_context_status(): void
     {
         $lesson = $this->lesson();

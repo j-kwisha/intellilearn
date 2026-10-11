@@ -68,9 +68,11 @@ export default function StudentMaterialViewerPage() {
   const [lessonContext, setLessonContext] = useState(null);
   const [contextStatus, setContextStatus] = useState('loading');
   const [loadedContextId, setLoadedContextId] = useState(null);
+  const [fileAvailable, setFileAvailable] = useState(null);
   const bottomRef = useRef(null);
   const contextMaterialId = materialId || material?.id;
   const contextReady = loadedContextId === String(contextMaterialId);
+  const fileMissing = contextReady && fileAvailable === false;
 
   // Fetch material from API if state was lost (page reload)
   useEffect(() => {
@@ -95,12 +97,15 @@ export default function StudentMaterialViewerPage() {
       .then(res => {
         if (!active) return;
         setLoadedContextId(String(id));
+        setFileAvailable(res.data.file_available ?? null);
         setLessonContext(res.data.has_text ? res.data.extracted_text : null);
         setContextStatus(res.data.has_text ? 'ready' : res.data.context_status || 'unavailable');
         if (res.data.has_text) {
           setMessages([{ from: 'bot', text: 'Hi! I have read this lesson material. Ask me anything about it!' }]);
         } else {
-          setMessages([{ from: 'bot', text: res.data.context_status === 'unsupported'
+          setMessages([{ from: 'bot', text: res.data.file_available === false
+            ? 'The original uploaded file is unavailable. Ask your instructor to re-upload it before using the material assistant.'
+            : res.data.context_status === 'unsupported'
             ? 'I cannot read this file format. Ask your instructor to upload a text-based PDF, DOCX or PPTX. Legacy DOC/PPT files need conversion to DOCX/PPTX.'
             : 'I could not read this material. It may be unavailable or contain only images. Ask your instructor for a text-based PDF, DOCX or PPTX.' }]);
         }
@@ -108,6 +113,7 @@ export default function StudentMaterialViewerPage() {
       .catch(() => {
         if (!active) return;
         setLoadedContextId(String(id));
+        setFileAvailable(null);
         setLessonContext(null);
         setContextStatus('unavailable');
         setMessages([{ from: 'bot', text: 'I could not load the material content. Please reopen the material or contact your instructor.' }]);
@@ -173,12 +179,17 @@ export default function StudentMaterialViewerPage() {
           <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg">Open in new tab</a>
         ) : (
           <button type="button" onClick={() => downloadMaterial(courseId, lessonId, material).catch(() => alert('Could not download the material.'))}
-            className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700">Download</button>
+            disabled={fileMissing} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">Download</button>
         )}
       </div>
 
       <div className="flex-1">
-        {format === 'docx' ? (
+        {fileMissing ? (
+          <div role="alert" className="bg-white border border-slate-200 rounded-xl m-6 p-6 text-slate-700">
+            <h2 className="font-semibold text-lg mb-2">File unavailable</h2>
+            <p>The original uploaded file could not be found. Ask your instructor to re-upload this material.</p>
+          </div>
+        ) : format === 'docx' ? (
           <DocxViewer key={`${courseId}/${lessonId}/${materialId}`} courseId={courseId} lessonId={lessonId} materialId={materialId} />
         ) : ['pdf', 'doc', 'ppt', 'pptx'].includes(format) && previewUrl ? (
           <iframe

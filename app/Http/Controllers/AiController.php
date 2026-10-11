@@ -309,15 +309,17 @@ class AiController extends Controller
             || ($user->isStudent() && $material->lesson->is_published
                 && Enrollment::where('user_id', $user->id)->where('course_id', $course->id)->where('status', 'active')->exists());
         if (!$allowed) return response()->json(['message' => 'You do not have access to this material.'], 403);
-        $status = trim($material->extracted_text ?? '') !== '' ? 'ready' : 'unavailable';
-        if ($status !== 'ready' && $material->file_path && !str_starts_with($material->file_path, 'http')) {
-            $extension = strtolower(pathinfo($material->file_path, PATHINFO_EXTENSION));
-            $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        $path = $material->publicStoragePath();
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        $fileAvailable = $path !== null ? $disk->exists($path) : null;
+        $status = $fileAvailable !== false && trim($material->extracted_text ?? '') !== '' ? 'ready' : 'unavailable';
+        if ($status !== 'ready' && $path !== null && $fileAvailable) {
+            $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
             if (!in_array($extension, ['pdf', 'docx', 'pptx'], true)) {
                 $status = 'unsupported';
-            } elseif ($disk->exists($material->file_path)) {
+            } else {
                 try {
-                    $file = new \Illuminate\Http\UploadedFile($disk->path($material->file_path), basename($material->file_path), null, null, true);
+                    $file = new \Illuminate\Http\UploadedFile($disk->path($path), basename($path), null, null, true);
                     $material->update(['extracted_text' => app(\App\Services\DocumentTextService::class)->extract($file)]);
                     $status = 'ready';
                 } catch (\Throwable $error) {
@@ -329,9 +331,10 @@ class AiController extends Controller
         return response()->json([
             'material_id'    => $material->id,
             'title'          => $material->title,
-            'extracted_text' => $material->extracted_text,
+            'extracted_text' => $status === 'ready' ? $material->extracted_text : null,
             'has_text'       => $status === 'ready',
             'context_status' => $status,
+            'file_available' => $fileAvailable,
         ]);
     }
 

@@ -326,13 +326,8 @@ class LessonController extends Controller
         abort_unless($lesson->course_id === $course->id && $material->lesson_id === $lesson->id, 404);
         abort_unless($this->canAccessCourse($request->user(), $course), 403);
         abort_if($request->user()->isStudent() && !$lesson->is_published, 403);
-        $path = $material->file_path;
-        if ($path && (str_starts_with($path, 'http') || str_starts_with($path, '/storage/'))) {
-            $path = parse_url($path, PHP_URL_PATH);
-            abort_unless(str_starts_with($path ?? '', '/storage/'), 404);
-            $path = substr($path, strlen('/storage/'));
-        }
-        abort_if(!$path || str_contains($path, '..') || str_starts_with($path, '/') || str_contains($path, '\\'), 404);
+        $path = $material->publicStoragePath();
+        abort_if($path === null, 404);
         abort_unless(Storage::disk('public')->exists($path), 404);
         return Storage::disk('public')->download($path, $material->download_name);
     }
