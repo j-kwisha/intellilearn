@@ -4,12 +4,13 @@ import api from '../../services/api';
 import { assessmentPublication, toApiDate } from '../../services/assessmentDates';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
 import { rubricError } from '../../services/rubric';
+import PdfQuizImport from '../../components/PdfQuizImport';
 
 export default function InstructorCreateAssessmentPage() {
   const { courseId } = useParams();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState('form'); // 'form' | 'questions' | 'upload_file'
+  const [step, setStep] = useState('form'); // 'form' | 'questions' | 'import_pdf'
   const [assessmentId, setAssessmentId] = useState(null);
   const [assessmentTitle, setAssessmentTitle] = useState('');
 
@@ -31,13 +32,9 @@ export default function InstructorCreateAssessmentPage() {
   const [qError, setQError] = useState('');
   const [savedQuestions, setSavedQuestions] = useState([]);
 
-  // Paper-based file upload
-  const [paperFile, setPaperFile] = useState(null);
-  const [paperFileType, setPaperFileType] = useState('pdf');
-  const [paperUploading, setPaperUploading] = useState(false);
-  const [paperUploadProgress, setPaperUploadProgress] = useState(0);
-  const [paperUploadError, setPaperUploadError] = useState('');
-  const [paperFileUrl, setPaperFileUrl] = useState(null);
+  const [pdfImport, setPdfImport] = useState(null);
+  const [pdfImportPending, setPdfImportPending] = useState(false);
+  const [pdfImportReviewed, setPdfImportReviewed] = useState(false);
 
   // Lessons list for essay reference picker
   const [lessons, setLessons] = useState([]);
@@ -76,6 +73,8 @@ export default function InstructorCreateAssessmentPage() {
     setSaving(true); setError('');
     try {
       const data = { ...form };
+      // Paper-based now describes the source: students take the imported quiz online.
+      if (data.type === 'paper_based') data.type = 'quiz';
       if (!data.time_limit_minutes) delete data.time_limit_minutes;
       data.available_from = toApiDate(data.available_from);
       data.due_date = toApiDate(data.due_date, true);
@@ -100,13 +99,12 @@ export default function InstructorCreateAssessmentPage() {
           title: `📝 ${created.title}`,
           event_type: form.type === 'long_exam' ? 'exam' : 'quiz',
           start_date: data.due_date,
-          description: `${form.type.replace(/_/g, ' ')}`,
+          description: `${data.type.replace(/_/g, ' ')}`,
           color: form.type === 'long_exam' ? '#ef4444' : '#f59e0b',
         });
       }
 
-      // Paper-based goes to file upload step, others go to questions step
-      setStep(form.type === 'paper_based' ? 'upload_file' : 'questions');
+      setStep(form.type === 'paper_based' && !pdfImport ? 'import_pdf' : 'questions');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save assessment.');
     } finally {
@@ -114,24 +112,18 @@ export default function InstructorCreateAssessmentPage() {
     }
   };
 
-  const handleUploadPaperFile = async (e) => {
-    e.preventDefault();
-    if (!paperFile) { setPaperUploadError('Please select a file.'); return; }
-    setPaperUploading(true); setPaperUploadError(''); setPaperUploadProgress(0);
-
-    const data = new FormData();
-    data.append('file', paperFile);
-
-    try {
-      const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/upload-file`, data, {
-        onUploadProgress: ev => setPaperUploadProgress(Math.round((ev.loaded / ev.total) * 100)),
-      });
-      setPaperFileUrl(res.data.file_url);
-    } catch (err) {
-      setPaperUploadError(err.response?.data?.message || 'Upload failed. Please try again.');
-    } finally {
-      setPaperUploading(false);
+  const handlePdfImported = async (draft) => {
+    const description = [form.description, draft.instructions].filter(Boolean).join('\n\n');
+    if (description !== form.description) {
+      await api.put(`/courses/${courseId}/assessments/${assessmentId}`, { description });
+      setForm(previous => ({ ...previous, description }));
     }
+    setQuestions(draft.questions.map(question => ({ ...newQuestion(), ...question })));
+    setPdfImport(draft);
+    setPdfImportPending(true);
+    setPdfImportReviewed(false);
+    setQError('');
+    setStep('questions');
   };
 
   const updateQuestion = (idx, field, value) => {
@@ -143,7 +135,7 @@ export default function InstructorCreateAssessmentPage() {
       if (i !== qIdx) return q;
       const opts = [...q.options];
       opts[optIdx] = value;
-      return { ...q, options: opts };
+      return { ...q, options: opts, correct_answer: q.correct_answer && q.correct_answer === q.options[optIdx] ? value : q.correct_answer };
     }));
   };
 
@@ -154,7 +146,7 @@ export default function InstructorCreateAssessmentPage() {
   const removeOption = (qIdx, optIdx) => {
     setQuestions(prev => prev.map((q, i) => {
       if (i !== qIdx) return q;
-      return { ...q, options: q.options.filter((_, oi) => oi !== optIdx) };
+      return { ...q, options: q.options.filter((_, oi) => oi !== optIdx), correct_answer: q.correct_answer === q.options[optIdx] ? '' : q.correct_answer };
     }));
   };
 
@@ -186,7 +178,11 @@ export default function InstructorCreateAssessmentPage() {
   const removeQuestion = (idx) => { if (questions.length > 1) setQuestions(prev => prev.filter((_, i) => i !== idx)); };
 
   const handleSaveQuestions = async () => {
+    if (qSaving) return;
     setQSaving(true); setQError('');
+    if (pdfImportPending && !pdfImportReviewed) {
+      setQError('Review the imported questions against your PDF and confirm the review before saving.'); setQSaving(false); return;
+    }
     // Validate
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
@@ -195,7 +191,7 @@ export default function InstructorCreateAssessmentPage() {
       if (q.type === 'multiple_choice') {
         const filled = q.options.filter(o => o.trim() !== '');
         if (filled.length < 2) { setQError(`Question ${i + 1}: Multiple choice needs at least 2 options.`); setQSaving(false); return; }
-        if (!q.correct_answer.trim()) { setQError(`Question ${i + 1}: Please select the correct answer.`); setQSaving(false); return; }
+        if (!q.correct_answer.trim() || !filled.includes(q.correct_answer)) { setQError(`Question ${i + 1}: Please select the correct answer.`); setQSaving(false); return; }
       }
       if (q.type === 'true_false' && !q.correct_answer) { setQError(`Question ${i + 1}: Please select True or False as the answer.`); setQSaving(false); return; }
       if (q.type === 'matching') {
@@ -254,6 +250,7 @@ export default function InstructorCreateAssessmentPage() {
       const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/questions/bulk`, { questions: cleaned });
       setSavedQuestions(prev => [...prev, ...res.data.questions]);
       setQuestions([newQuestion()]);
+      setPdfImportPending(false);
     } catch (err) {
       setQError(err.response?.data?.message || err.message || 'Failed to save questions.');
     } finally {
@@ -262,10 +259,13 @@ export default function InstructorCreateAssessmentPage() {
   };
 
   const handleFinish = async () => {
-    const setFinishError = step === 'upload_file' ? setPaperUploadError : setQError;
+    const setFinishError = setQError;
     setFinishError('');
-    if (publishOnCompletion && (step === 'upload_file' ? !paperFileUrl : savedQuestions.length === 0)) {
-      setFinishError(step === 'upload_file' ? 'Upload the assessment file before publishing.' : 'Save at least one question before publishing.');
+    if (pdfImportPending) {
+      setFinishError('Review and save the imported questions before finishing.'); return;
+    }
+    if (publishOnCompletion && savedQuestions.length === 0) {
+      setFinishError('Save at least one question before publishing.');
       return;
     }
     setFinishing(true);
@@ -337,10 +337,10 @@ export default function InstructorCreateAssessmentPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
         {[
           'Assessment Details',
-          form.type === 'paper_based' ? 'Upload File' : 'Add Questions'
+          form.type === 'paper_based' ? 'Import and Review Questions' : 'Add Questions'
         ].map((label, i) => {
-          const active = (i === 0 && step === 'form') || (i === 1 && (step === 'questions' || step === 'upload_file'));
-          const done = i === 0 && (step === 'questions' || step === 'upload_file');
+          const active = (i === 0 && step === 'form') || (i === 1 && (step === 'questions' || step === 'import_pdf'));
+          const done = i === 0 && (step === 'questions' || step === 'import_pdf');
           return (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
@@ -351,7 +351,7 @@ export default function InstructorCreateAssessmentPage() {
                 fontSize: '0.8rem', fontWeight: 700,
               }}>{done ? '✓' : i + 1}</div>
               <span style={{ fontSize: '0.875rem', fontWeight: active ? 700 : 500, color: active ? '#0f172a' : '#94a3b8' }}>{label}</span>
-              {i === 0 && <div style={{ width: 40, height: 2, background: (step === 'questions' || step === 'upload_file') ? '#10b981' : '#e2e8f0', borderRadius: 2 }} />}
+              {i === 0 && <div style={{ width: 40, height: 2, background: (step === 'questions' || step === 'import_pdf') ? '#10b981' : '#e2e8f0', borderRadius: 2 }} />}
             </div>
           );
         })}
@@ -380,7 +380,7 @@ export default function InstructorCreateAssessmentPage() {
                   <option value="quiz">Quiz</option>
                   <option value="long_exam">Long Exam</option>
                   <option value="individual_activity">Individual Activity</option>
-                  <option value="paper_based">📄 Paper-Based (Upload PDF/DOCX)</option>
+                  <option value="paper_based">📄 Paper-Based (Import quiz from PDF)</option>
                 </select>
               </div>
               <div>
@@ -505,6 +505,21 @@ export default function InstructorCreateAssessmentPage() {
       {step === 'questions' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
+          {pdfImport && (
+            <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 space-y-3">
+              <h3 className="font-bold text-slate-900">Imported from {pdfImport.filename}</h3>
+              <p className="text-sm text-slate-700">The questions below are copied from your PDF. Check all wording, choices, question types, answers and points. Headings and instructions were added to the assessment description, which you can edit.</p>
+              <ul className="text-sm text-slate-700 list-disc pl-5 space-y-1">{pdfImport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
+              <details><summary className="cursor-pointer font-semibold text-sm text-teal-800">View extracted source text (instructor only)</summary>
+                <pre className="mt-3 whitespace-pre-wrap break-words max-h-80 overflow-auto p-3 bg-white border border-teal-200 rounded-lg text-sm text-slate-800">{pdfImport.extracted_text}</pre>
+              </details>
+              {pdfImportPending && <label className="flex items-start gap-2 text-sm text-slate-800">
+                <input type="checkbox" checked={pdfImportReviewed} onChange={event => setPdfImportReviewed(event.target.checked)} className="mt-1 accent-teal-700" />
+                I have checked the imported questions against the PDF and reviewed the answers and points.
+              </label>}
+            </div>
+          )}
+
           {/* Saved questions summary */}
           {savedQuestions.length > 0 && (
             <div style={{ background: '#f0fdf4', borderRadius: 16, border: '1px solid #bbf7d0', padding: 20 }}>
@@ -565,7 +580,7 @@ export default function InstructorCreateAssessmentPage() {
                       </div>
                       <div>
                         <label style={S.label}>Points</label>
-                        <input style={S.input} type="number" min={1} step={1}
+                        <input style={S.input} type="number" min={0.01} step={0.01}
                           value={q.points} onChange={e => updateQuestion(idx, 'points', e.target.value)} />
                       </div>
                     </div>
@@ -709,83 +724,10 @@ export default function InstructorCreateAssessmentPage() {
         </div>
       )}
 
-      {/* STEP: Upload File (paper_based) */}
-      {step === 'upload_file' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', padding: 32 }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: 6, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              📄 Upload Question Sheet
-            </h3>
-            <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: 24 }}>
-              Upload the PDF or DOCX file that students will view and answer on paper.
-            </p>
-
-            {paperUploadError && (
-              <div style={{ background: '#FEF2F2', color: '#DC2626', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: '0.875rem' }}>
-                {paperUploadError}
-              </div>
-            )}
-
-            {paperFileUrl ? (
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: 20, textAlign: 'center' }}>
-                <div style={{ fontSize: '2rem', marginBottom: 8 }}>✅</div>
-                <p style={{ fontWeight: 700, color: '#14532d', marginBottom: 6 }}>File uploaded successfully!</p>
-                <p style={{ fontSize: '0.8rem', color: '#166534', marginBottom: 16 }}>Students will see this file when they open the assessment.</p>
-                <a href={paperFileUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: '0.85rem', color: '#0d9488', textDecoration: 'underline' }}>
-                  Preview uploaded file →
-                </a>
-              </div>
-            ) : (
-              <form onSubmit={handleUploadPaperFile} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div>
-                  <label style={S.label}>File Type</label>
-                  <select style={{ ...S.input, background: 'white' }} value={paperFileType}
-                    onChange={e => setPaperFileType(e.target.value)}>
-                    <option value="pdf">PDF</option>
-                    <option value="docx">Word Document (DOCX)</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={S.label}>Select File *</label>
-                  <div style={{ border: '2px dashed #cbd5e1', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={e => { e.preventDefault(); setPaperFile(e.dataTransfer.files[0]); }}>
-                    <input type="file" id="paper-file-input" accept=".pdf,.doc,.docx"
-                      onChange={e => setPaperFile(e.target.files[0])} style={{ display: 'none' }} />
-                    <label htmlFor="paper-file-input" style={{ cursor: 'pointer' }}>
-                      {paperFile ? (
-                        <p style={{ color: '#0d9488', fontWeight: 600, fontSize: '0.9rem' }}>📎 {paperFile.name}</p>
-                      ) : (
-                        <>
-                          <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>Click to select or drag & drop</p>
-                          <p style={{ color: '#94a3b8', fontSize: '0.78rem', marginTop: 4 }}>PDF or DOCX — Max 100MB</p>
-                        </>
-                      )}
-                    </label>
-                  </div>
-                </div>
-                {paperUploading && paperUploadProgress > 0 && (
-                  <div style={{ background: '#f1f5f9', borderRadius: 99, height: 8, overflow: 'hidden' }}>
-                    <div style={{ background: '#0d9488', height: '100%', width: `${paperUploadProgress}%`, transition: 'width 0.3s', borderRadius: 99 }} />
-                  </div>
-                )}
-                <button type="submit" disabled={paperUploading || !paperFile}
-                  style={{ ...S.btn, opacity: (paperUploading || !paperFile) ? 0.6 : 1 }}>
-                  {paperUploading ? `Uploading ${paperUploadProgress}%...` : '⬆ Upload File'}
-                </button>
-              </form>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={handleFinish} disabled={finishing || paperUploading} style={S.btn}>
-              {finishing ? 'Saving...' : '✓ Done — Back to Course'}
-            </button>
-            <button onClick={() => setStep('form')} style={S.btnGhost}>
-              ← Edit Assessment Details
-            </button>
-          </div>
+      {step === 'import_pdf' && (
+        <div className="space-y-4">
+          <PdfQuizImport courseId={courseId} assessmentId={assessmentId} onImported={handlePdfImported} />
+          <button type="button" onClick={() => setStep('form')} style={S.btnGhost}>Edit Assessment Details</button>
         </div>
       )}
     </div>

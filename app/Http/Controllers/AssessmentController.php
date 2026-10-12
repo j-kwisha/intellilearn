@@ -548,6 +548,16 @@ class AssessmentController extends Controller
         return response()->json(['file_url' => $assessment->fresh()->file_url]);
     }
 
+    /** Extract a reviewable quiz draft. Do not publish, save questions, or expose the source PDF. */
+    public function importPdf(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        abort_unless($this->canManageCourse($request->user(), $course), 403);
+        abort_unless($assessment->course_id === $course->id, 404);
+        $validated = $request->validate(['file' => ['required', 'file', 'mimes:pdf', 'extensions:pdf', 'max:10240']]);
+        $draft = app(\App\Services\PdfQuizImportService::class)->extract($validated['file']);
+        return response()->json($draft + ['filename' => $validated['file']->getClientOriginalName()]);
+    }
+
     /**
      * RELEASE SCORES FOR AN ASSESSMENT
      *
