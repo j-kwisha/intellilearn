@@ -5,6 +5,7 @@ import { downloadMaterial } from '../../services/materialDownload';
 import { materialFormat, materialPreviewUrl } from '../../services/materialPreview';
 import { materialChatHistory, materialChatSources } from '../../services/materialChat';
 import DocxViewer from '../../components/DocxViewer';
+import AnimatedAssistantButton from '../../components/shared/AnimatedAssistantButton';
 import chatbotAvatar from '../../assets/mascot_chathead.jpg';
 
 // Simple markdown renderer — handles bold, italic, bullets, numbered lists
@@ -242,18 +243,6 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
 
       <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
         <style>{`
-          @keyframes mcPulse {
-            0%   { transform: scale(1);    opacity: 0.6; }
-            70%  { transform: scale(1.55); opacity: 0; }
-            100% { transform: scale(1.55); opacity: 0; }
-          }
-          @keyframes mcBounce {
-            0%   { transform: scale(1); }
-            30%  { transform: scale(1.18); }
-            60%  { transform: scale(0.92); }
-            80%  { transform: scale(1.06); }
-            100% { transform: scale(1); }
-          }
           @keyframes mcSlideUp {
             from { opacity: 0; transform: translateY(24px) scale(0.96); }
             to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -263,8 +252,6 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
             40%            { transform: scale(1);   opacity: 1; }
           }
           .mc-window { animation: mcSlideUp 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
-          .mc-avatar-btn { transition: transform 0.15s ease, box-shadow 0.15s ease; }
-          .mc-avatar-btn:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(79,70,229,0.55) !important; }
           .mc-input:focus { border-color: #4f46e5 !important; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
         `}</style>
 
@@ -337,22 +324,7 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
           </div>
         )}
 
-        {/* Avatar toggle button */}
-        <div style={{ position: 'relative' }}>
-          {!chatOpen && (
-            <>
-              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(79,70,229,0.35)', animation: 'mcPulse 2s ease-out infinite', pointerEvents: 'none' }} />
-              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(79,70,229,0.2)', animation: 'mcPulse 2s ease-out infinite', animationDelay: '0.6s', pointerEvents: 'none' }} />
-            </>
-          )}
-          <button className="mc-avatar-btn" onClick={() => setChatOpen(v => !v)} title="Course Assistant"
-            style={{ width: 58, height: 58, borderRadius: '50%', background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', border: '3px solid white', cursor: 'pointer', padding: 0, boxShadow: '0 4px 20px rgba(79,70,229,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-            {chatOpen
-              ? <span style={{ color: 'white', fontSize: 20, fontWeight: 700 }}>✕</span>
-              : <img src={chatbotAvatar} alt="Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-            }
-          </button>
-        </div>
+        <AnimatedAssistantButton open={chatOpen} onToggle={() => setChatOpen(value => !value)} />
       </div>
     </div>
   );
