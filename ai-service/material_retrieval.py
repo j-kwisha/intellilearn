@@ -179,12 +179,37 @@ def _definition_score(chunk, concept_terms):
     return best
 
 
+def document_request_kind(question):
+    """Route document tasks before searching for incidental words such as 'check'.
+
+    Explicit sections and subject-specific questions keep normal topic retrieval.
+    These task words are ignored only here, never removed from topic searches.
+    """
+    normalized = unicodedata.normalize("NFKC", question).casefold()
+    if re.search(r"\b(?:topic|chapter|unit|section|page|slide)\s*#?\s*\d+\b", normalized):
+        return "topic"
+    task_words = set("""
+        title name named called read reading check checking inspect inspection review
+        scan look over through see access understand help say give provide short
+        summarize summarise summary overview introduction introduce identify
+        presentation presentations slideshow slides notes note pdf docx ppt pptx
+        what's whats can could would you please tell me this it its
+    """.split())
+    specific_terms = terms(question) - task_words
+    if not specific_terms and re.search(r"\b(?:title|name|named|called)\b", normalized):
+        return "title"
+    overview_task = re.search(
+        r"\b(?:summar(?:y|ize|ise)|overview|read(?:ing)?|check(?:ing)?|inspect(?:ion)?|"
+        r"review|scan|look|understand|explain|describe|discuss|about|introduction|what\s+(?:is|are))\b", normalized)
+    if not specific_terms and overview_task:
+        return "overview"
+    return "topic"
+
+
 def select_evidence(document, question, history=None, budget=EVIDENCE_BUDGET):
     chunks = chunks_for_document(document)
     query_terms = terms(question)
-    summary_request = re.search(r"\b(summar(?:y|ize|ise)|overview)\b", question, re.I) or re.search(
-        r"\b(explain|describe|discuss|what is)\b.*\b(lesson|module|material|pdf|document|file)\b", question, re.I)
-    broad = bool(summary_request) and not query_terms
+    request_kind = document_request_kind(question)
     # Corrections/follow-ups need earlier USER questions, never prior AI claims.
     follow_up = len(query_terms) < 3 and bool(re.search(
         r"\b(it|this|that|those|these|more|again|further|topic\s*\d+|why|yes)\b", question, re.I))
@@ -198,8 +223,12 @@ def select_evidence(document, question, history=None, budget=EVIDENCE_BUDGET):
     definition_terms = {term for term in terms(definition_question)
                         if ":" not in term and term not in {"define", "definition", "meaning", "mean", "refer"}}
     if not chunks:
-        return {"excerpts": [], "sources": [], "context_scope": "no_matching_evidence"}
-    if broad:
+        return {"excerpts": [], "sources": [], "context_scope": "no_matching_evidence", "request_kind": request_kind}
+    if request_kind == "title":
+        # Cover headings need not contain the literal words 'name' or 'title'.
+        # Only use the opening source, not a later title mentioned in the body.
+        selected = [chunk for chunk in chunks if chunk.label == chunks[0].label][:2]
+    elif request_kind == "overview":
         selected = [chunks[index] for index in _spread_indices(chunks, min(6, len(chunks)))]
     else:
         frequencies = Counter(term for chunk in chunks for term in chunk.terms)
@@ -216,7 +245,7 @@ def select_evidence(document, question, history=None, budget=EVIDENCE_BUDGET):
         selected = [chunk for value, chunk in ranked if value > 0][:4]
         # No lexical match is a retrieval limitation, not proof of topic absence.
         if not selected:
-            return {"excerpts": [], "sources": [], "context_scope": "no_matching_evidence"}
+            return {"excerpts": [], "sources": [], "context_scope": "no_matching_evidence", "request_kind": request_kind}
         selected.sort(key=lambda chunk: chunk.index)
     excerpts, sources = [], []
     remaining = budget
@@ -233,4 +262,4 @@ def select_evidence(document, question, history=None, budget=EVIDENCE_BUDGET):
         excerpts.append(excerpt)
         sources.append({"label": chunk.label, "excerpt_id": excerpt_id})
         remaining -= len(excerpt["text"]) + overhead
-    return {"excerpts": excerpts, "sources": sources, "context_scope": "selected_excerpts"}
+    return {"excerpts": excerpts, "sources": sources, "context_scope": "selected_excerpts", "request_kind": request_kind}

@@ -245,10 +245,16 @@ def chatbot(data: ChatRequest):
                 "- If evidence is insufficient, say: 'I couldn't find this in the available extracted text.' "
                 "Never claim a topic is not covered in the module or that a later section does not exist.\n"
                 "- For summaries, describe the supplied sections and say it is a summary of available excerpts.\n"
+                "- The upload_label is an instructor's display label, not necessarily the title written in the document. "
+                "For request_kind 'title', identify the title from the opening source excerpts; do not substitute the upload_label. "
+                "If no clear title is visible in the readable text, say so rather than guessing.\n"
+                "- For request_kind 'overview', treat read/check/inspect requests as a brief document overview. "
+                "Identify its subject from the opening excerpt and summarize the sampled sections, not just a passage containing the word 'check'.\n"
                 "- Use short paragraphs and bullets where helpful. Keep the answer concise."
             )
             user_content = json.dumps({
-                "material_title": (data.material_title or "This lesson")[:255],
+                "upload_label": (data.material_title or "This lesson")[:255],
+                "request_kind": evidence["request_kind"],
                 "earlier_user_questions": [row["content"] for row in history if row["role"] == "user"][-2:],
                 "current_question": data.message,
                 "selected_source_excerpts": evidence["excerpts"],

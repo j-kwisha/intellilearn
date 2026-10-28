@@ -34,7 +34,68 @@ def repeated_mentions_module():
             + "[Page 4]\n" + history * 70)
 
 
+def security_slides():
+    """The upload label is TESTTT; the real title is readable on its cover."""
+    return ("[Slide 1]\nFoundations of Information Assurance and Security\n"
+            "Prepared for introductory information security learners.\n"
+            "[Slide 2]\nEducational Background\nAn overview of the presenter's qualifications.\n"
+            "[Slide 3]\nTOPIC 1: SECURITY FUNDAMENTALS\n"
+            + "Confidentiality, integrity, and availability protect information assets. " * 35
+            + "\n[Slide 12]\nTOPIC 2: AUTHENTICATION\n"
+            + "An ATM PIN check is an authentication example. Check the PIN before granting access. " * 70
+            + "\n[Slide 24]\nTOPIC 3: PHISHING AWARENESS\n"
+            + "Phishing messages imitate trusted senders to steal credentials. " * 35)
+
+
 class MaterialRetrievalTests(unittest.TestCase):
+    def test_document_title_requests_retrieve_cover_without_literal_title_word(self):
+        document = security_slides()
+        self.assertNotIn("title", document.lower())
+        for question in ["title of the module?", "What is the title of this module?",
+                         "What is the name of this presentation?"]:
+            with self.subTest(question=question):
+                result = select_evidence(document, question)
+                self.assertEqual(result["request_kind"], "title")
+                self.assertTrue(result["excerpts"])
+                self.assertEqual(result["excerpts"][0]["source"], "Slide 1")
+                self.assertIn("Foundations of Information Assurance and Security",
+                              result["excerpts"][0]["text"])
+                self.assertNotIn("ATM PIN", json.dumps(result["excerpts"]))
+
+    def test_generic_material_inspection_is_overview_not_incidental_check_term_match(self):
+        for question in ["can you check the material?", "Read this presentation",
+                         "Please inspect this material", "Summarize this module",
+                         "What is this module?", "What is this document?"]:
+            with self.subTest(question=question):
+                result = select_evidence(security_slides(), question)
+                self.assertEqual(result["request_kind"], "overview")
+                self.assertEqual(result["excerpts"][0]["source"], "Slide 1")
+                labels = {row["label"] for row in result["sources"]}
+                self.assertIn("Slide 24", labels)
+                self.assertGreaterEqual(len(labels), 3)
+                evidence = json.dumps(result["excerpts"], ensure_ascii=False)
+                self.assertIn("Foundations of Information Assurance and Security", evidence)
+                self.assertIn("Phishing messages", evidence)
+                self.assertLess(len(evidence), EVIDENCE_BUDGET)
+
+    def test_targeted_security_and_numbered_title_requests_remain_topic_searches(self):
+        for question, expected in [("Explain PIN checks", "Slide 12"),
+                                   ("Check authentication examples", "Slide 12"),
+                                   ("Summarize topic 2", "Slide 12"),
+                                   ("What is the title of slide 3?", "Slide 3")]:
+            with self.subTest(question=question):
+                result = select_evidence(security_slides(), question)
+                self.assertEqual(result["request_kind"], "topic")
+                self.assertIn(expected, {row["label"] for row in result["sources"]})
+                self.assertNotIn("Slide 1", {row["label"] for row in result["sources"]})
+
+    def test_empty_document_title_request_has_no_invented_cover(self):
+        result = select_evidence("", "title of the module?")
+        self.assertEqual(result["request_kind"], "title")
+        self.assertEqual(result["context_scope"], "no_matching_evidence")
+        self.assertEqual(result["excerpts"], [])
+        self.assertEqual(result["sources"], [])
+
     def test_coursebook_definition_is_retrieved_beyond_old_first_6000_characters(self):
         document = sample_module()
         self.assertGreater(document.index("TOPIC 2"), 6000)
@@ -193,6 +254,40 @@ class ChatbotGroundingWiringTests(unittest.TestCase):
         self.client_patch = patch.object(self.chat_app, "groq_client", self.provider)
         self.client_patch.start()
         self.addCleanup(self.client_patch.stop)
+
+    def test_real_title_prompt_uses_cover_and_distinguishes_upload_label_from_title(self):
+        self.chat_app.chatbot(self.chat_app.ChatRequest(
+            message="title of the module?", lesson_context=security_slides(), material_title="TESTTT"))
+        messages = self.provider.chat.completions.create.call_args.kwargs["messages"]
+        payload = json.loads(messages[-1]["content"])
+        self.assertEqual(payload["request_kind"], "title")
+        self.assertEqual(payload["upload_label"], "TESTTT")
+        self.assertNotIn("material_title", payload)
+        excerpts = payload["selected_source_excerpts"]
+        self.assertEqual(excerpts[0]["source"], "Slide 1")
+        self.assertIn("Foundations of Information Assurance and Security", excerpts[0]["text"])
+        self.assertNotIn("ATM PIN", json.dumps(excerpts))
+        self.assertIn("upload_label", messages[0]["content"])
+        self.assertIn("title", messages[0]["content"].lower())
+
+    def test_real_check_material_prompt_sends_distributed_overview_not_only_pin_checks(self):
+        self.chat_app.chatbot(self.chat_app.ChatRequest(
+            message="can you check the material?", lesson_context=security_slides(), material_title="TESTTT"))
+        messages = self.provider.chat.completions.create.call_args.kwargs["messages"]
+        payload = json.loads(messages[-1]["content"])
+        self.assertEqual(payload["request_kind"], "overview")
+        self.assertEqual(payload["upload_label"], "TESTTT")
+        excerpts = payload["selected_source_excerpts"]
+        self.assertEqual(excerpts[0]["source"], "Slide 1")
+        self.assertIn("Phishing messages", json.dumps(excerpts))
+
+    def test_title_with_only_upload_label_never_calls_provider_or_invents_document_title(self):
+        result = self.chat_app.chatbot(self.chat_app.ChatRequest(
+            message="title of the module?", lesson_context="", material_title="TESTTT"))
+        self.provider.chat.completions.create.assert_not_called()
+        self.assertEqual(result["context_scope"], "no_matching_evidence")
+        self.assertEqual(result["sources"], [])
+        self.assertNotIn("TESTTT", result["response"])
 
     def test_real_chatbot_sends_later_evidence_with_citations_and_low_temperature(self):
         result = self.chat_app.chatbot(self.chat_app.ChatRequest(
