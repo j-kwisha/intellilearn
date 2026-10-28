@@ -36,8 +36,8 @@ def repeated_mentions_module():
 
 def security_slides():
     """The upload label is TESTTT; the real title is readable on its cover."""
-    return ("[Slide 1]\nFoundations of Information Assurance and Security\n"
-            "Prepared for introductory information security learners.\n"
+    return ("[Slide 1]\nFoundations of Information\n"
+            "Prepared by: Course instructor\nAssurance and Security\n"
             "[Slide 2]\nEducational Background\nAn overview of the presenter's qualifications.\n"
             "[Slide 3]\nTOPIC 1: SECURITY FUNDAMENTALS\n"
             + "Confidentiality, integrity, and availability protect information assets. " * 35
@@ -58,8 +58,8 @@ class MaterialRetrievalTests(unittest.TestCase):
                 self.assertEqual(result["request_kind"], "title")
                 self.assertTrue(result["excerpts"])
                 self.assertEqual(result["excerpts"][0]["source"], "Slide 1")
-                self.assertIn("Foundations of Information Assurance and Security",
-                              result["excerpts"][0]["text"])
+                self.assertIn("Foundations of Information", result["excerpts"][0]["text"])
+                self.assertIn("Assurance and Security", result["excerpts"][0]["text"])
                 self.assertNotIn("ATM PIN", json.dumps(result["excerpts"]))
 
     def test_generic_material_inspection_is_overview_not_incidental_check_term_match(self):
@@ -74,7 +74,8 @@ class MaterialRetrievalTests(unittest.TestCase):
                 self.assertIn("Slide 24", labels)
                 self.assertGreaterEqual(len(labels), 3)
                 evidence = json.dumps(result["excerpts"], ensure_ascii=False)
-                self.assertIn("Foundations of Information Assurance and Security", evidence)
+                self.assertIn("Foundations of Information", evidence)
+                self.assertIn("Assurance and Security", evidence)
                 self.assertIn("Phishing messages", evidence)
                 self.assertLess(len(evidence), EVIDENCE_BUDGET)
 
@@ -265,10 +266,15 @@ class ChatbotGroundingWiringTests(unittest.TestCase):
         self.assertNotIn("material_title", payload)
         excerpts = payload["selected_source_excerpts"]
         self.assertEqual(excerpts[0]["source"], "Slide 1")
-        self.assertIn("Foundations of Information Assurance and Security", excerpts[0]["text"])
+        self.assertIn("Foundations of Information", excerpts[0]["text"])
+        self.assertIn("Prepared by: Course instructor", excerpts[0]["text"])
+        self.assertIn("Assurance and Security", excerpts[0]["text"])
         self.assertNotIn("ATM PIN", json.dumps(excerpts))
         self.assertIn("upload_label", messages[0]["content"])
         self.assertIn("title", messages[0]["content"].lower())
+        self.assertIn("separate text boxes", messages[0]["content"])
+        self.assertIn("combine clearly related title fragments", messages[0]["content"])
+        self.assertIn("exclude author or presenter metadata", messages[0]["content"])
 
     def test_real_check_material_prompt_sends_distributed_overview_not_only_pin_checks(self):
         self.chat_app.chatbot(self.chat_app.ChatRequest(
