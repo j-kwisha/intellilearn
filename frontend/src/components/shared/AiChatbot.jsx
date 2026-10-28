@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import api from '../../services/api';
 
 import chatbotAvatar from '../../assets/mascot_chathead.jpg';
+import { hasVideoTransparency } from './assistantVideo';
 const AVATAR_URL = chatbotAvatar;
 
 // Video paths - place your video files in frontend/public/videos/
-const PEEKING_VIDEO = '/videos/chatbot-peeking.mp4';  // 2-3 second intro animation
-const IDLE_VIDEO = '/videos/chatbot-idle.mp4';        // Looping idle animation
+const PEEKING_VIDEO = '/videos/chatbot-peeking-transparent.webm';  // 2-3 second intro animation
+const IDLE_VIDEO = '/videos/chatbot-idle-transparent.webm';        // Looping idle animation
 
 // Simple markdown renderer
 function MarkdownText({ text }) {
@@ -382,6 +383,7 @@ export default function AiChatbot() {
                 src={PEEKING_VIDEO}
                 muted
                 playsInline
+                onLoadedData={event => { if (!hasVideoTransparency(event.currentTarget)) setVideoState('static'); }}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -401,6 +403,7 @@ export default function AiChatbot() {
                 muted
                 loop
                 playsInline
+                onLoadedData={event => { if (!hasVideoTransparency(event.currentTarget)) setVideoState('static'); }}
                 style={{
                   width: '100%',
                   height: '100%',

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import chatbotAvatar from '../../assets/mascot_chathead.jpg';
+import { hasVideoTransparency } from './assistantVideo';
 
 const motionPreference = '(prefers-reduced-motion: reduce)';
 const subscribeMotion = (listener) => {
@@ -56,8 +57,9 @@ export default function AnimatedAssistantButton({ open, onToggle }) {
           display: 'block', animation: open && !reducedMotion ? 'materialAssistantBounce .5s ease both' : 'none' }}>
         {showVideo ? (
           <video ref={videoRef}
-            src={animation === 'peeking' ? '/videos/chatbot-peeking.mp4' : '/videos/chatbot-idle.mp4'}
+            src={animation === 'peeking' ? '/videos/chatbot-peeking-transparent.webm' : '/videos/chatbot-idle-transparent.webm'}
             muted playsInline loop={animation === 'idle'} preload="metadata" aria-hidden="true"
+            onLoadedData={event => { if (!hasVideoTransparency(event.currentTarget)) setAnimation('static'); }}
             onEnded={() => setAnimation('idle')} onError={() => setAnimation('static')}
             style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
         ) : (
