@@ -271,71 +271,56 @@ class AiController extends Controller
     // 5. CHATBOT
     // ─────────────────────────────────────────────
 
-    /**
-     * POST /api/ai/chatbot
-     * Body: { message, course_name, lesson_context, material_title }
-     */
+    /** POST /api/ai/chatbot: material questions always use an authorized server-side source. */
     public function chatbot(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'message'        => ['required', 'string', 'max:500'],
-            'course_name'    => ['nullable', 'string', 'max:255'],
-            'lesson_context' => ['nullable', 'string'],
+            'message' => ['required', 'string', 'max:500'],
+            'course_name' => ['nullable', 'string', 'max:255'],
+            'material_id' => ['nullable', 'integer'],
+            'history' => ['nullable', 'array', 'max:6'],
+            'history.*.role' => ['required', 'in:user,assistant'],
+            'history.*.content' => ['required', 'string', 'max:1000'],
+            'lesson_context' => ['nullable', 'string', 'max:1000000'],
             'material_title' => ['nullable', 'string', 'max:255'],
         ]);
-
-        $response = Http::timeout(10)->post("{$this->aiServiceUrl}/chatbot", $validated);
-
-        if ($response->failed()) {
-            return response()->json([
-                'response' => 'The assistant is currently unavailable. Please try again later.',
-                'in_scope' => false,
-            ]);
+        $payload = array_intersect_key($validated, array_flip(['message', 'course_name', 'history']));
+        $materialId = $validated['material_id'] ?? null;
+        if ($materialId !== null) {
+            $material = LessonMaterial::findOrFail($materialId);
+            $contexts = app(\App\Services\MaterialContextService::class);
+            $contexts->authorize($request->user(), $material);
+            $context = $contexts->resolve($material);
+            if (!$context['has_text']) {
+                return response()->json(['response' => 'The module text is unavailable or could not be read. Please reopen the material or ask your instructor for a readable copy.',
+                    'in_scope' => false, 'context_status' => $context['context_status']], 409);
+            }
+            $payload['lesson_context'] = $context['extracted_text'];
+            $payload['material_title'] = $material->title;
+        } elseif ($request->filled('lesson_context') || $request->filled('material_title')) {
+            return response()->json(['response' => 'Please reopen this material to load its current content.', 'in_scope' => false], 422);
         }
-
-        return response()->json($response->json());
+        try {
+            $response = Http::timeout(25)->post("{$this->aiServiceUrl}/chatbot", $payload);
+        } catch (\Illuminate\Http\Client\ConnectionException $error) {
+            return response()->json(['response' => 'The assistant is taking too long to respond. Please try again shortly.', 'in_scope' => false], 503);
+        }
+        if ($response->failed()) {
+            return response()->json(['response' => 'The assistant is currently unavailable. Please try again shortly.', 'in_scope' => false], 503);
+        }
+        $body = $response->json();
+        if (!is_array($body) || !is_string($body['response'] ?? null) || trim($body['response']) === '') {
+            return response()->json(['response' => 'The assistant could not return a readable answer. Please try again.', 'in_scope' => false], 502);
+        }
+        return response()->json($body);
     }
 
-    /**
-     * GET /api/ai/materials/{material}/context
-     * Returns extracted text for a material (used by PDF chatbot)
-     */
+    /** GET /api/ai/materials/{material}/context: refresh legacy truncated text on first use. */
     public function materialContext(Request $request, LessonMaterial $material): JsonResponse
     {
-        $user = $request->user();
-        $course = $material->lesson->course;
-        $allowed = $user->isAdmin()
-            || ($user->isInstructor() && $course->instructor_id === $user->id)
-            || ($user->isStudent() && $material->lesson->is_published
-                && Enrollment::where('user_id', $user->id)->where('course_id', $course->id)->where('status', 'active')->exists());
-        if (!$allowed) return response()->json(['message' => 'You do not have access to this material.'], 403);
-        $path = $material->publicStoragePath();
-        $disk = \Illuminate\Support\Facades\Storage::disk('public');
-        $fileAvailable = $path !== null ? $disk->exists($path) : null;
-        $status = $fileAvailable !== false && trim($material->extracted_text ?? '') !== '' ? 'ready' : 'unavailable';
-        if ($status !== 'ready' && $path !== null && $fileAvailable) {
-            $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-            if (!in_array($extension, ['pdf', 'docx', 'pptx'], true)) {
-                $status = 'unsupported';
-            } else {
-                try {
-                    $file = new \Illuminate\Http\UploadedFile($disk->path($path), basename($path), null, null, true);
-                    $material->update(['extracted_text' => app(\App\Services\DocumentTextService::class)->extract($file)]);
-                    $status = 'ready';
-                } catch (\Throwable $error) {
-                    $status = 'extraction_failed';
-                    \Log::warning('Lesson material text extraction failed', ['material_id' => $material->id, 'extension' => $extension, 'exception_type' => get_class($error)]);
-                }
-            }
-        }
-        return response()->json([
-            'material_id'    => $material->id,
-            'title'          => $material->title,
-            'extracted_text' => $status === 'ready' ? $material->extracted_text : null,
-            'has_text'       => $status === 'ready',
-            'context_status' => $status,
-            'file_available' => $fileAvailable,
-        ]);
+        $contexts = app(\App\Services\MaterialContextService::class);
+        $contexts->authorize($request->user(), $material);
+        return response()->json($contexts->resolve($material));
     }
 
     // ─────────────────────────────────────────────

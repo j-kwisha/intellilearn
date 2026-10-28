@@ -279,6 +279,7 @@ class LessonController extends Controller
 
         $filePath = null;
         $extractedText = null;
+        $extractionVersion = null;
 
         // Handle file upload
         if ($request->hasFile('file')) {
@@ -293,7 +294,8 @@ class LessonController extends Controller
                 // Extraction follows the actual Office/PDF extension, including PPTX uploads.
                 if (in_array(strtolower($file->getClientOriginalExtension()), ['pdf', 'docx', 'pptx'], true)) {
                     try {
-                        $extractedText = app(\App\Services\DocumentTextService::class)->extract($file);
+                        $extractedText = app(\App\Services\DocumentTextService::class)->extractMaterial($file);
+                        $extractionVersion = \App\Services\DocumentTextService::MATERIAL_EXTRACTION_VERSION;
                     } catch (\Exception $e) {
                         $extractedText = null;
                     }
@@ -313,6 +315,7 @@ class LessonController extends Controller
             'url'            => $validated['url'] ?? null,
             'order'          => $validated['order'] ?? ($lesson->materials()->max('order') + 1),
             'extracted_text' => $extractedText,
+            'extraction_version' => $extractionVersion,
         ]);
 
         return response()->json([

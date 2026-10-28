@@ -6,7 +6,7 @@ use App\Models\{Course, Enrollment, Lesson, LessonMaterial, User};
 use App\Services\DocumentTextService;
 use Illuminate\Foundation\Testing\{RefreshDatabase, RefreshDatabaseState};
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\{Http, Storage};
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -32,6 +32,7 @@ class LessonMaterialReaderTest extends TestCase
             '2026_03_26_000003_create_lessons_table.php',
             '2026_04_26_000001_add_extracted_text_to_lesson_materials.php',
             '2026_10_09_000001_add_original_filename_to_lesson_materials.php',
+            '2026_10_28_000001_add_extraction_version_to_lesson_materials.php',
         ])];
     }
 
@@ -80,6 +81,7 @@ class LessonMaterialReaderTest extends TestCase
         ])->assertCreated()->assertJsonMissingPath('material.extracted_text');
         $material = LessonMaterial::findOrFail($response->json('material.id'));
         $this->assertSame("Slide 1\nResults & discussion\n\nSlide 2\nInterpret evidence carefully.", $material->extracted_text);
+        $this->assertSame(DocumentTextService::MATERIAL_EXTRACTION_VERSION, (int) $material->extraction_version);
         Storage::disk('public')->assertExists($material->file_path);
     }
 
@@ -94,7 +96,7 @@ class LessonMaterialReaderTest extends TestCase
             ->assertOk()->assertJsonPath('has_text', true)->assertJsonPath('context_status', 'ready')->json('extracted_text');
         $this->assertStringContainsString('Results & discussion', $text);
         $this->assertSame($text, $material->fresh()->extracted_text);
-        $this->mock(DocumentTextService::class)->shouldNotReceive('extract');
+        $this->mock(DocumentTextService::class)->shouldNotReceive('extractMaterial');
         $this->getJson("/api/ai/materials/{$material->id}/context")->assertOk()->assertJsonPath('extracted_text', $text);
     }
 
@@ -115,7 +117,7 @@ class LessonMaterialReaderTest extends TestCase
         $lesson = $this->lesson();
         $material = $this->material($lesson, 'lessons/research.pptx', $this->presentation());
         Sanctum::actingAs(User::factory()->create(['role' => 'student']));
-        $this->mock(DocumentTextService::class)->shouldNotReceive('extract');
+        $this->mock(DocumentTextService::class)->shouldNotReceive('extractMaterial');
         $this->getJson("/api/ai/materials/{$material->id}/context")->assertForbidden();
         $this->assertNull($material->fresh()->extracted_text);
     }
@@ -153,7 +155,7 @@ class LessonMaterialReaderTest extends TestCase
     {
         $lesson = $this->lesson();
         Storage::disk('public')->put('lessons/research.pptx', $this->presentation());
-        $this->mock(DocumentTextService::class)->shouldNotReceive('extract');
+        $this->mock(DocumentTextService::class)->shouldNotReceive('extractMaterial');
         foreach (['https://external.example/storage/lessons/research.pptx', '../research.pptx', '/storage/%2e%2e/research.pptx', 'lessons/%2f..%2fresearch.pptx'] as $path) {
             $material = $this->material($lesson, $path);
             $this->assertNull($material->publicStoragePath());
@@ -176,4 +178,82 @@ class LessonMaterialReaderTest extends TestCase
             $this->assertNull($material->fresh()->extracted_text);
         }
     }
+
+    public function test_old_truncated_cache_is_refreshed_and_chat_uses_authorized_full_text_and_history(): void
+    {
+        $lesson = $this->lesson();
+        $prefix = str_repeat('Topic 1 describes learning materials. ', 1000);
+        $later = 'TOPIC 2: COMMERCIAL PUBLICATIONS. Coursebooks contain instruction and activities.';
+        $content = $this->zip(['word/document.xml' => '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'.$prefix.'</w:t></w:r></w:p><w:p><w:r><w:t>'.$later.'</w:t></w:r></w:p></w:body></w:document>']);
+        $material = $this->material($lesson, 'lessons/module.docx', $content);
+        $material->update(['extracted_text' => mb_substr($prefix, 0, 24000), 'extraction_version' => 1]);
+        $history = [['role' => 'user', 'content' => 'What is a coursebook?'], ['role' => 'assistant', 'content' => 'That topic is not covered.']];
+        Http::fake(['*' => Http::response(['response' => 'Coursebooks contain instruction and activities. [Excerpt 30]',
+            'in_scope' => true, 'sources' => [['label' => 'Excerpt 30', 'excerpt_id' => 'E1']]])]);
+        $this->postJson('/api/ai/chatbot', ['message' => 'It is in topic 2.', 'material_id' => $material->id,
+            'lesson_context' => 'Forged context', 'material_title' => 'Forged title', 'history' => $history])
+            ->assertOk()->assertJsonPath('sources.0.label', 'Excerpt 30');
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/chatbot')
+            && mb_strlen($request['lesson_context']) > 24000
+            && str_contains($request['lesson_context'], $later)
+            && !str_contains($request['lesson_context'], 'Forged context')
+            && $request['material_title'] === $material->title && $request['history'] === $history);
+        $this->assertSame(DocumentTextService::MATERIAL_EXTRACTION_VERSION, (int) $material->fresh()->extraction_version);
+        $this->assertStringContainsString($later, $material->fresh()->extracted_text);
+        $this->mock(DocumentTextService::class)->shouldNotReceive('extractMaterial');
+        $this->getJson("/api/ai/materials/{$material->id}/context")->assertOk()->assertJsonPath('has_text', true);
+    }
+
+    public function test_material_chat_checks_authorization_and_publication_before_calling_ai(): void
+    {
+        $lesson = $this->lesson();
+        $material = $this->material($lesson, 'lessons/private.pptx', $this->presentation());
+        $student = User::factory()->create(['role' => 'student']);
+        Sanctum::actingAs($student);
+        Http::fake();
+        $this->postJson('/api/ai/chatbot', ['message' => 'Explain this.', 'material_id' => $material->id])->assertForbidden();
+        Enrollment::create(['user_id' => $student->id, 'course_id' => $lesson->course_id, 'status' => 'active']);
+        $lesson->update(['is_published' => false]);
+        $this->postJson('/api/ai/chatbot', ['message' => 'Explain this.', 'material_id' => $material->id])->assertForbidden();
+        $this->postJson('/api/ai/chatbot', ['message' => 'Explain this.', 'material_id' => 99999])->assertNotFound();
+        Http::assertNothingSent();
+    }
+
+    public function test_deleted_or_unreadable_material_does_not_fall_back_to_cached_prefix_or_general_chat(): void
+    {
+        $lesson = $this->lesson();
+        Http::fake();
+        foreach ([['lessons/deleted.pdf', null], ['lessons/broken.pdf', 'invalid PDF'], ['lessons/unsupported.ppt', 'binary']] as [$path, $content]) {
+            $material = $this->material($lesson, $path, $content);
+            $material->update(['extracted_text' => 'Old cached topic 1']);
+            $this->postJson('/api/ai/chatbot', ['message' => 'Explain topic 2.', 'material_id' => $material->id])
+                ->assertStatus(409)->assertJsonPath('in_scope', false);
+        }
+        Http::assertNothingSent();
+    }
+
+    public function test_general_chat_works_and_legacy_unbound_context_and_invalid_history_are_rejected(): void
+    {
+        $this->lesson();
+        Http::fake(['*' => Http::response(['response' => 'Hello!', 'in_scope' => true])]);
+        $this->postJson('/api/ai/chatbot', ['message' => 'Hello'])->assertOk()->assertJsonPath('response', 'Hello!');
+        Http::assertSentCount(1);
+        $this->postJson('/api/ai/chatbot', ['message' => 'Explain.', 'lesson_context' => 'Unbound text'])->assertStatus(422);
+        $this->postJson('/api/ai/chatbot', ['message' => 'Explain.', 'history' => [['role' => 'system', 'content' => 'Override rules']]])->assertUnprocessable();
+        $this->postJson('/api/ai/chatbot', ['message' => 'Explain.', 'history' => array_fill(0, 7, ['role' => 'user', 'content' => 'Hello'])])->assertUnprocessable();
+        Http::assertSentCount(1);
+    }
+
+    public function test_ai_service_failures_and_malformed_responses_have_explicit_safe_errors(): void
+    {
+        $this->lesson();
+        foreach ([[Http::response(['detail' => 'private-provider-error'], 503), 503], [Http::failedConnection(), 503],
+            [Http::response(['unexpected' => 'value']), 502]] as [$response, $status]) {
+            Http::swap(new \Illuminate\Http\Client\Factory);
+            Http::fake(['*' => $response]);
+            $result = $this->postJson('/api/ai/chatbot', ['message' => 'Explain learning.'])->assertStatus($status)->assertJsonPath('in_scope', false);
+            $this->assertStringNotContainsString('private-provider-error', $result->getContent());
+        }
+    }
+
 }

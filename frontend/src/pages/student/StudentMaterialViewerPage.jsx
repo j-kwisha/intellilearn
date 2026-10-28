@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import { downloadMaterial } from '../../services/materialDownload';
 import { materialFormat, materialPreviewUrl } from '../../services/materialPreview';
+import { materialChatHistory, materialChatSources } from '../../services/materialChat';
 import DocxViewer from '../../components/DocxViewer';
 import chatbotAvatar from '../../assets/mascot_chathead.jpg';
 
@@ -56,20 +57,26 @@ function renderInline(text) {
 
 export default function StudentMaterialViewerPage() {
   const { courseId, lessonId, materialId } = useParams();
-  const navigate = useNavigate();
   const { state } = useLocation();
-  const [material, setMaterial] = useState(state?.material || null);
+  return <MaterialViewer key={`${courseId}/${lessonId}/${materialId}`}
+    courseId={courseId} lessonId={lessonId} materialId={materialId} initialMaterial={state?.material} />;
+}
+
+function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
+  const navigate = useNavigate();
+  const [material, setMaterial] = useState(() => String(initialMaterial?.id) === String(materialId) ? initialMaterial : null);
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([
     { from: 'bot', text: 'Hi! I can answer questions about this material. What would you like to know?' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [lessonContext, setLessonContext] = useState(null);
+  const [hasContext, setHasContext] = useState(false);
   const [contextStatus, setContextStatus] = useState('loading');
   const [loadedContextId, setLoadedContextId] = useState(null);
   const [fileAvailable, setFileAvailable] = useState(null);
   const bottomRef = useRef(null);
+  const chatRequestRef = useRef(null);
   const contextMaterialId = materialId || material?.id;
   const contextReady = loadedContextId === String(contextMaterialId);
   const fileMissing = contextReady && fileAvailable === false;
@@ -88,20 +95,22 @@ export default function StudentMaterialViewerPage() {
     return () => { active = false; };
   }, [materialId, courseId, lessonId, material]);
 
-  // Fetch extracted text for AI — use materialId directly so it works even before material loads
+  // Only check readiness here. The server resolves the authorized document for
+  // every chat request; the browser never sends document text as AI evidence.
   useEffect(() => {
     const id = contextMaterialId;
     if (!id) return;
     let active = true;
-    api.get(`/ai/materials/${id}/context`)
+    const controller = new AbortController();
+    api.get(`/ai/materials/${id}/context`, { signal: controller.signal })
       .then(res => {
         if (!active) return;
         setLoadedContextId(String(id));
         setFileAvailable(res.data.file_available ?? null);
-        setLessonContext(res.data.has_text ? res.data.extracted_text : null);
+        setHasContext(res.data.has_text === true);
         setContextStatus(res.data.has_text ? 'ready' : res.data.context_status || 'unavailable');
         if (res.data.has_text) {
-          setMessages([{ from: 'bot', text: 'Hi! I have read this lesson material. Ask me anything about it!' }]);
+          setMessages([{ from: 'bot', text: 'Hi! I can search the readable text in this material. What would you like to know?' }]);
         } else {
           setMessages([{ from: 'bot', text: res.data.file_available === false
             ? 'The original uploaded file is unavailable. Ask your instructor to re-upload it before using the material assistant.'
@@ -114,12 +123,19 @@ export default function StudentMaterialViewerPage() {
         if (!active) return;
         setLoadedContextId(String(id));
         setFileAvailable(null);
-        setLessonContext(null);
+        setHasContext(false);
         setContextStatus('unavailable');
         setMessages([{ from: 'bot', text: 'I could not load the material content. Please reopen the material or contact your instructor.' }]);
       });
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [contextMaterialId]);
+
+  // Route changes remount this viewer. Cancel the outgoing chat and invalidate
+  // its callbacks so they cannot append to a different material's conversation.
+  useEffect(() => () => {
+    chatRequestRef.current?.controller.abort();
+    chatRequestRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (chatOpen) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -127,23 +143,38 @@ export default function StudentMaterialViewerPage() {
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || loading || !contextReady || contextStatus !== 'ready' || !lessonContext) return;
-    setMessages(prev => [...prev, { from: 'user', text }]);
+    if (!text || text.length > 500 || chatRequestRef.current || !contextReady || contextStatus !== 'ready' || !hasContext) return;
+    const request = { controller: new AbortController(), materialId: String(contextMaterialId) };
+    chatRequestRef.current = request;
+    setMessages(prev => [...prev, { from: 'user', text, includeInHistory: true }]);
     setInput('');
     setLoading(true);
     try {
       const res = await api.post('/ai/chatbot', {
         message: text,
-        lesson_context: lessonContext,
-        material_title: material?.title,
-      });
+        material_id: Number(contextMaterialId),
+        history: materialChatHistory(messages),
+      }, { signal: request.controller.signal });
+      if (chatRequestRef.current !== request || request.controller.signal.aborted) return;
       // Strip <think>...</think> tags from response
+      if (typeof res.data.response !== 'string' || !res.data.response.trim()) throw new Error('Invalid assistant response');
       const cleaned = res.data.response.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-      setMessages(prev => [...prev, { from: 'bot', text: cleaned }]);
-    } catch {
-      setMessages(prev => [...prev, { from: 'bot', text: 'Sorry, the assistant is unavailable right now.' }]);
+      if (!cleaned) throw new Error('Empty assistant response');
+      setMessages(prev => [...prev, {
+        from: 'bot', text: cleaned, includeInHistory: res.data.in_scope !== false,
+        sources: materialChatSources(res.data.sources),
+      }]);
+    } catch (error) {
+      if (chatRequestRef.current !== request || request.controller.signal.aborted) return;
+      const response = error.response?.data?.response;
+      setMessages(prev => [...prev, { from: 'bot', text: typeof response === 'string'
+        ? response : 'Sorry, the assistant is unavailable right now. Please try again.' }]);
+      setInput(current => current || text);
     } finally {
-      setLoading(false);
+      if (chatRequestRef.current === request) {
+        chatRequestRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
@@ -247,12 +278,12 @@ export default function StudentMaterialViewerPage() {
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ color: '#fff', fontWeight: 700, fontSize: 14, margin: 0, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                  {lessonContext ? `📄 ${material?.title || 'Material Assistant'}` : 'IntelliLearn Assistant'}
+                  {hasContext ? `📄 ${material?.title || 'Material Assistant'}` : 'IntelliLearn Assistant'}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80' }} />
                   <p style={{ color: '#c7d2fe', fontSize: 11, margin: 0 }}>
-                  {!contextReady || contextStatus === 'loading' ? 'Reading material...' : lessonContext ? 'Reading this material' : 'Material content unavailable'}
+                  {!contextReady || contextStatus === 'loading' ? 'Reading material...' : hasContext ? 'Searching this material' : 'Material content unavailable'}
                   </p>
                 </div>
               </div>
@@ -270,6 +301,11 @@ export default function StudentMaterialViewerPage() {
                   )}
                   <div style={{ maxWidth: '78%', padding: '9px 13px', borderRadius: msg.from === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: 13, lineHeight: 1.6, background: msg.from === 'user' ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : '#f1f5f9', color: msg.from === 'user' ? '#fff' : '#334155', boxShadow: msg.from === 'user' ? '0 2px 8px rgba(79,70,229,0.25)' : 'none' }}>
                     {msg.from === 'user' ? msg.text : <MarkdownText text={msg.text} />}
+                    {msg.from === 'bot' && msg.sources?.length > 0 && (
+                      <p style={{ margin: '8px 0 0', paddingTop: 6, borderTop: '1px solid #cbd5e1', fontSize: 11, color: '#475569' }}>
+                        Source excerpts: {msg.sources.join(' · ')}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -291,7 +327,7 @@ export default function StudentMaterialViewerPage() {
             {/* Input */}
             <div style={{ padding: '10px 12px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, background: '#fafafa' }}>
               <input className="mc-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder="Ask about this material..."
+                placeholder="Ask about this material..." aria-label="Question about this material" maxLength={500}
                 style={{ flex: 1, padding: '9px 13px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 13, outline: 'none', fontFamily: "'DM Sans', sans-serif", background: 'white', transition: 'border-color 0.2s, box-shadow 0.2s' }} />
               <button onClick={sendMessage} disabled={loading || !input.trim() || !contextReady || contextStatus !== 'ready'}
                 style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 700, opacity: loading || !input.trim() || !contextReady || contextStatus !== 'ready' ? 0.45 : 1, transition: 'opacity 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
