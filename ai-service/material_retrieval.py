@@ -20,6 +20,13 @@ SOURCE_MARKER = re.compile(
 SECTION_HEADING = re.compile(
     r"^\s*((?:topic|chapter|unit|section)\s+\d+\b[^\n]{0,150})", re.I | re.M
 )
+DEFINITION_QUERY = re.compile(
+    r"\b(?:what\s+(?:is|are)|defin(?:e|ition)|meaning|means?|refers?\s+to)\b", re.I
+)
+DEFINITION_PASSAGE = re.compile(
+    r"(?P<subject>(?:[^\W_]+(?:['’][^\W_]+)?\s+){1,8})"
+    r"(?P<verb>is|are|means?|refers?\s+to)\b", re.I
+)
 STOP_WORDS = set("""
     a an and are as at be been but by can could did do does for from had has have
     how i if in into is it its me my of on or our please should so than that the
@@ -104,6 +111,15 @@ def chunks_for_document(document):
     current_section = ""
     for label, content in units:
         headings = list(SECTION_HEADING.finditer(content))
+        # Some PDFs store the visual page header after every body text object.
+        # A sole trailing heading (with at most a page-number footer after it)
+        # therefore labels this page, not just the empty tail of its extraction.
+        # Multiple headings or a heading followed by body text keep normal order.
+        if label.startswith("Page ") and len(headings) == 1 and headings[0].start() > 0:
+            trailing = content[headings[0].end():].strip()
+            if not trailing or trailing.isdecimal():
+                current_section = headings[0].group(1).strip()
+                headings = []
         sections = [(0, "")] + [(heading.start(), heading.group(1).strip()) for heading in headings]
         for offset, (start, heading) in enumerate(sections):
             end = sections[offset + 1][0] if offset + 1 < len(sections) else len(content)
@@ -137,6 +153,32 @@ def _spread_indices(chunks, count):
     return sorted(selected)
 
 
+def _definition_score(chunk, concept_terms):
+    """Prefer an actual defining passage over incidental concept mentions.
+
+    The bonus is capped per chunk, so repeating a word or sentence cannot win
+    merely by frequency. It works for arbitrary concepts, not a coursebook list.
+    """
+    if not concept_terms:
+        return 0
+    best = 0
+    for match in DEFINITION_PASSAGE.finditer(chunk.text):
+        overlap = concept_terms & terms(match.group("subject"))
+        if overlap:
+            best = max(best, 64 * len(overlap) / len(concept_terms))
+    for line in chunk.text.splitlines():
+        label, separator, explanation = line.partition(":")
+        if separator and len(label.split()) <= 8 and len(explanation.strip()) > 20:
+            overlap = concept_terms & terms(label)
+            if overlap:
+                best = max(best, 64 * len(overlap) / len(concept_terms))
+        # A short standalone concept heading is also stronger than a passing
+        # mention, while preserving room for its later defining paragraph.
+        if len(line.split()) <= 8 and terms(line.rstrip(":")) == concept_terms:
+            best = max(best, 24)
+    return best
+
+
 def select_evidence(document, question, history=None, budget=EVIDENCE_BUDGET):
     chunks = chunks_for_document(document)
     query_terms = terms(question)
@@ -148,6 +190,13 @@ def select_evidence(document, question, history=None, budget=EVIDENCE_BUDGET):
         r"\b(it|this|that|those|these|more|again|further|topic\s*\d+|why|yes)\b", question, re.I))
     previous_users = [row["content"] for row in bounded_history(history) if row["role"] == "user"][-2:]
     history_terms = set().union(*(terms(text) for text in previous_users)) if follow_up and previous_users else set()
+    definition_question = ""
+    if DEFINITION_QUERY.search(question):
+        definition_question = question
+    elif follow_up:
+        definition_question = next((text for text in reversed(previous_users) if DEFINITION_QUERY.search(text)), "")
+    definition_terms = {term for term in terms(definition_question)
+                        if ":" not in term and term not in {"define", "definition", "meaning", "mean", "refer"}}
     if not chunks:
         return {"excerpts": [], "sources": [], "context_scope": "no_matching_evidence"}
     if broad:
@@ -158,8 +207,11 @@ def select_evidence(document, question, history=None, budget=EVIDENCE_BUDGET):
             current = sum(math.log(1 + len(chunks) / frequencies[term]) for term in query_terms & chunk.terms)
             previous = sum(math.log(1 + len(chunks) / frequencies[term]) for term in history_terms & chunk.terms)
             # An explicit page/topic selector must outweigh a prior topic.
+            # A matching definition outranks inherited topic metadata: PDF text
+            # order can put a visible heading after its own body paragraphs.
             selector_bonus = 12 * len({term for term in query_terms & chunk.terms if ":" in term})
-            return current + previous * 0.55 + selector_bonus
+            definition_bonus = _definition_score(chunk, definition_terms)
+            return current + previous * 0.55 + selector_bonus + definition_bonus
         ranked = sorted(((score(chunk), chunk) for chunk in chunks), key=lambda item: (-item[0], item[1].index))
         selected = [chunk for value, chunk in ranked if value > 0][:4]
         # No lexical match is a retrieval limitation, not proof of topic absence.
