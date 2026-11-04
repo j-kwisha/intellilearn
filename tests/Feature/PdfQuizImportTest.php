@@ -127,6 +127,32 @@ class PdfQuizImportTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_bulk_question_save_accepts_empty_unselected_reference_lesson(): void
+    {
+        [$course, $assessment] = $this->fixture();
+        $path = "/api/courses/{$course->id}/assessments/{$assessment->id}";
+
+        $response = $this->postJson($path.'/questions/bulk', ['questions' => [[
+            'question_text' => 'Match each term to its definition.',
+            'type' => 'matching',
+            'points' => 1,
+            'reference_lesson_id' => '',
+            'reference_text' => '',
+            'matching_pairs' => [
+                ['left_item' => 'HTTP', 'right_item' => 'Web protocol', 'correct_match' => 'Web protocol'],
+                ['left_item' => 'SMTP', 'right_item' => 'Mail protocol', 'correct_match' => 'Mail protocol'],
+            ],
+        ]]]);
+
+        $response->assertCreated()->assertJsonCount(1, 'questions');
+        $this->assertDatabaseHas('questions', [
+            'id' => $response->json('questions.0.id'),
+            'reference_lesson_id' => null,
+            'reference_text' => null,
+        ]);
+        $this->assertDatabaseCount('matching_pairs', 2);
+    }
+
     public function test_autosave_enumeration_random_order_and_pretest_grading(): void
     {
         [$course, $assessment] = $this->fixture();

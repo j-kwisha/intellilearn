@@ -400,6 +400,16 @@ class AssessmentController extends Controller
 
         // Validate the entire batch before creating any question.
         foreach ($validated['questions'] as &$data) {
+            // Some clients submit an empty string for an unselected lesson.
+            // Normalize it explicitly because this app's middleware stack does
+            // not convert empty strings to null before database persistence.
+            $data['reference_lesson_id'] = filled($data['reference_lesson_id'] ?? null)
+                ? (int) $data['reference_lesson_id']
+                : null;
+            $data['reference_text'] = filled($data['reference_text'] ?? null)
+                ? trim($data['reference_text'])
+                : null;
+
             if (($data['type'] ?? null) === 'enumeration' && empty($data['correct_answer'])) {
                 throw ValidationException::withMessages(['questions' => 'Enumeration questions need at least one expected answer.']);
             }
