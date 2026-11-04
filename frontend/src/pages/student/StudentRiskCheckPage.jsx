@@ -9,9 +9,14 @@ export default function StudentRiskCheckPage() {
   const [practiceAnswers, setPracticeAnswers] = useState({});
   const [practiceResult, setPracticeResult] = useState(null);
   const [practiceBusy, setPracticeBusy] = useState(false);
+  const [practiceCourseId, setPracticeCourseId] = useState(null);
 
   const loadPractice = async (courseId) => {
+    if (!courseId) return;
     setPracticeBusy(true);
+    setPracticeCourseId(courseId);
+    setPractice(null);
+    setError('');
     setPracticeResult(null);
     setPracticeAnswers({});
     try {
@@ -96,7 +101,7 @@ export default function StudentRiskCheckPage() {
                 </span>
               </div>
               <button type="button" className="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold disabled:opacity-60" disabled={practiceBusy} onClick={() => loadPractice(item.course?.id)}>
-                {practiceBusy ? 'Loading…' : 'Practice missed questions'}
+                {practiceBusy && practiceCourseId === item.course?.id ? 'Loading…' : 'Practice missed questions'}
               </button>
 
               {/* Not assessed message */}
@@ -143,18 +148,32 @@ export default function StudentRiskCheckPage() {
                   </ul>
                 </div>
               )}
+
+              {practiceBusy && practiceCourseId === item.course?.id && (
+                <p className="mt-4 text-sm text-indigo-600" role="status">Loading missed questions for {item.course?.name}…</p>
+              )}
+
+              {practice?.courseId === item.course?.id && (
+                <section className="mt-5 bg-indigo-50/60 rounded-xl border border-indigo-200 p-5 space-y-4">
+                  <div className="flex justify-between items-center gap-3">
+                    <div>
+                      <h2 className="font-bold text-slate-800">Practice Quiz · Missed questions</h2>
+                      <p className="text-xs text-slate-500 mt-1">{item.course?.name}</p>
+                    </div>
+                    <button type="button" onClick={() => setPractice(null)} className="text-slate-500 hover:text-slate-800">Close</button>
+                  </div>
+                  {practice.questions.length === 0 ? <p className="text-sm text-slate-600">No previously missed objective questions are available for this course yet.</p> : practice.questions.map((question, index) => <div key={question.id} className="border-t border-indigo-100 pt-3">
+                    <p className="text-sm font-medium">{index + 1}. {question.question_text}</p>
+                    {question.assessment_title && <p className="mt-1 text-xs text-slate-500">From: {question.assessment_title}</p>}
+                    {question.type === 'multiple_choice' || question.type === 'true_false' ? <select className="mt-2 w-full border rounded-lg p-2 bg-white" value={practiceAnswers[question.id] || ''} onChange={e => setPracticeAnswers(prev => ({ ...prev, [question.id]: e.target.value }))}><option value="">Choose an answer</option>{Object.values(question.options || {}).map(option => <option key={option} value={option}>{option}</option>)}</select> : <textarea className="mt-2 w-full border rounded-lg p-2 bg-white" rows={question.type === 'enumeration' ? 3 : 1} placeholder={question.type === 'enumeration' ? 'One answer per line' : 'Your answer'} value={practiceAnswers[question.id] || ''} onChange={e => setPracticeAnswers(prev => ({ ...prev, [question.id]: e.target.value }))} />}
+                  </div>)}
+                  {practice.questions.length > 0 && !practiceResult && <button type="button" disabled={practiceBusy} onClick={submitPractice} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold disabled:opacity-60">{practiceBusy ? 'Checking…' : 'Check practice answers'}</button>}
+                  {practiceResult && <p className="p-3 rounded-lg bg-white text-indigo-800 font-semibold">Practice result: {practiceResult.attempt.correct_count} / {practiceResult.attempt.question_count} correct ({practiceResult.attempt.percentage}%). This does not affect your course grade.</p>}
+                </section>
+              )}
             </div>
           ))}
         </div>
-        {practice && <section className="mt-6 bg-white rounded-xl border border-indigo-200 p-5 space-y-4">
-          <div className="flex justify-between items-center"><h2 className="font-bold text-slate-800">Practice Quiz · Missed questions</h2><button type="button" onClick={() => setPractice(null)} className="text-slate-500">Close</button></div>
-          {practice.questions.length === 0 ? <p className="text-sm text-slate-500">No previously missed objective questions are available for this course yet.</p> : practice.questions.map((question, index) => <div key={question.id} className="border-t pt-3">
-            <p className="text-sm font-medium">{index + 1}. {question.question_text}</p>
-            {question.type === 'multiple_choice' || question.type === 'true_false' ? <select className="mt-2 w-full border rounded-lg p-2" value={practiceAnswers[question.id] || ''} onChange={e => setPracticeAnswers(prev => ({ ...prev, [question.id]: e.target.value }))}><option value="">Choose an answer</option>{Object.values(question.options || {}).map(option => <option key={option} value={option}>{option}</option>)}</select> : <textarea className="mt-2 w-full border rounded-lg p-2" rows={question.type === 'enumeration' ? 3 : 1} placeholder={question.type === 'enumeration' ? 'One answer per line' : 'Your answer'} value={practiceAnswers[question.id] || ''} onChange={e => setPracticeAnswers(prev => ({ ...prev, [question.id]: e.target.value }))} />}
-          </div>)}
-          {practice.questions.length > 0 && !practiceResult && <button type="button" disabled={practiceBusy} onClick={submitPractice} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold disabled:opacity-60">{practiceBusy ? 'Checking…' : 'Check practice answers'}</button>}
-          {practiceResult && <p className="p-3 rounded-lg bg-indigo-50 text-indigo-800 font-semibold">Practice result: {practiceResult.attempt.correct_count} / {practiceResult.attempt.question_count} correct ({practiceResult.attempt.percentage}%). This does not affect your course grade.</p>}
-        </section>}
       </div>
     </div>
   );

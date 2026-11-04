@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import AssessmentSchedule from '../../components/AssessmentSchedule';
@@ -19,12 +19,34 @@ export default function StudentQuizPage() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [saveState, setSaveState] = useState('saved');
   const [lowDataMode, setLowDataMode] = useState(() => localStorage.getItem('intellilearn-low-data') === 'true');
+  const [timerWarningOpen, setTimerWarningOpen] = useState(false);
   const lastSyncedAnswers = useRef({});
+  const timerWarningShown = useRef(false);
+  const timerExpired = useRef(false);
+
+  const startedAt = submission?.started_at ? Date.parse(submission.started_at) : NaN;
+  const timeLimitSeconds = Number(assessment?.time_limit_minutes) * 60;
+  const remainingSeconds = Number.isFinite(startedAt) && timeLimitSeconds > 0
+    ? Math.max(0, Math.ceil((startedAt + timeLimitSeconds * 1000 - currentTime) / 1000))
+    : null;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    timerWarningShown.current = false;
+    timerExpired.current = false;
+    setTimerWarningOpen(false);
+  }, [submission?.id]);
+
+  useEffect(() => {
+    if (remainingSeconds !== null && remainingSeconds > 0 && remainingSeconds <= 60 && !timerWarningShown.current) {
+      timerWarningShown.current = true;
+      setTimerWarningOpen(true);
+    }
+  }, [remainingSeconds]);
 
   useEffect(() => {
     api.get(`/courses/${courseId}/assessments/${assessmentId}`)
@@ -143,7 +165,8 @@ export default function StudentQuizPage() {
     return () => window.removeEventListener('online', retrySave);
   }, [submission, result, answers, courseId, assessmentId]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
+    if (submitting) return;
     setSubmitting(true);
     setError('');
 
@@ -164,7 +187,14 @@ export default function StudentQuizPage() {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [answers, assessmentId, courseId, submission, submitting]);
+
+  useEffect(() => {
+    if (remainingSeconds !== 0 || !submission || result || submitting || timerExpired.current) return;
+    timerExpired.current = true;
+    setTimerWarningOpen(false);
+    handleSubmit();
+  }, [remainingSeconds, submission, result, submitting, handleSubmit]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">
@@ -405,6 +435,30 @@ export default function StudentQuizPage() {
   // Show questions
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {remainingSeconds !== null && (
+        <div className="sticky top-20 z-30 -mb-2 flex justify-end pointer-events-none">
+          <div className={`pointer-events-auto rounded-xl border px-4 py-2 shadow-lg ${remainingSeconds <= 60
+            ? 'bg-red-50 border-red-300 text-red-800'
+            : 'bg-white border-indigo-200 text-slate-800'}`} aria-live="polite">
+            <span className="text-xs font-medium mr-2">Time remaining</span>
+            <span className="font-mono font-bold tabular-nums">{formatRemainingTime(remainingSeconds)}</span>
+          </div>
+        </div>
+      )}
+
+      {timerWarningOpen && remainingSeconds !== null && remainingSeconds > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="alertdialog" aria-modal="true" aria-labelledby="assessment-time-warning-title">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="assessment-time-warning-title" className="text-lg font-bold text-amber-700">One minute remaining</h2>
+            <p className="mt-2 text-sm text-slate-600">Your assessment will be submitted automatically when the timer reaches zero.</p>
+            <p className="mt-3 font-mono text-2xl font-bold text-slate-900">{formatRemainingTime(remainingSeconds)}</p>
+            <button type="button" onClick={() => setTimerWarningOpen(false)} className="mt-5 w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+              Continue assessment
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Warning banner */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
         <span className="text-amber-600 text-xl flex-shrink-0">⚠️</span>
@@ -421,7 +475,6 @@ export default function StudentQuizPage() {
         <p className="text-sm text-slate-500 mt-1">
           Answer all questions, then click Submit.
         </p>
-        <AssessmentSchedule assessment={assessment} />
         <button type="button" onClick={() => setLowDataMode(previous => { const next = !previous; localStorage.setItem('intellilearn-low-data', String(next)); return next; })} className="mt-3 text-xs px-3 py-1.5 rounded-full border border-indigo-200 text-indigo-700">
           Low-data mode: {lowDataMode ? 'On' : 'Off'}
         </button>
@@ -561,6 +614,12 @@ export default function StudentQuizPage() {
 }
 
 // ── AI Feedback Panel ──────────────────────────────────────────
+function formatRemainingTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`;
+}
+
 function AiFeedbackPanel({ submissionId }) {
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(true);

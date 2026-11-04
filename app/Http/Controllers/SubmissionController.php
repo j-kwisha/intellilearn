@@ -46,10 +46,6 @@ class SubmissionController extends Controller
             return response()->json(['message' => 'This assessment is not available yet.'], 403);
         }
 
-        if ($message = $this->assessmentDateError($assessment)) {
-            return response()->json(['message' => $message], 403);
-        }
-
         // Check if student has an in-progress attempt
         $existingAttempt = Submission::where('user_id', $user->id)
             ->where('assessment_id', $assessment->id)
@@ -68,6 +64,12 @@ class SubmissionController extends Controller
                 'message'    => 'You have an in-progress attempt.',
                 'submission' => $existingAttempt,
             ]);
+        }
+
+        // Availability windows prevent new attempts, but do not strand a student
+        // who already started and needs to resume after refreshing or reconnecting.
+        if ($message = $this->assessmentDateError($assessment)) {
+            return response()->json(['message' => $message], 403);
         }
 
         // Check max attempts
@@ -116,9 +118,6 @@ class SubmissionController extends Controller
         if (!$assessment->questions()->whereKey($data['question_id'])->exists()) {
             return response()->json(['message' => 'Question does not belong to this assessment.'], 422);
         }
-        if (!$assessment->allow_late_submissions && $assessment->due_date && now()->gte($assessment->due_date)) {
-            return response()->json(['message' => 'The deadline for this assessment has passed.'], 422);
-        }
         SubmissionAnswer::updateOrCreate(
             ['submission_id' => $submission->id, 'question_id' => $data['question_id']],
             ['answer_text' => $data['answer_text'] ?? null]
@@ -162,10 +161,6 @@ class SubmissionController extends Controller
             return response()->json([
                 'message' => 'No active submission found. Start the assessment first.',
             ], 404);
-        }
-
-        if ($message = $this->assessmentDateError($assessment)) {
-            return response()->json(['message' => $message], 403);
         }
 
         // Load all questions for this assessment (for auto-grading)

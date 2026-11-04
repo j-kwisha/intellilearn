@@ -140,7 +140,14 @@ class AuthController extends Controller
                     fn ($message) => $message->to($user->email, $user->full_name)->subject('IntelliLearn admin sign-in code'));
             } catch (\Throwable $error) {
                 DB::table('admin_login_challenges')->where('token_hash', hash('sha256', $challenge))->delete();
-                \Illuminate\Support\Facades\Log::error('Admin sign-in email could not be sent', ['user_id' => $user->id, 'exception_type' => get_class($error)]);
+                $providerError = preg_replace('/Bearer\s+[^\s]+/i', 'Bearer [redacted]', $error->getMessage());
+                $providerError = preg_replace('/\bre_[A-Za-z0-9_-]{12,}\b/', '[redacted-api-key]', $providerError);
+                $providerError = preg_replace('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', '[redacted-email]', $providerError);
+                \Illuminate\Support\Facades\Log::error('Admin sign-in email could not be sent', [
+                    'user_id' => $user->id,
+                    'exception_type' => get_class($error),
+                    'provider_error' => mb_substr($providerError, 0, 300),
+                ]);
                 return response()->json(['message' => 'Could not send the admin verification code. Please try again later.'], 503);
             }
             return response()->json(['requires_two_factor' => true, 'challenge_token' => $challenge,

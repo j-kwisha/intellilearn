@@ -202,7 +202,7 @@ class PresentationSeederTest extends TestCase
         ])->assertOk()->assertJsonPath('submission.status', 'graded')->assertJsonPath('submission.percentage', '100.00');
     }
 
-    public function test_assessment_dates_block_early_starts_closed_resumes_and_late_submissions(): void
+    public function test_assessment_dates_block_attempt_starts_without_interrupting_active_attempts(): void
     {
         $this->dataset();
         $this->travelTo(PresentationData::date()->setHour(12));
@@ -218,13 +218,12 @@ class PresentationSeederTest extends TestCase
         $attempt = $this->postJson($path . '/start')->assertCreated()->json('submission.id');
         $this->postJson($path . '/start')->assertOk()->assertJsonPath('submission.id', $attempt);
         $this->travel(1)->hours();
-        $this->postJson($path . '/start')->assertForbidden()->assertJsonPath('message', 'The deadline for this assessment has passed.');
+        $this->postJson($path . '/start')->assertOk()->assertJsonPath('submission.id', $attempt);
         $question = $assessment->questions()->firstOrFail();
         $this->postJson($path . '/submit', ['submission_id' => $attempt, 'answers' => [
             ['question_id' => $question->id, 'answer_text' => $question->correct_answer],
-        ]])->assertForbidden();
-        $this->assertDatabaseHas('submissions', ['id' => $attempt, 'status' => 'in_progress']);
-        $this->assertSame(0, Submission::findOrFail($attempt)->answers()->count());
+        ]])->assertOk()->assertJsonPath('submission.status', 'graded');
+        $this->assertDatabaseHas('submissions', ['id' => $attempt, 'status' => 'graded']);
         // A fresh attempt is also denied after closure.
         Sanctum::actingAs($this->user('sofia.ramos'));
         $this->postJson($path . '/start')->assertForbidden();

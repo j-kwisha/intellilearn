@@ -153,6 +153,36 @@ class PdfQuizImportTest extends TestCase
         $this->assertDatabaseCount('matching_pairs', 2);
     }
 
+    public function test_due_date_does_not_interrupt_an_attempt_started_during_availability(): void
+    {
+        [$course, $assessment] = $this->fixture();
+        $path = "/api/courses/{$course->id}/assessments/{$assessment->id}";
+        $question = $this->postJson($path.'/questions', [
+            'question_text' => 'Which protocol serves web pages?',
+            'type' => 'multiple_choice',
+            'options' => ['HTTP', 'SMTP'],
+            'correct_answer' => 'HTTP',
+            'points' => 1,
+        ])->assertCreated()->json('question');
+        $assessment->update(['is_published' => true, 'time_limit_minutes' => 10, 'due_date' => now()->addMinute()]);
+
+        $student = User::factory()->create(['role' => 'student']);
+        Enrollment::create(['user_id' => $student->id, 'course_id' => $course->id, 'status' => 'active']);
+        Sanctum::actingAs($student);
+        $submissionId = $this->postJson($path.'/start')->assertCreated()->json('submission.id');
+
+        $this->travel(2)->minutes();
+        $this->putJson($path.'/autosave', [
+            'submission_id' => $submissionId,
+            'question_id' => $question['id'],
+            'answer_text' => 'HTTP',
+        ])->assertOk()->assertJsonPath('saved', true);
+        $this->postJson($path.'/submit', [
+            'submission_id' => $submissionId,
+            'answers' => [['question_id' => $question['id'], 'answer_text' => 'HTTP']],
+        ])->assertOk()->assertJsonPath('submission.status', 'graded')->assertJsonPath('submission.score', '1.00');
+    }
+
     public function test_autosave_enumeration_random_order_and_pretest_grading(): void
     {
         [$course, $assessment] = $this->fixture();
