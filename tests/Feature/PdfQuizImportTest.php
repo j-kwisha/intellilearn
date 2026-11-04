@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Assessment, Course, Enrollment, User};
+use App\Models\{Assessment, Course, Enrollment, Question, Submission, SubmissionAnswer, User};
 use Illuminate\Foundation\Testing\{RefreshDatabase, RefreshDatabaseState};
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\{Http, Storage};
@@ -37,6 +37,7 @@ class PdfQuizImportTest extends TestCase
             '2026_09_26_170424_add_criterion_scores_to_submission_answers.php',
             '2026_10_04_160000_add_reference_fields_to_questions.php',
             '2026_10_06_000001_extend_essay_rubrics_and_grading_audit.php',
+            '2026_11_05_000001_add_learning_and_security_features.php',
             '2026_10_06_000002_add_essay_grading_states.php',
         ])];
     }
@@ -124,6 +125,70 @@ class PdfQuizImportTest extends TestCase
         ]])->assertOk()->assertJsonPath('submission.status', 'graded')
             ->assertJsonPath('submission.score', '5.00')->assertJsonPath('submission.percentage', '100.00');
         Http::assertNothingSent();
+    }
+
+    public function test_autosave_enumeration_random_order_and_pretest_grading(): void
+    {
+        [$course, $assessment] = $this->fixture();
+        $path = "/api/courses/{$course->id}/assessments/{$assessment->id}";
+        $this->postJson($path.'/questions', ['question_text' => 'Name two transport protocols.', 'type' => 'enumeration', 'correct_answer' => "TCP\nUDP", 'points' => 2])->assertCreated();
+        $this->postJson($path.'/questions', ['question_text' => 'Which protocol is secure?', 'type' => 'multiple_choice', 'options' => ['HTTP', 'HTTPS'], 'correct_answer' => 'HTTPS', 'points' => 1])->assertCreated();
+        $this->putJson($path, ['is_published' => true, 'shuffle_questions' => true, 'assessment_stage' => 'pre_test', 'passing_score' => 70])->assertOk();
+        $student = User::factory()->create(['role' => 'student']);
+        Enrollment::create(['user_id' => $student->id, 'course_id' => $course->id, 'status' => 'active']);
+        Sanctum::actingAs($student);
+        $start = $this->postJson($path.'/start')->assertCreated();
+        $submissionId = $start->json('submission.id');
+        $this->assertCount(2, $start->json('submission.question_order'));
+        $questionId = $start->json('submission.question_order.0');
+        $this->putJson($path.'/autosave', ['submission_id' => $submissionId, 'question_id' => $questionId, 'answer_text' => 'TCP'])->assertOk()->assertJsonPath('saved', true);
+        $this->assertDatabaseHas('submission_answers', ['submission_id' => $submissionId, 'question_id' => $questionId, 'answer_text' => 'TCP']);
+        $result = $this->postJson($path.'/submit', ['submission_id' => $submissionId, 'answers' => [
+            ['question_id' => Question::where('assessment_id', $assessment->id)->where('type', 'enumeration')->value('id'), 'answer_text' => "TCP\n"],
+            ['question_id' => Question::where('assessment_id', $assessment->id)->where('type', 'multiple_choice')->value('id'), 'answer_text' => 'HTTPS'],
+        ]])->assertOk();
+        $this->assertSame(2.0, (float) $result->json('submission.score'));
+        $this->assertSame('pre_test', $assessment->fresh()->assessment_stage);
+    }
+
+    public function test_practice_uses_previously_missed_questions_without_changing_assessment_grade(): void
+    {
+        [$course, $assessment] = $this->fixture();
+        $path = "/api/courses/{$course->id}/assessments/{$assessment->id}";
+        $question = $this->postJson($path.'/questions', ['question_text' => 'Which protocol provides encryption?', 'type' => 'multiple_choice', 'options' => ['HTTP', 'HTTPS'], 'correct_answer' => 'HTTPS', 'points' => 1])->assertCreated()->json('question');
+        $this->putJson($path, ['is_published' => true])->assertOk();
+        $student = User::factory()->create(['role' => 'student']);
+        Enrollment::create(['user_id' => $student->id, 'course_id' => $course->id, 'status' => 'active']);
+        Sanctum::actingAs($student);
+        $submission = $this->postJson($path.'/start')->assertCreated()->json('submission.id');
+        $this->postJson($path.'/submit', ['submission_id' => $submission, 'answers' => [['question_id' => $question['id'], 'answer_text' => 'HTTP']]])
+            ->assertOk()->assertJsonPath('submission.percentage', '0.00');
+        $this->getJson('/api/student/practice?course_id='.$course->id)->assertOk()
+            ->assertJsonCount(1, 'questions')->assertJsonMissingPath('questions.0.correct_answer');
+        $practice = $this->postJson('/api/student/practice', ['course_id' => $course->id, 'answers' => [['question_id' => $question['id'], 'answer_text' => 'HTTPS']]])
+            ->assertOk()->assertJsonPath('attempt.percentage', 100);
+        $this->assertDatabaseHas('practice_attempt_answers', ['practice_attempt_id' => $practice->json('attempt.id'), 'question_id' => $question['id'], 'is_correct' => 1]);
+        $this->assertSame('0.00', Submission::findOrFail($submission)->fresh()->percentage);
+    }
+
+    public function test_pre_post_learning_gain_and_question_difficulty_are_reported(): void
+    {
+        [$course, $assessment] = $this->fixture();
+        $teacher = User::findOrFail($course->instructor_id);
+        $student = User::factory()->create(['role' => 'student']);
+        $pre = $course->assessments()->create(['title' => 'Baseline', 'type' => 'quiz', 'assessment_stage' => 'pre_test']);
+        $post = $course->assessments()->create(['title' => 'Follow-up', 'type' => 'quiz', 'assessment_stage' => 'post_test']);
+        foreach ([[$pre, 50], [$post, 80]] as [$test, $percentage]) {
+            Submission::create(['user_id' => $student->id, 'assessment_id' => $test->id, 'status' => 'graded', 'score' => $percentage, 'total_points' => 100, 'percentage' => $percentage]);
+        }
+        $question = $assessment->questions()->create(['question_text' => 'Which networking layer routes packets?', 'type' => 'multiple_choice', 'options' => ['Network', 'Physical'], 'correct_answer' => 'Network', 'points' => 1]);
+        $attempt = Submission::create(['user_id' => $student->id, 'assessment_id' => $assessment->id, 'status' => 'graded', 'score' => 0, 'total_points' => 1, 'percentage' => 0]);
+        SubmissionAnswer::create(['submission_id' => $attempt->id, 'question_id' => $question->id, 'answer_text' => 'Physical', 'is_correct' => false, 'points_earned' => 0]);
+        Sanctum::actingAs($teacher);
+        $this->getJson("/api/courses/{$course->id}/knowledge-gain")->assertOk()
+            ->assertJsonPath('students.0.pre_test_average', 50)->assertJsonPath('students.0.post_test_average', 80)->assertJsonPath('students.0.gain', 30);
+        $this->getJson("/api/courses/{$course->id}/assessments/{$assessment->id}/question-analysis")->assertOk()
+            ->assertJsonPath('questions.0.percent_correct', 0)->assertJsonPath('questions.0.difficulty', 'Difficult');
     }
 
     public function test_student_other_instructor_and_wrong_course_cannot_import(): void

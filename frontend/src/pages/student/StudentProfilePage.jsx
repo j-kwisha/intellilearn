@@ -13,7 +13,7 @@ import './StudentProfilePage.css';
 
 const blankPassword = { current_password: '', password: '', password_confirmation: '' };
 const blankPhoto = { file: null, preview: null, remove: false };
-const accountFields = user => ({ first_name: user?.first_name || '', last_name: user?.last_name || '', email: user?.email || '' });
+const accountFields = user => ({ first_name: user?.first_name || '', last_name: user?.last_name || '', email: user?.email || '', birthday: user?.birthday || '', year_level: user?.year_level || '', section: user?.section || '', student_id: user?.student_id || '' });
 const fieldErrors = error => Object.fromEntries(Object.entries(error.response?.data?.errors || {}).map(([key, messages]) => [key, messages[0]]));
 
 function Notice({ notice }) {
@@ -21,11 +21,11 @@ function Notice({ notice }) {
     role={notice.type === 'error' ? 'alert' : 'status'}>{notice.text}</div>;
 }
 
-function TextField({ label, name, value, onChange, error, placeholder, type = 'text', autoComplete }) {
+function TextField({ label, name, value, onChange, error, placeholder, type = 'text', autoComplete, required = true }) {
   const id = `profile-${name}`;
   return <div className="profile-field">
     <label htmlFor={id}>{label}</label>
-    <input id={id} name={name} type={type} value={value} onChange={onChange} required maxLength={255}
+    <input id={id} name={name} type={type} value={value} onChange={onChange} required={required} maxLength={255}
       placeholder={placeholder} autoComplete={autoComplete} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} />
     {error && <p id={`${id}-error`} className="profile-field-error">{error}</p>}
   </div>;
@@ -205,13 +205,19 @@ export default function StudentProfilePage() {
             </div>
             <TextField name="email" label="Email address" type="email" autoComplete="email" placeholder="you@example.com"
               value={form.email} error={profileErrors.email} onChange={event => { setForm({ ...form, email: event.target.value }); setProfileErrors(current => ({ ...current, email: '' })); }} />
+            {user?.role === 'student' && <div className="profile-name-grid">
+              <TextField name="birthday" label="Birthday" type="date" required={false} value={form.birthday} error={profileErrors.birthday} onChange={event => setForm({ ...form, birthday: event.target.value })} />
+              <TextField name="year_level" label="Year level" required={false} placeholder="e.g. 2nd Year" value={form.year_level} error={profileErrors.year_level} onChange={event => setForm({ ...form, year_level: event.target.value })} />
+              <TextField name="section" label="Section" required={false} placeholder="e.g. BSIT-2A" value={form.section} error={profileErrors.section} onChange={event => setForm({ ...form, section: event.target.value })} />
+              <TextField name="student_id" label="Student ID" required={false} placeholder="Enter your student ID" value={form.student_id} error={profileErrors.student_id} onChange={event => setForm({ ...form, student_id: event.target.value })} />
+            </div>}
             <div className="profile-actions profile-form-actions">
               <button type="submit" className="profile-btn profile-btn--primary" disabled={busy || !!profileErrors.avatar}>{saving ? 'Saving…' : 'Save Changes'}</button>
               <button type="button" className="profile-btn profile-btn--secondary" onClick={() => { resetPhoto(); setEditing(false); setProfileErrors({}); setProfileNotice(null); }}>Cancel</button>
             </div>
           </fieldset>
         </form> : <dl className="profile-details">
-          {[['First name', user?.first_name], ['Last name', user?.last_name], ['Email address', user?.email], ['Role', user?.role]].map(([label, value]) =>
+          {[['First name', user?.first_name], ['Last name', user?.last_name], ['Email address', user?.email], ...(user?.role === 'student' ? [['Birthday', user?.birthday], ['Year level', user?.year_level], ['Section', user?.section], ['Student ID', user?.student_id]] : []), ['Role', user?.role]].map(([label, value]) =>
             <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
         </dl>}
       </section>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import AssessmentSchedule from '../../components/AssessmentSchedule';
@@ -17,6 +17,9 @@ export default function StudentQuizPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [saveState, setSaveState] = useState('saved');
+  const [lowDataMode, setLowDataMode] = useState(() => localStorage.getItem('intellilearn-low-data') === 'true');
+  const lastSyncedAnswers = useRef({});
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -81,7 +84,17 @@ export default function StudentQuizPage() {
     try {
       const res = await api.post(`/courses/${courseId}/assessments/${assessmentId}/start`);
       setSubmission(res.data.submission);
-      setAnswers(Object.fromEntries((res.data.submission.answers || []).map(answer => [answer.question_id, answer.answer_text ?? ''])));
+      const serverAnswers = Object.fromEntries((res.data.submission.answers || []).map(answer => [answer.question_id, answer.answer_text ?? '']));
+      const localKey = `intellilearn-activity-${res.data.submission.id}`;
+      let localAnswers = {};
+      try { localAnswers = JSON.parse(localStorage.getItem(localKey) || '{}'); } catch { localAnswers = {}; }
+      const restoredAnswers = { ...serverAnswers, ...localAnswers };
+      lastSyncedAnswers.current = { ...serverAnswers };
+      setAnswers(restoredAnswers);
+      if (res.data.submission.question_order?.length) {
+        const order = new Map(res.data.submission.question_order.map((id, idx) => [Number(id), idx]));
+        setAssessment(current => ({ ...current, questions: [...(current?.questions || [])].sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999)) }));
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Could not start assessment.');
     }
@@ -90,6 +103,45 @@ export default function StudentQuizPage() {
   const handleAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
+
+  // Local persistence is immediate; server autosave is debounced and resumes on reconnection.
+  useEffect(() => {
+    if (!submission || result) return undefined;
+    const key = `intellilearn-activity-${submission.id}`;
+    try { localStorage.setItem(key, JSON.stringify(answers)); } catch { /* device storage may be full */ }
+    const changed = Object.entries(answers).filter(([id, value]) => lastSyncedAnswers.current[id] !== value);
+    if (!changed.length) return undefined;
+    const timer = window.setTimeout(async () => {
+      if (!navigator.onLine) { setSaveState('offline'); return; }
+      setSaveState('saving');
+      try {
+        for (const [questionId, answerText] of changed) {
+          await api.put(`/courses/${courseId}/assessments/${assessmentId}/autosave`, {
+            submission_id: submission.id, question_id: Number(questionId), answer_text: answerText,
+          });
+          lastSyncedAnswers.current[questionId] = answerText;
+        }
+        setSaveState('saved');
+      } catch {
+        setSaveState(navigator.onLine ? 'retry' : 'offline');
+      }
+    }, lowDataMode ? 1800 : 600);
+    return () => window.clearTimeout(timer);
+  }, [answers, submission, result, courseId, assessmentId, lowDataMode]);
+
+  useEffect(() => {
+    const retrySave = () => {
+      if (submission && !result) {
+        Object.entries(answers).filter(([questionId, answerText]) => lastSyncedAnswers.current[questionId] !== answerText).forEach(([questionId, answerText]) => {
+          api.put(`/courses/${courseId}/assessments/${assessmentId}/autosave`, {
+            submission_id: submission.id, question_id: Number(questionId), answer_text: answerText,
+          }).then(() => { lastSyncedAnswers.current[questionId] = answerText; setSaveState('saved'); }).catch(() => setSaveState('retry'));
+        });
+      }
+    };
+    window.addEventListener('online', retrySave);
+    return () => window.removeEventListener('online', retrySave);
+  }, [submission, result, answers, courseId, assessmentId]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -106,6 +158,7 @@ export default function StudentQuizPage() {
         answers: answerArray,
       });
       setResult(res.data.submission);
+      localStorage.removeItem(`intellilearn-activity-${submission.id}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Submission failed.');
     } finally {
@@ -198,7 +251,7 @@ export default function StudentQuizPage() {
                 {result.score} / {result.total_points} points
               </p>
               <p className="text-sm text-slate-500 mt-1">
-                {result.percentage >= 75 ? 'Great job!' : 'Keep studying — you can do better!'}
+                {assessment.passing_score != null ? `${result.percentage >= Number(assessment.passing_score) ? 'Passed' : 'Not passed'} · Passing score ${assessment.passing_score}%` : (result.percentage >= 75 ? 'Great job!' : 'Keep studying — you can do better!')}
               </p>
             </>
           ) : (
@@ -312,7 +365,7 @@ export default function StudentQuizPage() {
 
   const dateMessage = assessment.available_from && currentTime < Date.parse(assessment.available_from)
     ? 'This assessment is not open yet.'
-    : assessment.due_date && currentTime >= Date.parse(assessment.due_date)
+    : !assessment.allow_late_submissions && assessment.due_date && currentTime >= Date.parse(assessment.due_date)
       ? 'The deadline for this assessment has passed.' : '';
 
   // Show start screen
@@ -321,6 +374,7 @@ export default function StudentQuizPage() {
       <div className="max-w-lg mx-auto">
         <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
           <h2 className="text-xl font-bold text-slate-800">{assessment.title}</h2>
+          {assessment.assessment_stage && assessment.assessment_stage !== 'regular' && <p className="text-xs mt-2 text-indigo-600">{assessment.assessment_stage === 'pre_test' ? 'Pre-test' : 'Post-test'} · Stored for knowledge-gain reporting; excluded from your course grade.</p>}
           <div className="flex justify-center gap-4 mt-4 text-sm text-slate-500">
             <span>{assessment.questions?.length} questions</span>
             <span>{assessment.total_points} points</span>
@@ -368,6 +422,9 @@ export default function StudentQuizPage() {
           Answer all questions, then click Submit.
         </p>
         <AssessmentSchedule assessment={assessment} />
+        <button type="button" onClick={() => setLowDataMode(previous => { const next = !previous; localStorage.setItem('intellilearn-low-data', String(next)); return next; })} className="mt-3 text-xs px-3 py-1.5 rounded-full border border-indigo-200 text-indigo-700">
+          Low-data mode: {lowDataMode ? 'On' : 'Off'}
+        </button>
       </div>
 
       {error && (
@@ -376,6 +433,9 @@ export default function StudentQuizPage() {
         </div>
       )}
 
+      <div className="text-xs text-slate-500" aria-live="polite">
+        {saveState === 'saving' ? 'Saving answers…' : saveState === 'offline' ? 'Offline — answers saved on this device; they will sync when you reconnect.' : saveState === 'retry' ? 'Could not sync yet — your answers remain saved on this device.' : 'Answers autosaved'}
+      </div>
       {assessment.questions?.map((q, idx) => (
         <div key={q.id} className="bg-white rounded-xl border border-slate-200 p-5">
           <p className="text-sm font-medium text-slate-800">
@@ -454,6 +514,14 @@ export default function StudentQuizPage() {
                   </table>
                 </div>
               </div>
+            ) : q.type === 'enumeration' ? (
+              <textarea
+                value={answers[q.id] || ''}
+                onChange={(e) => handleAnswer(q.id, e.target.value)}
+                rows={3}
+                placeholder="Enter one answer per line"
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
             ) : q.type === 'essay' ? (
               <textarea
                 value={answers[q.id] || ''}

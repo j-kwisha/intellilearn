@@ -26,6 +26,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'avatar',
         'is_active',
         'last_login_at',
+        'birthday',
+        'year_level',
+        'section',
+        'student_id',
     ];
 
     /**
@@ -49,6 +53,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'last_login_at' => 'datetime',
             'password' => 'hashed',        // Auto-hashes when setting password
             'is_active' => 'boolean',
+            'birthday' => 'date',
         ];
     }
 
@@ -81,6 +86,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function enrollments()
+    {
+        return $this->hasMany(Enrollment::class);
     }
 
     /**

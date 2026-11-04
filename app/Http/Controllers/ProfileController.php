@@ -23,6 +23,10 @@ class ProfileController extends Controller
             'first_name' => ['sometimes', 'string', 'max:255'],
             'last_name'  => ['sometimes', 'string', 'max:255'],
             'email'      => ['sometimes', 'email', 'unique:users,email,' . $user->id],
+            'birthday'   => ['sometimes', 'nullable', 'date', 'before:today'],
+            'year_level' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'section'    => ['sometimes', 'nullable', 'string', 'max:80'],
+            'student_id' => ['sometimes', 'nullable', 'string', 'max:80', 'unique:users,student_id,' . $user->id],
             'avatar' => ['bail', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120',
                 function ($attribute, $file, $fail) {
                     $image = @getimagesize($file->getRealPath());
@@ -46,7 +50,7 @@ class ProfileController extends Controller
             }
             $user = DB::transaction(function () use ($user, $validated, $request, $disk, $newPath, &$oldAvatar) {
                 $account = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-                $changes = array_intersect_key($validated, array_flip(['first_name', 'last_name', 'email']));
+                $changes = array_intersect_key($validated, array_flip(['first_name', 'last_name', 'email', 'birthday', 'year_level', 'section', 'student_id']));
                 if ($newPath || $request->boolean('remove_avatar')) {
                     $oldAvatar = $account->avatar;
                     $changes['avatar'] = $newPath ? $disk->url($newPath) : null;
@@ -72,7 +76,7 @@ class ProfileController extends Controller
 
         return response()->json([
             'message' => 'Profile updated successfully.',
-            'user'    => $user->only(['id', 'first_name', 'last_name', 'email', 'role', 'avatar']),
+            'user'    => $user->only(['id', 'first_name', 'last_name', 'email', 'role', 'avatar', 'birthday', 'year_level', 'section', 'student_id']),
         ]);
     }
 

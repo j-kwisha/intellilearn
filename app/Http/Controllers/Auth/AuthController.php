@@ -11,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -125,6 +127,26 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->isAdmin()) {
+            $code = (string) random_int(100000, 999999);
+            $challenge = bin2hex(random_bytes(32));
+            DB::table('admin_login_challenges')->where('user_id', $user->id)->delete();
+            DB::table('admin_login_challenges')->insert([
+                'user_id' => $user->id, 'token_hash' => hash('sha256', $challenge), 'code_hash' => Hash::make($code),
+                'attempts' => 0, 'expires_at' => now()->addMinutes(5), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            try {
+                Mail::raw("Your IntelliLearn admin login code is {$code}. It expires in 5 minutes.",
+                    fn ($message) => $message->to($user->email, $user->full_name)->subject('IntelliLearn admin sign-in code'));
+            } catch (\Throwable $error) {
+                DB::table('admin_login_challenges')->where('token_hash', hash('sha256', $challenge))->delete();
+                \Illuminate\Support\Facades\Log::error('Admin sign-in email could not be sent', ['user_id' => $user->id, 'exception_type' => get_class($error)]);
+                return response()->json(['message' => 'Could not send the admin verification code. Please try again later.'], 503);
+            }
+            return response()->json(['requires_two_factor' => true, 'challenge_token' => $challenge,
+                'message' => 'A verification code was sent to your admin email address.']);
+        }
+
         // Check if email is verified
         // Skip verification check for instructor and admin accounts
         if ($user->isStudent() && ! $user->hasVerifiedEmail()) {
@@ -154,8 +176,38 @@ class AuthController extends Controller
                 'role'       => $user->role,
                 'full_name'  => $user->full_name,
                 'avatar'     => $user->avatar,
+                'birthday'  => $user->birthday?->toDateString(),
+                'year_level' => $user->year_level,
+                'section'    => $user->section,
+                'student_id' => $user->student_id,
             ],
             'token' => $token,
+        ]);
+    }
+
+    public function verifyAdminLogin(Request $request): JsonResponse
+    {
+        $data = $request->validate(['challenge_token' => ['required', 'string', 'size:64'], 'code' => ['required', 'digits:6']]);
+        $tokenHash = hash('sha256', $data['challenge_token']);
+        $challenge = DB::table('admin_login_challenges')->where('token_hash', $tokenHash)->first();
+        if (!$challenge || now()->gte($challenge->expires_at) || $challenge->attempts >= 5) {
+            if ($challenge) DB::table('admin_login_challenges')->where('id', $challenge->id)->delete();
+            return response()->json(['message' => 'The verification code expired. Sign in again to request a new code.'], 422);
+        }
+        if (!Hash::check($data['code'], $challenge->code_hash)) {
+            DB::table('admin_login_challenges')->where('id', $challenge->id)->increment('attempts');
+            return response()->json(['message' => 'The verification code is incorrect.'], 422);
+        }
+        $user = User::whereKey($challenge->user_id)->where('role', 'admin')->where('is_active', true)->first();
+        DB::table('admin_login_challenges')->where('id', $challenge->id)->delete();
+        if (!$user) return response()->json(['message' => 'This account is unavailable.'], 403);
+        $user->update(['last_login_at' => now()]);
+        return response()->json([
+            'message' => 'Login successful.',
+            'user' => ['id' => $user->id, 'first_name' => $user->first_name, 'last_name' => $user->last_name,
+                'email' => $user->email, 'role' => $user->role, 'full_name' => $user->full_name, 'avatar' => $user->avatar,
+                'birthday' => $user->birthday?->toDateString(), 'year_level' => $user->year_level, 'section' => $user->section, 'student_id' => $user->student_id],
+            'token' => $user->createToken('auth-token')->plainTextToken,
         ]);
     }
 
@@ -201,6 +253,10 @@ class AuthController extends Controller
                 'full_name'         => $user->full_name,
                 'email_verified_at' => $user->email_verified_at,
                 'avatar'            => $user->avatar,
+                'birthday'          => $user->birthday?->toDateString(),
+                'year_level'        => $user->year_level,
+                'section'           => $user->section,
+                'student_id'        => $user->student_id,
                 'created_at'        => $user->created_at,
             ],
         ]);

@@ -192,12 +192,38 @@ class LessonController extends Controller
             'available_until' => ['nullable', 'date'],
         ]);
 
+        $this->snapshotLesson($lesson, $user->id, 'edit');
         $lesson->update($validated);
 
         return response()->json([
             'message' => 'Lesson updated successfully.',
             'lesson'  => $lesson,
         ]);
+    }
+
+    public function versions(Request $request, Course $course, Lesson $lesson): JsonResponse
+    {
+        abort_unless($this->canManageCourse($request->user(), $course) && $lesson->course_id === $course->id, 403);
+        $versions = \Illuminate\Support\Facades\DB::table('lesson_versions')->where('lesson_id', $lesson->id)
+            ->orderByDesc('created_at')->get(['id', 'created_by', 'change_type', 'created_at']);
+        return response()->json(['versions' => $versions]);
+    }
+
+    public function restoreVersion(Request $request, Course $course, Lesson $lesson, int $version): JsonResponse
+    {
+        abort_unless($this->canManageCourse($request->user(), $course) && $lesson->course_id === $course->id, 403);
+        $record = \Illuminate\Support\Facades\DB::table('lesson_versions')->where('lesson_id', $lesson->id)->where('id', $version)->first();
+        abort_unless($record, 404);
+        $snapshot = json_decode($record->snapshot, true) ?: [];
+        $this->snapshotLesson($lesson, $request->user()->id, 'before_restore');
+        $lesson->update(collect($snapshot['lesson'] ?? [])->only(['title', 'description', 'topic', 'order', 'is_published', 'available_from', 'available_until'])->all());
+        \Illuminate\Support\Facades\DB::transaction(function () use ($lesson, $snapshot) {
+            $lesson->materials()->delete();
+            foreach (($snapshot['materials'] ?? []) as $material) {
+                $lesson->materials()->create(collect($material)->only(['title', 'type', 'file_path', 'original_filename', 'url', 'order', 'extracted_text', 'extraction_version'])->all());
+            }
+        });
+        return response()->json(['message' => 'Lesson version restored.', 'lesson' => $lesson->fresh()->load('materials')]);
     }
 
     /**
@@ -306,6 +332,7 @@ class LessonController extends Controller
             }
         }
 
+        $this->snapshotLesson($lesson, $user->id, 'material_change');
         $material = LessonMaterial::create([
             'lesson_id'      => $lesson->id,
             'title'          => $validated['title'],
@@ -355,6 +382,8 @@ class LessonController extends Controller
                 'message' => 'Material not found in this lesson.',
             ], 404);
         }
+
+        $this->snapshotLesson($lesson, $user->id, 'material_change');
 
         // Delete the actual file from storage if it exists
         if ($material->file_path) {
@@ -494,5 +523,30 @@ class LessonController extends Controller
         if ($user->isAdmin()) return true;
         if ($user->isInstructor() && $course->instructor_id === $user->id) return true;
         return false;
+    }
+
+    private function snapshotLesson(Lesson $lesson, int $userId, string $changeType): void
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('lesson_versions')) return;
+        $materials = $lesson->materials()->get()->map(fn ($material) => $material->only([
+            'id', 'title', 'type', 'file_path', 'original_filename', 'url', 'order', 'extracted_text', 'extraction_version',
+        ]))->all();
+        $snapshot = [
+            'lesson' => $lesson->only(['title', 'description', 'topic', 'order', 'is_published', 'available_from', 'available_until']),
+            'materials' => $materials,
+        ];
+        $versionId = \Illuminate\Support\Facades\DB::table('lesson_versions')->insertGetId([
+            'lesson_id' => $lesson->id, 'created_by' => $userId, 'snapshot' => json_encode($snapshot),
+            'change_type' => $changeType, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $disk = Storage::disk('public');
+        foreach ($snapshot['materials'] as &$material) {
+            $relative = $material['file_path'] ? (new LessonMaterial($material))->publicStoragePath() : null;
+            if (!$relative || !$disk->exists($relative)) continue;
+            $archive = "lesson_versions/{$lesson->id}/{$versionId}/" . basename($relative);
+            if ($disk->copy($relative, $archive)) $material['file_path'] = $archive;
+        }
+        unset($material);
+        \Illuminate\Support\Facades\DB::table('lesson_versions')->where('id', $versionId)->update(['snapshot' => json_encode($snapshot)]);
     }
 }

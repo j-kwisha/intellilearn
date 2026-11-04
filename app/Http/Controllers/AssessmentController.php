@@ -98,6 +98,10 @@ class AssessmentController extends Controller
             'is_published'       => ['nullable', 'boolean'],
             'defer_publication'  => ['sometimes', 'boolean'],
             'score_visibility'   => ['nullable', 'in:immediate,instructor_release,hidden'],
+            'assessment_stage'   => ['nullable', 'in:regular,pre_test,post_test'],
+            'passing_score'      => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'allow_late_submissions' => ['sometimes', 'boolean'],
+            'shuffle_questions' => ['sometimes', 'boolean'],
         ]);
 
         $this->validateSchedule($validated);
@@ -203,6 +207,10 @@ class AssessmentController extends Controller
             'due_date'           => ['nullable', 'date'],
             'is_published'       => ['sometimes', 'boolean'],
             'score_visibility'   => ['sometimes', 'in:immediate,instructor_release,hidden'],
+            'assessment_stage'   => ['sometimes', 'in:regular,pre_test,post_test'],
+            'passing_score'      => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'allow_late_submissions' => ['sometimes', 'boolean'],
+            'shuffle_questions' => ['sometimes', 'boolean'],
         ]);
 
         $this->validateSchedule($validated, $assessment);
@@ -281,7 +289,7 @@ class AssessmentController extends Controller
 
         $validated = $request->validate([
             'question_text'  => ['required', 'string'],
-            'type'           => ['required', 'in:multiple_choice,true_false,short_answer,essay,matching'],
+            'type'           => ['required', 'in:multiple_choice,true_false,short_answer,essay,matching,enumeration'],
             'options'        => ['nullable', 'array'],
             'options.*'      => ['string'],
             'correct_answer' => ['nullable', 'string'],
@@ -312,6 +320,9 @@ class AssessmentController extends Controller
             if (empty($validated['matching_pairs']) || count($validated['matching_pairs']) < 2) {
                 return response()->json(['message' => 'Matching questions require at least 2 pairs.'], 422);
             }
+        }
+        if ($validated['type'] === 'enumeration' && empty($validated['correct_answer'])) {
+            return response()->json(['message' => 'Enumeration questions require expected answers separated by commas or new lines.'], 422);
         }
 
         // Auto-set order if not provided
@@ -373,7 +384,7 @@ class AssessmentController extends Controller
         $validated = $request->validate([
             'questions'                  => ['required', 'array', 'min:1'],
             'questions.*.question_text'  => ['required', 'string'],
-            'questions.*.type'           => ['required', 'in:multiple_choice,true_false,short_answer,essay,matching'],
+            'questions.*.type'           => ['required', 'in:multiple_choice,true_false,short_answer,essay,matching,enumeration'],
             'questions.*.options'        => ['nullable', 'array'],
             'questions.*.correct_answer' => ['nullable', 'string'],
             'questions.*.points'         => ['nullable', 'numeric', 'min:0.01'],
@@ -389,6 +400,9 @@ class AssessmentController extends Controller
 
         // Validate the entire batch before creating any question.
         foreach ($validated['questions'] as &$data) {
+            if (($data['type'] ?? null) === 'enumeration' && empty($data['correct_answer'])) {
+                throw ValidationException::withMessages(['questions' => 'Enumeration questions need at least one expected answer.']);
+            }
             $data['rubric'] = $this->questionRubric($data, $assessment);
         }
         unset($data);
@@ -444,7 +458,7 @@ class AssessmentController extends Controller
 
         $validated = $request->validate([
             'question_text'  => ['sometimes', 'string'],
-            'type'           => ['sometimes', 'in:multiple_choice,true_false,short_answer,essay,matching'],
+            'type'           => ['sometimes', 'in:multiple_choice,true_false,short_answer,essay,matching,enumeration'],
             'options'        => ['nullable', 'array'],
             'correct_answer' => ['nullable', 'string'],
             'points'         => ['sometimes', 'numeric', 'min:0.01'],
@@ -461,6 +475,9 @@ class AssessmentController extends Controller
 
         $effective = array_merge($question->getAttributes(), $validated);
         $effective['reference_file'] = $validated['reference_file'] ?? $question->reference_file;
+        if (($effective['type'] ?? $question->type) === 'enumeration' && empty($effective['correct_answer'])) {
+            throw ValidationException::withMessages(['correct_answer' => 'Enumeration questions need at least one expected answer.']);
+        }
         if (!array_key_exists('rubric', $validated) && $question->rubric) {
             $effective['rubric'] = app(RubricService::class)->snapshot($question->rubric);
         }
@@ -647,6 +664,51 @@ class AssessmentController extends Controller
                     ->header('Retry-After', '60');
             }
             return response()->json(['message' => 'AI could not generate a valid rubric. Try again or create one manually.'], 502);
+        }
+    }
+
+    /** Generate an instructor-reviewed draft from readable lesson material. */
+    public function generateQuizDraft(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        $user = $request->user();
+        if (!$this->canManageCourse($user, $course) || $assessment->course_id !== $course->id) {
+            return response()->json(['message' => 'You cannot generate questions for this assessment.'], 403);
+        }
+        $data = $request->validate([
+            'lesson_id' => ['required', 'integer', \Illuminate\Validation\Rule::exists('lessons', 'id')->where('course_id', $course->id)],
+            'question_count' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'instructions' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $lesson = \App\Models\Lesson::with('materials')->findOrFail($data['lesson_id']);
+        $materialChunks = [];
+        foreach ($lesson->materials as $material) {
+            $context = app(\App\Services\MaterialContextService::class)->resolve($material);
+            if ($context['has_text']) $materialChunks[] = "## {$material->title}\n{$context['extracted_text']}";
+        }
+        if ($materialChunks === []) {
+            return response()->json(['message' => 'This lesson has no readable material. Upload a text-based PDF, DOCX, PPTX, or TXT file first.'], 422);
+        }
+        $chunks = ["## Lesson context\nTitle: {$lesson->title}\nTopic: {$lesson->topic}\nDescription: {$lesson->description}", ...$materialChunks];
+        $source = mb_substr(implode("\n\n", $chunks), 0, 24000);
+        try {
+            $response = Http::timeout(60)->post(rtrim(env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/') . '/generate-quiz-draft', [
+                'source_text' => $source,
+                'question_count' => $data['question_count'] ?? 5,
+                'instructions' => $data['instructions'] ?? '',
+            ]);
+            $response->throw();
+            $questions = $response->json('questions');
+            if (!is_array($questions) || count($questions) < 1) {
+                return response()->json(['message' => 'AI returned an invalid question draft.'], 502);
+            }
+            return response()->json(['questions' => $questions, 'lesson_id' => $lesson->id, 'source_material_count' => count($materialChunks)]);
+        } catch (\Throwable $error) {
+            \Illuminate\Support\Facades\Log::warning('Lesson quiz generation failed', [
+                'course_id' => $course->id, 'assessment_id' => $assessment->id, 'lesson_id' => $lesson->id,
+                'source_characters' => mb_strlen($source), 'exception_type' => get_class($error),
+                'http_status' => $error instanceof \Illuminate\Http\Client\RequestException ? $error->response?->status() : null,
+            ]);
+            return response()->json(['message' => 'AI quiz generation is currently unavailable. You can write questions manually and retry later.'], 503);
         }
     }
 

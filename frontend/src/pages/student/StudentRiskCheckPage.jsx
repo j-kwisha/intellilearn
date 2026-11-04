@@ -5,6 +5,40 @@ export default function StudentRiskCheckPage() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [practice, setPractice] = useState(null);
+  const [practiceAnswers, setPracticeAnswers] = useState({});
+  const [practiceResult, setPracticeResult] = useState(null);
+  const [practiceBusy, setPracticeBusy] = useState(false);
+
+  const loadPractice = async (courseId) => {
+    setPracticeBusy(true);
+    setPracticeResult(null);
+    setPracticeAnswers({});
+    try {
+      const response = await api.get('/student/practice', { params: { course_id: courseId } });
+      setPractice({ courseId, questions: response.data.questions || [] });
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not create your practice quiz.');
+    } finally {
+      setPracticeBusy(false);
+    }
+  };
+
+  const submitPractice = async () => {
+    if (!practice?.questions?.length) return;
+    setPracticeBusy(true);
+    try {
+      const response = await api.post('/student/practice', {
+        course_id: practice.courseId,
+        answers: practice.questions.map(question => ({ question_id: question.id, answer_text: practiceAnswers[question.id] || '' })),
+      });
+      setPracticeResult(response.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not submit practice answers.');
+    } finally {
+      setPracticeBusy(false);
+    }
+  };
 
   useEffect(() => {
     api.get('/ai/my-risk')
@@ -61,6 +95,9 @@ export default function StudentRiskCheckPage() {
                    item.status === 'not_assessed' ? '📊 Not Assessed Yet' : 'N/A'}
                 </span>
               </div>
+              <button type="button" className="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold disabled:opacity-60" disabled={practiceBusy} onClick={() => loadPractice(item.course?.id)}>
+                {practiceBusy ? 'Loading…' : 'Practice missed questions'}
+              </button>
 
               {/* Not assessed message */}
               {item.status === 'not_assessed' && (
@@ -109,6 +146,15 @@ export default function StudentRiskCheckPage() {
             </div>
           ))}
         </div>
+        {practice && <section className="mt-6 bg-white rounded-xl border border-indigo-200 p-5 space-y-4">
+          <div className="flex justify-between items-center"><h2 className="font-bold text-slate-800">Practice Quiz · Missed questions</h2><button type="button" onClick={() => setPractice(null)} className="text-slate-500">Close</button></div>
+          {practice.questions.length === 0 ? <p className="text-sm text-slate-500">No previously missed objective questions are available for this course yet.</p> : practice.questions.map((question, index) => <div key={question.id} className="border-t pt-3">
+            <p className="text-sm font-medium">{index + 1}. {question.question_text}</p>
+            {question.type === 'multiple_choice' || question.type === 'true_false' ? <select className="mt-2 w-full border rounded-lg p-2" value={practiceAnswers[question.id] || ''} onChange={e => setPracticeAnswers(prev => ({ ...prev, [question.id]: e.target.value }))}><option value="">Choose an answer</option>{Object.values(question.options || {}).map(option => <option key={option} value={option}>{option}</option>)}</select> : <textarea className="mt-2 w-full border rounded-lg p-2" rows={question.type === 'enumeration' ? 3 : 1} placeholder={question.type === 'enumeration' ? 'One answer per line' : 'Your answer'} value={practiceAnswers[question.id] || ''} onChange={e => setPracticeAnswers(prev => ({ ...prev, [question.id]: e.target.value }))} />}
+          </div>)}
+          {practice.questions.length > 0 && !practiceResult && <button type="button" disabled={practiceBusy} onClick={submitPractice} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold disabled:opacity-60">{practiceBusy ? 'Checking…' : 'Check practice answers'}</button>}
+          {practiceResult && <p className="p-3 rounded-lg bg-indigo-50 text-indigo-800 font-semibold">Practice result: {practiceResult.attempt.correct_count} / {practiceResult.attempt.question_count} correct ({practiceResult.attempt.percentage}%). This does not affect your course grade.</p>}
+        </section>}
       </div>
     </div>
   );

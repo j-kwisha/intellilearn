@@ -59,6 +59,11 @@ class SubmissionController extends Controller
         if ($existingAttempt) {
             // Return the existing attempt so they can continue
             $existingAttempt->load('answers');
+            if (!$existingAttempt->question_order) {
+                $ids = $assessment->questions()->pluck('id')->all();
+                if ($assessment->shuffle_questions) shuffle($ids);
+                $existingAttempt->update(['question_order' => $ids]);
+            }
             return response()->json([
                 'message'    => 'You have an in-progress attempt.',
                 'submission' => $existingAttempt,
@@ -77,18 +82,48 @@ class SubmissionController extends Controller
         }
 
         // Create new submission
+        $questionIds = $assessment->questions()->pluck('id')->all();
+        if ($assessment->shuffle_questions) shuffle($questionIds);
         $submission = Submission::create([
             'user_id'        => $user->id,
             'assessment_id'  => $assessment->id,
             'attempt_number' => $attemptCount + 1,
             'status'         => 'in_progress',
             'started_at'     => now(),
+            'question_order' => $questionIds,
         ]);
 
         return response()->json([
             'message'    => 'Assessment started. Good luck!',
             'submission' => $submission,
         ], 201);
+    }
+
+    /** Persist an in-progress answer as the student works. */
+    public function autosave(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isStudent() || !$this->isEnrolled($user, $course) || $assessment->course_id !== $course->id) {
+            return response()->json(['message' => 'You cannot save answers for this assessment.'], 403);
+        }
+        $data = $request->validate([
+            'submission_id' => ['required', 'integer'],
+            'question_id' => ['required', 'integer'],
+            'answer_text' => ['nullable', 'string', 'max:50000'],
+        ]);
+        $submission = Submission::whereKey($data['submission_id'])->where('assessment_id', $assessment->id)
+            ->where('user_id', $user->id)->where('status', 'in_progress')->firstOrFail();
+        if (!$assessment->questions()->whereKey($data['question_id'])->exists()) {
+            return response()->json(['message' => 'Question does not belong to this assessment.'], 422);
+        }
+        if (!$assessment->allow_late_submissions && $assessment->due_date && now()->gte($assessment->due_date)) {
+            return response()->json(['message' => 'The deadline for this assessment has passed.'], 422);
+        }
+        SubmissionAnswer::updateOrCreate(
+            ['submission_id' => $submission->id, 'question_id' => $data['question_id']],
+            ['answer_text' => $data['answer_text'] ?? null]
+        );
+        return response()->json(['saved' => true, 'saved_at' => now()->toIso8601String()]);
     }
 
     /**
@@ -205,6 +240,17 @@ class SubmissionController extends Controller
                     
                 $isCorrect = $correctCount === $totalPairs;
             }
+            elseif ($question->type === 'enumeration') {
+                $expected = preg_split('/[\\r\\n;,]+/', (string) $question->correct_answer, -1, PREG_SPLIT_NO_EMPTY);
+                $student = json_decode($answerData['answer_text'] ?? '', true);
+                if (!is_array($student)) $student = preg_split('/[\\r\\n;,]+/', (string) ($answerData['answer_text'] ?? ''), -1, PREG_SPLIT_NO_EMPTY);
+                $normalize = fn ($value) => mb_strtolower(trim((string) $value));
+                $expected = array_values(array_unique(array_filter(array_map($normalize, $expected))));
+                $student = array_values(array_unique(array_filter(array_map($normalize, $student))));
+                $correctCount = count(array_intersect($expected, $student));
+                $pointsEarned = count($expected) ? round($question->points * $correctCount / count($expected), 2) : 0;
+                $isCorrect = $correctCount === count($expected);
+            }
             elseif ($question->type === 'essay') {
                 $graded = app(EssayGradingService::class)->grade($question, $answerData['answer_text'] ?? null);
                 SubmissionAnswer::updateOrCreate(
@@ -267,8 +313,8 @@ class SubmissionController extends Controller
                 ->where('is_published', true)->count();
             $submissions = Submission::where('user_id', $user->id)
                 ->where('status', 'graded')
-                ->whereHas('assessment', fn($q) => $q->where('course_id', $course->id))
-                ->with('assessment:id,type')
+                ->whereHas('assessment', fn($q) => $q->where('course_id', $course->id)->where('assessment_stage', 'regular'))
+                ->with('assessment:id,type,assessment_stage')
                 ->get();
 
             $quizScores = []; $examScores = []; $activityScores = [];
@@ -572,7 +618,7 @@ class SubmissionController extends Controller
         if ($assessment->available_from && $currentTime->lt($assessment->available_from)) {
             return 'This assessment is not open yet.';
         }
-        if ($assessment->due_date && $currentTime->gte($assessment->due_date)) {
+        if (!$assessment->allow_late_submissions && $assessment->due_date && $currentTime->gte($assessment->due_date)) {
             return 'The deadline for this assessment has passed.';
         }
         return null;

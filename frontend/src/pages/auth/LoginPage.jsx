@@ -31,7 +31,7 @@ const features = [
 ];
 
 export default function LoginPage() {
-  const { login, register } = useAuth();
+  const { login, completeAdminLogin, register } = useAuth();
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const [activeSlide, setActiveSlide] = useState(0);
@@ -39,6 +39,8 @@ export default function LoginPage() {
   const [loginForm, setLoginForm]     = useState({ email:'', password:'' });
   const [loginError, setLoginError]   = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [adminChallenge, setAdminChallenge] = useState('');
+  const [adminCode, setAdminCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showRegPw, setShowRegPw]       = useState(false);
   const [regForm, setRegForm]   = useState({ first_name:'', last_name:'', email:'', password:'', password_confirmation:'' });
@@ -67,6 +69,11 @@ export default function LoginPage() {
     e.preventDefault(); setLoginError(''); setLoginLoading(true);
     try {
       const result = await login(loginForm.email, loginForm.password);
+      if (result?.requires_two_factor) {
+        setAdminChallenge(result.challenge_token);
+        setLoginError('A six-digit code was sent to your admin email.');
+        return;
+      }
       // Check if backend returned requires_verification (403 case)
       if (result?.requires_verification) {
         setUnverifiedEmail(result.email);
@@ -84,6 +91,17 @@ export default function LoginPage() {
       }
     }
     finally { setLoginLoading(false); }
+  };
+
+  const handleAdminCode = async (e) => {
+    e.preventDefault(); setLoginError(''); setLoginLoading(true);
+    try {
+      const user = await completeAdminLogin(adminChallenge, adminCode);
+      if (user.role === 'admin') navigate('/admin');
+      else setLoginError('This account is not an administrator.');
+    } catch (err) {
+      setLoginError(err.response?.data?.message || 'Could not verify the code.');
+    } finally { setLoginLoading(false); }
   };
 
   const handleRegister = async (e) => {
@@ -416,7 +434,7 @@ export default function LoginPage() {
                   ) : (
                     loginError && <div style={{ background:'#FEF2F2',color:'#DC2626',fontSize:13,padding:'10px 14px',borderRadius:10,marginBottom:16,border:'1px solid #FECACA' }}>{loginError}</div>
                   )}
-                  <form onSubmit={handleLogin} style={{ display:'flex',flexDirection:'column',gap:16 }}>
+                  <form onSubmit={handleLogin} style={{ display:adminChallenge ? 'none' : 'flex',flexDirection:'column',gap:16 }}>
                     <div>
                       <label style={{ display:'block',fontSize:13,fontWeight:600,color:'var(--navy)',marginBottom:7,fontFamily:"'Plus Jakarta Sans',sans-serif" }}>Email Address</label>
                       <div className="ll-wrap">
@@ -444,6 +462,14 @@ export default function LoginPage() {
                       {loginLoading?'Logging in...':<><span>Log in</span><ArrowForwardIcon sx={{fontSize:17}}/></>}
                     </button>
                   </form>
+                  {adminChallenge && <form onSubmit={handleAdminCode} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                    <p style={{ color:'#475569', fontSize:14, margin:0 }}>Enter the six-digit code sent to the administrator email address. The code expires in five minutes.</p>
+                    <label style={{ display:'block', fontSize:13, fontWeight:600, color:'var(--navy)' }}>Verification code
+                      <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={adminCode} onChange={e => setAdminCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="ll-inp" style={{ marginTop:7, letterSpacing:'.3em' }} />
+                    </label>
+                    <button type="submit" disabled={loginLoading || adminCode.length !== 6} className="ll-btn">{loginLoading ? 'Verifying…' : 'Verify and log in'}</button>
+                    <button type="button" onClick={() => { setAdminChallenge(''); setAdminCode(''); setLoginError(''); }} style={{ background:'none', border:0, color:'#2563EB', cursor:'pointer' }}>Use a different account</button>
+                  </form>}
                   
                   {/* Divider */}
                   <div style={{ display:'flex',alignItems:'center',gap:12,margin:'20px 0' }}>

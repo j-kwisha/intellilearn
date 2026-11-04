@@ -18,7 +18,8 @@ export default function InstructorCreateAssessmentPage() {
   const [form, setForm] = useState({
     title: '', description: '', lesson_id: '', type: 'quiz', topic: '',
     time_limit_minutes: '', max_attempts: 1, is_published: false,
-    available_from: '', due_date: '', score_visibility: 'immediate',
+    available_from: '', due_date: '', score_visibility: 'immediate', assessment_stage: 'regular',
+    passing_score: '', allow_late_submissions: false, shuffle_questions: false,
   });
   const [addToCalendar, setAddToCalendar] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -31,6 +32,9 @@ export default function InstructorCreateAssessmentPage() {
   const [qSaving, setQSaving] = useState(false);
   const [qError, setQError] = useState('');
   const [savedQuestions, setSavedQuestions] = useState([]);
+  const [quizDraftLoading, setQuizDraftLoading] = useState(false);
+  const [quizDraftError, setQuizDraftError] = useState('');
+  const [quizDraftCount, setQuizDraftCount] = useState(5);
 
   const [pdfImport, setPdfImport] = useState(null);
   const [pdfImportPending, setPdfImportPending] = useState(false);
@@ -124,6 +128,23 @@ export default function InstructorCreateAssessmentPage() {
     setPdfImportReviewed(false);
     setQError('');
     setStep('questions');
+  };
+
+  const generateQuizDraft = async () => {
+    if (!form.lesson_id || !assessmentId) return;
+    setQuizDraftLoading(true);
+    setQuizDraftError('');
+    try {
+      const response = await api.post(`/courses/${courseId}/assessments/${assessmentId}/generate-quiz-draft`, {
+        lesson_id: Number(form.lesson_id), question_count: Number(quizDraftCount),
+      });
+      setQuestions((response.data.questions || []).map(question => ({ ...newQuestion(), ...question })));
+      setQError('Review and edit this AI-generated draft before saving it.');
+    } catch (err) {
+      setQuizDraftError(err.response?.data?.message || 'Could not generate a question draft from this lesson.');
+    } finally {
+      setQuizDraftLoading(false);
+    }
   };
 
   const updateQuestion = (idx, field, value) => {
@@ -399,6 +420,28 @@ export default function InstructorCreateAssessmentPage() {
                 {lessons.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
               </select>
             </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <label style={S.label}>Assessment use</label>
+                <select style={S.input} value={form.assessment_stage} onChange={e => setForm({ ...form, assessment_stage: e.target.value })}>
+                  <option value="regular">Regular graded activity</option>
+                  <option value="pre_test">Pre-test (stored, excluded from course grade)</option>
+                  <option value="post_test">Post-test (stored, excluded from course grade)</option>
+                </select>
+              </div>
+              <div>
+                <label style={S.label}>Passing score (%)</label>
+                <input style={S.input} type="number" min="0" max="100" step="0.1" placeholder="Optional" value={form.passing_score} onChange={e => setForm({ ...form, passing_score: e.target.value })} />
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.shuffle_questions} onChange={e => setForm({ ...form, shuffle_questions: e.target.checked })} />
+              <span style={{ fontSize: '0.9rem', color: '#334155' }}>Randomize question order for each student attempt</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.allow_late_submissions} onChange={e => setForm({ ...form, allow_late_submissions: e.target.checked })} />
+              <span style={{ fontSize: '0.9rem', color: '#334155' }}>Accept submissions after the due date</span>
+            </label>
             {/* Total Points removed — auto-calculated from question points */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
@@ -504,6 +547,13 @@ export default function InstructorCreateAssessmentPage() {
       {/* STEP 2: Questions */}
       {step === 'questions' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap', padding: 14, border: '1px solid #cbd5e1', borderRadius: 10, background: '#f8fafc' }}>
+            <div style={{ flex: 1, minWidth: 220 }}><strong>Draft questions from lesson</strong><p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>AI uses readable lesson files. Review every question and answer before saving.</p></div>
+            <label style={{ fontSize: 12 }}>Questions <input type="number" min="1" max="20" value={quizDraftCount} onChange={e => setQuizDraftCount(e.target.value)} style={{ ...S.input, width: 72, display: 'inline-block', marginLeft: 6 }} /></label>
+            <button type="button" onClick={generateQuizDraft} disabled={quizDraftLoading || !form.lesson_id || !assessmentId} style={S.btn}>{quizDraftLoading ? 'Generating…' : 'Generate Draft from Lesson'}</button>
+            {!form.lesson_id && <span style={{ fontSize: 12, color: '#b45309' }}>Select a linked lesson in assessment details first.</span>}
+            {quizDraftError && <p role="alert" style={{ flexBasis: '100%', color: '#b91c1c', margin: 0 }}>{quizDraftError}</p>}
+          </div>
 
           {pdfImport && (
             <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 space-y-3">
@@ -576,6 +626,7 @@ export default function InstructorCreateAssessmentPage() {
                           <option value="short_answer">Short Answer</option>
                           <option value="essay">Essay</option>
                           <option value="matching">Matching</option>
+                          <option value="enumeration">Enumeration (multiple answers)</option>
                         </select>
                       </div>
                       <div>
@@ -635,6 +686,13 @@ export default function InstructorCreateAssessmentPage() {
                         <input style={S.input} type="text" placeholder="Exact answer (case-insensitive match)"
                           value={q.correct_answer} onChange={e => updateQuestion(idx, 'correct_answer', e.target.value)} />
                         <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 4 }}>Leave blank if you want to grade manually.</p>
+                      </div>
+                    )}
+
+                    {q.type === 'enumeration' && (
+                      <div>
+                        <label style={S.label}>Expected answers (one per line; partial credit per correct item)</label>
+                        <textarea style={S.input} rows={3} placeholder={'First expected answer\nSecond expected answer'} value={q.correct_answer} onChange={e => updateQuestion(idx, 'correct_answer', e.target.value)} />
                       </div>
                     )}
 

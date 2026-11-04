@@ -22,6 +22,7 @@ class Submission extends Model
         'started_at',
         'submitted_at',
         'graded_at',
+        'question_order',
     ];
 
     protected function casts(): array
@@ -33,6 +34,7 @@ class Submission extends Model
             'started_at'   => 'datetime',
             'submitted_at' => 'datetime',
             'graded_at'    => 'datetime',
+            'question_order' => 'array',
         ];
     }
 

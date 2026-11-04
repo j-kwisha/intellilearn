@@ -59,6 +59,7 @@ export function AuthProvider({ children }) {
       throw error;
     }
     if (operation !== authOperation.current) throw new Error('This sign-in was cancelled. Please sign in again.');
+    if (res.data.requires_two_factor) return res.data;
     // If requires_verification, don't set user — return the response for the UI to handle
     if (res.data.requires_verification) {
       // Store token so resend verification can be called
@@ -68,6 +69,17 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return res.data;
     }
+    getAuthSession().set(res.data.token, res.data.user);
+    displayedToken.current = res.data.token;
+    setUser(res.data.user);
+    setLoading(false);
+    return res.data.user;
+  };
+
+  const completeAdminLogin = async (challengeToken, code) => {
+    const operation = ++authOperation.current;
+    const res = await api.post('/login/verify-admin-otp', { challenge_token: challengeToken, code });
+    if (operation !== authOperation.current) throw new Error('This sign-in was cancelled. Please try again.');
     getAuthSession().set(res.data.token, res.data.user);
     displayedToken.current = res.data.token;
     setUser(res.data.user);
@@ -121,7 +133,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, updateUser }}>
+    <AuthContext.Provider value={{ user, login, completeAdminLogin, register, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

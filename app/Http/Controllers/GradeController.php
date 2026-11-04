@@ -67,8 +67,8 @@ class GradeController extends Controller
             // Get all graded submissions for this student in this course
             $submissions = Submission::where('user_id', $studentId)
                 ->where('status', 'graded')
-                ->whereHas('assessment', fn($q) => $q->where('course_id', $course->id))
-                ->with('assessment:id,type')
+                ->whereHas('assessment', fn($q) => $q->where('course_id', $course->id)->where('assessment_stage', 'regular'))
+                ->with('assessment:id,type,assessment_stage')
                 ->get();
 
             // Group by assessment type and calculate averages

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../services/api';
 
 /* ── Row action menu ── */
@@ -41,19 +41,26 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [sectionFilter, setSectionFilter] = useState('');
+  const [courseFilter, setCourseFilter] = useState('');
+  const [courses, setCourses] = useState([]);
 
-  const fetchUsers = () => {
-    api.get('/admin/users')
+  const fetchUsers = useCallback(() => {
+    api.get('/admin/users', { params: { search, role: roleFilter, status: statusFilter, section: sectionFilter, course_id: courseFilter } })
       .then((res) => setUsers(res.data.users))
       .catch(() => setUsers([]))
       .finally(() => setLoading(false));
-  };
+  }, [search, roleFilter, statusFilter, sectionFilter, courseFilter]);
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { api.get('/courses').then(res => setCourses(res.data.courses || [])).catch(() => {}); }, []);
+  useEffect(() => {
+    const timer = setTimeout(fetchUsers, 250);
+    return () => clearTimeout(timer);
+  }, [fetchUsers]);
 
-  const filteredUsers = users.filter((u) =>
-    `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredUsers = users;
 
   const deleteUser = async (userId) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
@@ -117,6 +124,12 @@ export default function AdminUsersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '0 0 16px' }}>
+        <select aria-label="Filter by role" className="adm-form-input" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}><option value="">All roles</option><option value="admin">Admin</option><option value="instructor">Instructor</option><option value="student">Student</option></select>
+        <select aria-label="Filter by status" className="adm-form-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+        <input aria-label="Filter by section" className="adm-form-input" placeholder="Section" value={sectionFilter} onChange={e => setSectionFilter(e.target.value)} />
+        <select aria-label="Filter by course" className="adm-form-input" value={courseFilter} onChange={e => setCourseFilter(e.target.value)}><option value="">All courses</option>{courses.map(course => <option key={course.id} value={course.id}>{course.name}</option>)}</select>
       </div>
 
       {/* Create user form */}
@@ -189,7 +202,7 @@ export default function AdminUsersPage() {
 function CreateUserForm({ onClose, onSuccess }) {
   const [form, setForm] = useState({
     first_name: '', last_name: '', email: '', password: '',
-    password_confirmation: '', role: 'student',
+    password_confirmation: '', role: 'student', birthday: '', year_level: '', section: '', student_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -234,6 +247,12 @@ function CreateUserForm({ onClose, onSuccess }) {
           <option value="instructor">Instructor</option>
           <option value="admin">Admin</option>
         </select>
+        {form.role === 'student' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <label className="adm-form-label">Birthday<input type="date" value={form.birthday} className="adm-form-input" onChange={e => setForm({ ...form, birthday: e.target.value })} /></label>
+          <label className="adm-form-label">Year level<input placeholder="e.g. 2nd Year" value={form.year_level} className="adm-form-input" onChange={e => setForm({ ...form, year_level: e.target.value })} /></label>
+          <label className="adm-form-label">Section<input placeholder="e.g. BSIT-2A" value={form.section} className="adm-form-input" onChange={e => setForm({ ...form, section: e.target.value })} /></label>
+          <label className="adm-form-label">Student ID<input placeholder="Optional" value={form.student_id} className="adm-form-input" onChange={e => setForm({ ...form, student_id: e.target.value })} /></label>
+        </div>}
         <div style={{ display: 'flex', gap: '10px', paddingTop: '4px' }}>
           <button type="submit" disabled={saving} className="adm-new-course-btn" style={{ opacity: saving ? 0.6 : 1 }}>
             {saving ? 'Creating…' : 'Create User'}

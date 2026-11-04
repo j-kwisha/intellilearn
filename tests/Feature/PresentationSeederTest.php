@@ -7,7 +7,7 @@ use App\Services\{EssayGradingService, EssayReferenceService, RubricService};
 use Database\Seeders\{AdminSeeder, DatabaseSeeder};
 use Database\Seeders\Presentation\PresentationData;
 use Illuminate\Foundation\Testing\{RefreshDatabase, RefreshDatabaseState};
-use Illuminate\Support\Facades\{DB, Hash, Http, Storage};
+use Illuminate\Support\Facades\{DB, Hash, Http, Storage, Mail};
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -169,10 +169,19 @@ class PresentationSeederTest extends TestCase
     {
         $this->travelTo(PresentationData::date()->setHour(12));
         $this->dataset();
+        Mail::fake();
         foreach (['marisol.reyes', 'adrian.mendoza', 'isabella.santos'] as $name) {
             $account = $this->user($name);
-            $this->postJson('/api/login', ['email' => $account->email, 'password' => config('presentation.password')])
-                ->assertOk()->assertJsonPath('user.role', $account->role);
+            $login = $this->postJson('/api/login', ['email' => $account->email, 'password' => config('presentation.password')])->assertOk();
+            if ($account->isAdmin()) {
+                $login->assertJsonPath('requires_two_factor', true);
+                $tokenHash = hash('sha256', $login->json('challenge_token'));
+                DB::table('admin_login_challenges')->where('token_hash', $tokenHash)->update(['code_hash' => Hash::make('123456')]);
+                $this->postJson('/api/login/verify-admin-otp', ['challenge_token' => $login->json('challenge_token'), 'code' => '123456'])
+                    ->assertOk()->assertJsonPath('user.role', 'admin');
+            } else {
+                $login->assertJsonPath('user.role', $account->role);
+            }
         }
         Sanctum::actingAs($this->user('marisol.reyes'));
         $this->getJson('/api/admin/users')->assertOk()->assertJsonCount(13, 'users');

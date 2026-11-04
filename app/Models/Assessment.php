@@ -26,6 +26,10 @@ class Assessment extends Model
         'is_published',
         'score_visibility',
         'scores_released_at',
+        'assessment_stage',
+        'passing_score',
+        'allow_late_submissions',
+        'shuffle_questions',
     ];
 
     protected $appends = ['file_url'];
@@ -51,6 +55,9 @@ class Assessment extends Model
             'scores_released_at' => 'datetime',
             'time_limit_minutes' => 'integer',
             'max_attempts'       => 'integer',
+            'passing_score'      => 'decimal:2',
+            'allow_late_submissions' => 'boolean',
+            'shuffle_questions' => 'boolean',
         ];
     }
 

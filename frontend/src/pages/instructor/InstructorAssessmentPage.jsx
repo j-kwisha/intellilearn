@@ -115,6 +115,7 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
                 <option value="short_answer">Short Answer</option>
                 <option value="essay">Essay</option>
                 <option value="matching">Matching</option>
+                <option value="enumeration">Enumeration</option>
               </select>
             </div>
             <div>
@@ -169,6 +170,13 @@ function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved 
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Expected Answer</label>
               <input type="text" style={inputStyle} placeholder="Leave blank to grade manually"
                 value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))} />
+            </div>
+          )}
+          {form.type === 'enumeration' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Expected answers (one per line)</label>
+              <textarea rows={3} style={inputStyle} value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))} />
+              <p className="text-xs text-slate-400 mt-1.5">Students receive partial credit for each correct item.</p>
             </div>
           )}
 
@@ -426,6 +434,8 @@ export default function InstructorAssessmentPage() {
   const [gradeError, setGradeError] = useState('');
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [showAddQuestion, setShowAddQuestion] = useState(false);
+  const [questionAnalysis, setQuestionAnalysis] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
   const fetchAll = useCallback(() => {
     Promise.all([
@@ -497,6 +507,15 @@ export default function InstructorAssessmentPage() {
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to release scores.');
     }
+  };
+
+  const loadQuestionAnalysis = async () => {
+    setAnalysisLoading(true);
+    try {
+      const response = await api.get(`/courses/${courseId}/assessments/${assessmentId}/question-analysis`);
+      setQuestionAnalysis(response.data);
+    } catch (err) { alert(err.response?.data?.message || 'Could not load question analysis.'); }
+    finally { setAnalysisLoading(false); }
   };
 
   if (loading) return (
@@ -661,6 +680,8 @@ export default function InstructorAssessmentPage() {
       {/* Results tab */}
       {tab === 'results' && (
         <div className="space-y-3">
+          <div className="flex justify-end"><button type="button" onClick={loadQuestionAnalysis} disabled={analysisLoading} className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold disabled:opacity-60">{analysisLoading ? 'Analyzing…' : 'Question Analysis'}</button></div>
+          {questionAnalysis && <div className="bg-white rounded-xl border border-slate-200 p-5"><h3 className="font-semibold text-slate-800 mb-1">Question difficulty</h3><p className="text-xs text-slate-500 mb-3">Fewer than {questionAnalysis.minimum_reliable_attempts} responses is a small sample; use those results carefully.</p><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-slate-500"><th className="py-2">Question</th><th>Responses</th><th>Correct</th><th>Difficulty</th></tr></thead><tbody>{questionAnalysis.questions.map(item => <tr key={item.question_id} className="border-t"><td className="py-2 pr-4">{item.question_text}</td><td>{item.attempts}</td><td>{item.percent_correct == null ? '—' : `${item.percent_correct}%`}</td><td>{item.difficulty}{item.attempts > 0 && !item.reliable_sample ? ' · small sample' : ''}</td></tr>)}</tbody></table></div></div>}
           {submissions.length === 0 ? (
             <p className="text-slate-500 bg-white rounded-xl border border-slate-200 p-6 text-center">
               No submissions yet.

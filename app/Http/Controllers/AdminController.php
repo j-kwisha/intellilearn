@@ -21,8 +21,21 @@ class AdminController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        $users = User::orderBy('created_at', 'desc')->get([
-            'id', 'first_name', 'last_name', 'email', 'role', 'is_active', 'created_at',
+        $query = User::query();
+        if ($request->filled('search')) {
+            $search = trim($request->string('search')->toString());
+            $operator = \Illuminate\Support\Facades\DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(fn ($q) => $q->where('first_name', $operator, "%{$search}%")
+                    ->orWhere('last_name', $operator, "%{$search}%")
+                    ->orWhere('email', $operator, "%{$search}%")
+                    ->orWhere('student_id', $operator, "%{$search}%"));
+        }
+        if ($request->filled('role')) $query->where('role', $request->input('role'));
+        if ($request->filled('status')) $query->where('is_active', $request->input('status') === 'active');
+        if ($request->filled('section')) $query->where('section', $request->input('section'));
+        if ($request->filled('course_id')) $query->whereHas('enrollments', fn ($q) => $q->where('course_id', $request->integer('course_id'))->where('status', 'active'));
+        $users = $query->orderBy('created_at', 'desc')->get([
+            'id', 'first_name', 'last_name', 'email', 'role', 'is_active', 'created_at', 'birthday', 'year_level', 'section', 'student_id',
         ]);
 
         return response()->json(['users' => $users]);
@@ -44,6 +57,10 @@ class AdminController extends Controller
             'email'      => ['required', 'email', 'unique:users'],
             'password'   => ['required', 'string', 'min:8', 'confirmed'],
             'role'       => ['required', 'in:student,instructor,admin'],
+            'birthday'   => ['nullable', 'date', 'before:today'],
+            'year_level' => ['nullable', 'string', 'max:40'],
+            'section'    => ['nullable', 'string', 'max:80'],
+            'student_id' => ['nullable', 'string', 'max:80', 'unique:users,student_id'],
         ]);
 
         $user = User::create($validated);
@@ -72,6 +89,10 @@ class AdminController extends Controller
             'email'      => ['sometimes', 'email', 'unique:users,email,' . $user->id],
             'role'       => ['sometimes', 'in:student,instructor,admin'],
             'is_active'  => ['sometimes', 'boolean'],
+            'birthday'   => ['nullable', 'date', 'before:today'],
+            'year_level' => ['nullable', 'string', 'max:40'],
+            'section'    => ['nullable', 'string', 'max:80'],
+            'student_id' => ['nullable', 'string', 'max:80', 'unique:users,student_id,' . $user->id],
         ]);
 
         if (isset($validated['role']) && $validated['role'] !== $user->role) {

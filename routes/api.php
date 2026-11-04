@@ -24,7 +24,8 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 Route::get('/health', fn() => response()->json(['status' => 'ok']));
 
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:8,1');
+Route::post('/login/verify-admin-otp', [AuthController::class, 'verifyAdminLogin'])->middleware('throttle:8,1');
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
@@ -98,6 +99,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/courses/{course}/lessons', [LessonController::class, 'store']);
     Route::get('/courses/{course}/lessons/{lesson}', [LessonController::class, 'show']);
     Route::put('/courses/{course}/lessons/{lesson}', [LessonController::class, 'update']);
+    Route::get('/courses/{course}/lessons/{lesson}/versions', [LessonController::class, 'versions']);
+    Route::post('/courses/{course}/lessons/{lesson}/versions/{version}/restore', [LessonController::class, 'restoreVersion']);
     Route::delete('/courses/{course}/lessons/{lesson}', [LessonController::class, 'destroy']);
 
     // --- LESSON MATERIALS ---
@@ -119,21 +122,27 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/courses/{course}/assessments/{assessment}/import-pdf', [AssessmentController::class, 'importPdf']);
     Route::post('/courses/{course}/upload-reference-text', [AssessmentController::class, 'uploadReferenceText']);
     Route::post('/courses/{course}/assessments/{assessment}/release-scores', [AssessmentController::class, 'releaseScores']);
+    Route::get('/courses/{course}/knowledge-gain', [\App\Http\Controllers\LearningFeatureController::class, 'knowledgeGain']);
+    Route::get('/courses/{course}/assessments/{assessment}/question-analysis', [\App\Http\Controllers\LearningFeatureController::class, 'questionAnalysis']);
+    Route::get('/student/practice', [\App\Http\Controllers\LearningFeatureController::class, 'practiceSet']);
+    Route::post('/student/practice', [\App\Http\Controllers\LearningFeatureController::class, 'submitPractice']);
 
     // --- QUESTIONS ---
     Route::post('/courses/{course}/assessments/{assessment}/questions', [AssessmentController::class, 'addQuestion']);
     Route::post('/courses/{course}/assessments/{assessment}/questions/bulk', [AssessmentController::class, 'addQuestionsBulk']);
+    Route::post('/courses/{course}/assessments/{assessment}/generate-quiz-draft', [AssessmentController::class, 'generateQuizDraft'])->middleware('throttle:4,1');
     Route::put('/courses/{course}/assessments/{assessment}/questions/{question}', [AssessmentController::class, 'updateQuestion']);
     Route::delete('/courses/{course}/assessments/{assessment}/questions/{question}', [AssessmentController::class, 'deleteQuestion']);
 
     // --- RUBRICS ---
     Route::post('/courses/{course}/assessments/{assessment}/questions/{question}/rubric', [AssessmentController::class, 'saveRubric']);
-    Route::post('/courses/{course}/assessments/{assessment}/rubric/generate', [AssessmentController::class, 'generateRubric']);
+    Route::post('/courses/{course}/assessments/{assessment}/rubric/generate', [AssessmentController::class, 'generateRubric'])->middleware('throttle:4,1');
     Route::get('/courses/{course}/assessments/{assessment}/questions/{question}/rubric', [AssessmentController::class, 'getRubric']);
     Route::delete('/courses/{course}/assessments/{assessment}/questions/{question}/rubric', [AssessmentController::class, 'deleteRubric']);
 
     // --- SUBMISSIONS & GRADING ---
     Route::post('/courses/{course}/assessments/{assessment}/start', [SubmissionController::class, 'start']);
+    Route::put('/courses/{course}/assessments/{assessment}/autosave', [SubmissionController::class, 'autosave']);
     Route::post('/courses/{course}/assessments/{assessment}/submit', [SubmissionController::class, 'submit']);
     Route::get('/courses/{course}/assessments/{assessment}/submissions', [SubmissionController::class, 'index']);
     Route::get('/courses/{course}/assessments/{assessment}/submissions/{submission}', [SubmissionController::class, 'show']);

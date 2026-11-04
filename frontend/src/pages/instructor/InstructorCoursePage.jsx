@@ -87,7 +87,7 @@ function HeroActionMenu({ onDelete }) {
 }
 
 /* ── Per-lesson 3-dot action menu (Upload / Delete) ── */
-function LessonActionMenu({ onUpload, onDelete, uploadLabel }) {
+function LessonActionMenu({ onUpload, onDelete, onVersions, uploadLabel }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   useEffect(() => {
@@ -110,6 +110,7 @@ function LessonActionMenu({ onUpload, onDelete, uploadLabel }) {
       </button>
       {open && (
         <div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, minWidth:180, background:'var(--instr-panel)', border:'1px solid var(--instr-line)', borderRadius:10, boxShadow:'0 10px 28px rgba(15,35,25,0.16)', padding:6, zIndex:50 }}>
+          <button onClick={() => { setOpen(false); onVersions(); }} style={{ display:'flex', width:'100%', padding:'9px 10px', borderRadius:8, border:'none', background:'none', fontSize:13.5, fontWeight:500, color:'var(--instr-ink)', cursor:'pointer', fontFamily:'Inter,sans-serif' }}>Version history / restore</button>
           <button onClick={() => { setOpen(false); onUpload(); }}
             style={{ display:'flex', width:'100%', padding:'9px 10px', borderRadius:8, border:'none', background:'none', fontSize:13.5, fontWeight:500, color:'var(--instr-green-600)', cursor:'pointer', fontFamily:'Inter,sans-serif', alignItems:'center', gap:8 }}>
             📎 {uploadLabel}
@@ -139,6 +140,11 @@ export default function InstructorCoursePage() {
   const [editingAssessment, setEditingAssessment] = useState(null);
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [showMaterialForm, setShowMaterialForm] = useState(null); // lessonId
+  const [versionLesson, setVersionLesson] = useState(null);
+  const [lessonVersions, setLessonVersions] = useState([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [gainReport, setGainReport] = useState(null);
+  const [gainReportError, setGainReportError] = useState('');
 
   // Join code state
   const [codeLoading, setCodeLoading] = useState(false);
@@ -164,6 +170,11 @@ export default function InstructorCoursePage() {
   }, [courseId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (tab !== 'learning_gain') return;
+    setGainReportError('');
+    api.get(`/courses/${courseId}/knowledge-gain`).then(res => setGainReport(res.data)).catch(err => setGainReportError(err.response?.data?.message || 'Could not load report.'));
+  }, [tab, courseId]);
 
   if (loading) {
     return (
@@ -175,7 +186,7 @@ export default function InstructorCoursePage() {
 
   if (!course) return <p style={{ color: 'var(--instr-muted)', fontFamily: 'Inter, sans-serif' }}>Course not found.</p>;
 
-  const tabs = ['lessons', 'assessments', 'announcements', 'students', 'calendar'];
+  const tabs = ['lessons', 'assessments', 'announcements', 'students', 'calendar', 'learning_gain'];
 
   const deleteAnnouncement = async (id) => {
     if (!confirm('Delete this announcement?')) return;
@@ -249,6 +260,25 @@ export default function InstructorCoursePage() {
     }
   };
 
+  const showLessonVersions = async (lesson) => {
+    setVersionLesson(lesson);
+    setVersionsLoading(true);
+    try {
+      const response = await api.get(`/courses/${courseId}/lessons/${lesson.id}/versions`);
+      setLessonVersions(response.data.versions || []);
+    } catch (err) { alert(err.response?.data?.message || 'Could not load lesson history.'); }
+    finally { setVersionsLoading(false); }
+  };
+
+  const restoreLessonVersion = async (versionId) => {
+    if (!confirm('Restore this saved lesson and its materials? Current content will be saved as another version.')) return;
+    try {
+      await api.post(`/courses/${courseId}/lessons/${versionLesson.id}/versions/${versionId}/restore`);
+      setVersionLesson(null);
+      await fetchData();
+    } catch (err) { alert(err.response?.data?.message || 'Could not restore this version.'); }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
@@ -296,7 +326,7 @@ export default function InstructorCoursePage() {
             {t === 'lessons' && tab === t && (
               <svg viewBox="0 0 24 24" fill="none" style={{ width:15, height:15 }}><path d="M6 3h9l5 5v13H6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>
             )}
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'learning_gain' ? 'Learning Gain' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -318,6 +348,7 @@ export default function InstructorCoursePage() {
                   <LessonActionMenu
                     onUpload={() => setShowMaterialForm(showMaterialForm === lesson.id ? null : lesson.id)}
                     onDelete={() => handleDeleteLesson(lesson.id, lesson.title)}
+                    onVersions={() => showLessonVersions(lesson)}
                     uploadLabel={showMaterialForm === lesson.id ? '✕ Cancel Upload' : '+ Upload Material'}
                   />
                 </div>
@@ -353,6 +384,7 @@ export default function InstructorCoursePage() {
               </div>
             </div>
           ))}
+          {versionLesson && <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4"><div className="bg-white rounded-xl p-5 w-full max-w-xl max-h-[80vh] overflow-auto"><div className="flex justify-between items-center"><h3 className="font-bold">History · {versionLesson.title}</h3><button onClick={() => setVersionLesson(null)}>Close</button></div><p className="text-xs text-slate-500 mt-1">Lesson edits and material changes save a recoverable snapshot.</p>{versionsLoading ? <p className="py-5">Loading history…</p> : lessonVersions.length === 0 ? <p className="py-5 text-sm text-slate-500">No saved versions yet. The first snapshot appears after your next edit.</p> : lessonVersions.map(version => <div key={version.id} className="flex items-center justify-between gap-3 border-t py-3"><span className="text-sm">{new Date(version.created_at).toLocaleString()} · {version.change_type.replace('_', ' ')}</span><button onClick={() => restoreLessonVersion(version.id)} className="px-3 py-1.5 rounded bg-emerald-700 text-white text-xs">Restore</button></div>)}</div></div>}
         </div>
       )}
 
@@ -477,6 +509,7 @@ export default function InstructorCoursePage() {
 
       {/* ── Calendar ── */}
       {tab === 'calendar' && <CalendarTab courseId={courseId} />}
+      {tab === 'learning_gain' && <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4"><div><h3 className="font-bold text-slate-800">Pre-test / Post-test Knowledge Gain</h3><p className="text-xs text-slate-500">Only students who completed both are included in the cohort average.</p></div>{gainReportError && <p role="alert" className="text-red-600">{gainReportError}</p>}{!gainReport && !gainReportError ? <p>Loading report…</p> : gainReport && <><div className="p-4 rounded-lg bg-emerald-50 text-emerald-800">Cohort average gain: {gainReport.cohort_average_gain == null ? 'Not enough paired results' : `${gainReport.cohort_average_gain > 0 ? '+' : ''}${gainReport.cohort_average_gain} percentage points`} · {gainReport.paired_student_count} paired students</div><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-slate-500 border-b"><th className="py-2">Student</th><th>Pre-test avg</th><th>Post-test avg</th><th>Gain</th></tr></thead><tbody>{gainReport.students.map(row => <tr key={row.student.id} className="border-b"><td className="py-2">{row.student.first_name} {row.student.last_name}</td><td>{row.pre_test_average == null ? '—' : `${row.pre_test_average}%`}</td><td>{row.post_test_average == null ? '—' : `${row.post_test_average}%`}</td><td>{row.gain == null ? 'Needs both tests' : `${row.gain > 0 ? '+' : ''}${row.gain} pts`}</td></tr>)}</tbody></table></div></>}</div>}
     </div>
   );
 }

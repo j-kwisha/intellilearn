@@ -11,6 +11,7 @@ import json
 from essay_grading import (validate_rubric, validate_evaluation, request_json, generate_rubric_draft, GRADING_PROMPT)
 from chat_intents import matches_keyword
 from material_retrieval import select_evidence, bounded_history
+from quiz_generation import generate_quiz_draft
 
 # Suppress sklearn feature name warnings
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
@@ -181,6 +182,22 @@ def generate_rubric(data: dict):
     except Exception as exc:
         print(f"Rubric generation failed: {type(exc).__name__}")
         raise HTTPException(status_code=502, detail="AI returned no valid rubric")
+
+
+@app.post("/generate-quiz-draft")
+def generate_quiz(data: dict):
+    source = data.get("source_text")
+    if not isinstance(source, str) or not source.strip() or len(source) > 24000:
+        raise HTTPException(status_code=422, detail="Readable lesson text is required (max 24000 characters)")
+    try:
+        return generate_quiz_draft(groq_client, source, data.get("question_count", 5), data.get("instructions", ""))
+    except RateLimitError as exc:
+        raise HTTPException(status_code=503, detail="AI quiz generation is busy. Please try again shortly.", headers={"Retry-After": "60"}) from exc
+    except APITimeoutError as exc:
+        raise HTTPException(status_code=503, detail="AI quiz generation timed out. Please try again.") from exc
+    except Exception as exc:
+        print(f"Quiz draft generation failed: {type(exc).__name__}")
+        raise HTTPException(status_code=502, detail="AI could not return a valid quiz draft") from exc
 
 
 @app.post("/grade-essay")
