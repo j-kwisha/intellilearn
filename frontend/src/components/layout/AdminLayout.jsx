@@ -4,6 +4,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import logo from '../../assets/intellilearn-mark.png';
+import ThemeSwitch from '../shared/ThemeSwitch';
+import useSiteTheme from '../../hooks/useSiteTheme';
 
 /* ── Course search dropdown (reused from DashboardLayout) ── */
 function CourseSearchDropdown({ query, courses, onSelect, onClose }) {
@@ -39,6 +41,7 @@ function CourseSearchDropdown({ query, courses, onSelect, onClose }) {
 
 export default function AdminLayout({ children }) {
   const { user, logout } = useAuth();
+  const [darkMode, toggleTheme] = useSiteTheme(user?.id);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -186,6 +189,7 @@ export default function AdminLayout({ children }) {
           </button>
           <h1 className="adm-page-title">{pageLabel}</h1>
           <div className="adm-topbar-right">
+            <ThemeSwitch darkMode={darkMode} onToggle={toggleTheme} />
             <div className="adm-search" ref={searchRef} style={{ position: 'relative' }}>
               <svg className="adm-search-icon" viewBox="0 0 24 24" fill="none">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>

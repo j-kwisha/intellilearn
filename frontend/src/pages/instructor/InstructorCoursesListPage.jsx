@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import ProfileAvatar from '../../components/shared/ProfileAvatar';
+import ThemeSwitch from '../../components/shared/ThemeSwitch';
+import useSiteTheme from '../../hooks/useSiteTheme';
 import logo from '../../assets/intellilearn-mark.png';
 
 const courseIconColors = [
@@ -120,6 +122,7 @@ function InstructorSidebar({ user, onLogout, location }) {
 
 export default function InstructorCoursesListPage() {
   const { user, logout } = useAuth();
+  const [darkMode, toggleTheme] = useSiteTheme(user?.id);
   const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -169,6 +172,7 @@ export default function InstructorCoursesListPage() {
         <header className="instr-topbar">
           <h1 className="instr-page-title">Courses</h1>
           <div className="instr-topbar-right">
+            <ThemeSwitch darkMode={darkMode} onToggle={toggleTheme} />
             <div className="instr-search">
               <svg className="instr-search-icon" viewBox="0 0 24 24" fill="none">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>

@@ -1,8 +1,10 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import ProfileAvatar from '../shared/ProfileAvatar';
+import ThemeSwitch from '../shared/ThemeSwitch';
+import useSiteTheme from '../../hooks/useSiteTheme';
 import useStudentNotifications from '../../hooks/useStudentNotifications';
 import { notificationId, notificationPath } from '../../services/studentNotifications';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -193,19 +195,7 @@ function CourseSearchDropdown({ query, courses, onSelect, onClose }) {
 /* ── Main Layout ── */
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
-  const studentThemeKey = `intellilearn-student-theme-${user?.id}`;
-  const [darkMode, setDarkMode] = useState(() => {
-    try { return user?.role === 'student' && localStorage.getItem(studentThemeKey) === 'dark'; }
-    catch { return false; }
-  });
-
-  useLayoutEffect(() => {
-    if (user?.role !== 'student') return undefined;
-    document.body.dataset.studentTheme = darkMode ? 'dark' : 'light';
-    try { localStorage.setItem(studentThemeKey, darkMode ? 'dark' : 'light'); }
-    catch { /* Keep the current page usable when device storage is unavailable. */ }
-    return () => { delete document.body.dataset.studentTheme; };
-  }, [darkMode, studentThemeKey, user?.role]);
+  const [darkMode, toggleTheme] = useSiteTheme(user?.id, true);
   const location = useLocation();
   const navigate = useNavigate();
   const { checkGuard } = useNavigationGuard();
@@ -507,19 +497,7 @@ export default function DashboardLayout({ children }) {
             )}
           </div>
 
-          {user?.role === 'student' && (
-            <button type="button" className="student-theme-toggle" onClick={() => setDarkMode(value => !value)}
-              role="switch" aria-label="Dark mode" aria-checked={darkMode}
-              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
-              <span className={`student-theme-track${darkMode ? ' is-dark' : ''}`} aria-hidden="true">
-                <span className="student-theme-stars" />
-                <span className="student-theme-cloud student-theme-cloud-one" />
-                <span className="student-theme-cloud student-theme-cloud-two" />
-                <span className="student-theme-orb" />
-              </span>
-              <span className="student-theme-label">{darkMode ? 'Dark' : 'Light'}</span>
-            </button>
-          )}
+          {user?.role === 'student' && <ThemeSwitch darkMode={darkMode} onToggle={toggleTheme} />}
 
           {user?.role === 'student' && (
             <div className="relative">

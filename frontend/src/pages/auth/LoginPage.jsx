@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import heroImg from '../../assets/Student_LandingPage.png';
+import ThemeSwitch from '../../components/shared/ThemeSwitch';
+import useSiteTheme from '../../hooks/useSiteTheme';
 
 import imgLearningPath from '../../assets/Personalized_Learning_Path.png';
 import imgFeedback     from '../../assets/Instant_Feedback_System.png';
@@ -32,6 +34,7 @@ const features = [
 
 export default function LoginPage() {
   const { login, completeAdminLogin, register } = useAuth();
+  const [darkMode, toggleTheme] = useSiteTheme();
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const [activeSlide, setActiveSlide] = useState(0);
@@ -192,7 +195,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ width:'100vw', height:'100vh', overflow:'hidden', fontFamily:"'Plus Jakarta Sans','DM Sans',sans-serif" }}>
+    <div className="ll-page" style={{ width:'100vw', height:'100vh', overflow:'hidden', fontFamily:"'Plus Jakarta Sans','DM Sans',sans-serif" }}>
       <style>{`
         :root {
           --navy: #0B2A6F;
@@ -267,7 +270,7 @@ export default function LoginPage() {
       `}</style>
 
       {/* ══ NAVBAR ══ */}
-      <nav style={{
+      <nav className="ll-navbar" style={{
         position:'fixed',top:0,left:0,right:0,zIndex:300,height:64,
         background:'#EEF4FF',
         borderBottom:'1px solid rgba(180,210,255,.4)',boxShadow:'0 2px 12px rgba(37,99,235,.08)',
@@ -277,6 +280,7 @@ export default function LoginPage() {
           <span className="landing-logo-tile" aria-hidden="true" />
           <span style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", fontWeight:800, fontSize:18, color:'#1e1b4b', letterSpacing:'.04em' }}>INTELLILEARN</span>
         </div>
+        <ThemeSwitch darkMode={darkMode} onToggle={toggleTheme} />
         <button className="nav-link active" onClick={()=>scrollTo(0)}>HOME</button>
         <button className="nav-link" onClick={()=>scrollTo(1)}>BLOGS</button>
         <button className="nav-link">ABOUT US</button>
@@ -303,7 +307,7 @@ export default function LoginPage() {
         {/* ════════════════════════════════
             (A) SLIDE 1 — HERO
         ════════════════════════════════ */}
-        <div className="ll-slide" style={{ background:'#EAF1FF',display:'flex',flexDirection:'column',padding:'72px 28px 28px',boxSizing:'border-box' }}>
+        <div className="ll-slide ll-hero-slide" style={{ background:'#EAF1FF',display:'flex',flexDirection:'column',padding:'72px 28px 28px',boxSizing:'border-box' }}>
           <div style={{ flex:1,position:'relative',overflow:'hidden',borderRadius:30,background:'linear-gradient(135deg,#1E44A8 0%,#2758CC 35%,#3D6EE0 65%,#5B7BE8 100%)' }}>
 
             {/* ── soft glow blobs top area ── */}
@@ -403,7 +407,7 @@ export default function LoginPage() {
         {/* ════════════════════════════════
             (B) SLIDE 2 — FEATURES
         ════════════════════════════════ */}
-        <div className="ll-slide" style={{ background:'var(--page-bg)',display:'flex',flexDirection:'column',paddingTop:64,boxSizing:'border-box',position:'relative',overflow:'hidden' }}>
+        <div className="ll-slide ll-features-slide" style={{ background:'var(--page-bg)',display:'flex',flexDirection:'column',paddingTop:64,boxSizing:'border-box',position:'relative',overflow:'hidden' }}>
           {/* subtle blob top-right */}
           <div style={{ position:'absolute',top:-100,right:-80,width:380,height:380,borderRadius:'50%',background:'rgba(37,99,235,.06)',pointerEvents:'none' }} />
 
@@ -421,7 +425,7 @@ export default function LoginPage() {
             {features.map((f,idx)=>(
               <div key={f.title} className="feat-card" style={{ animationDelay:`${idx*.06}s` }}>
                 {/* illustration panel — fixed height */}
-                <div style={{ background:'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)',height:190,borderRadius:'24px 24px 0 0',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0,position:'relative' }}>
+                <div className="ll-feature-image" style={{ background:'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)',height:190,borderRadius:'24px 24px 0 0',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0,position:'relative' }}>
                   <div style={{ position:'absolute',top:-20,right:-20,width:120,height:120,borderRadius:'50%',background:'rgba(59,130,246,.08)' }} />
                   <img src={f.img} alt={f.title} style={{ width:'85%',height:'85%',objectFit:'contain',position:'relative',zIndex:1 }} onError={e=>{e.target.style.opacity='0'}} />
                 </div>
@@ -441,10 +445,10 @@ export default function LoginPage() {
         {/* ════════════════════════════════
             (C) SLIDE 3 — LOGIN / SIGNUP
         ════════════════════════════════ */}
-        <div className="ll-slide" style={{ display:'flex',alignItems:'stretch',paddingTop:64,boxSizing:'border-box',position:'relative',overflow:'hidden',background:'white' }}>
+        <div className="ll-slide ll-auth-slide" style={{ display:'flex',alignItems:'stretch',paddingTop:64,boxSizing:'border-box',position:'relative',overflow:'hidden',background:'white' }}>
 
           {/* ── LEFT — form panel (white -> very light blue) ── */}
-          <div className={activeSlide===2?'ll-up':''} style={{ flex:'0 0 50%',display:'flex',alignItems:'center',justifyContent:'center',padding:'32px 52px',boxSizing:'border-box',background:'linear-gradient(160deg,#ffffff 0%,#f0f6ff 100%)',position:'relative',zIndex:2 }}>
+          <div className={`ll-auth-form-side ${activeSlide===2?'ll-up':''}`} style={{ flex:'0 0 50%',display:'flex',alignItems:'center',justifyContent:'center',padding:'32px 52px',boxSizing:'border-box',background:'linear-gradient(160deg,#ffffff 0%,#f0f6ff 100%)',position:'relative',zIndex:2 }}>
             {/* dot grid top-left of form side */}
             {Array.from({length:9},(_,i)=>(
               <div key={'fl'+i} style={{ position:'absolute',left:20+(i%3)*20,top:72+Math.floor(i/3)*20,width:5,height:5,borderRadius:'50%',background:'rgba(37,99,235,.15)',pointerEvents:'none' }} />
@@ -459,7 +463,7 @@ export default function LoginPage() {
 
                   {/* Unverified email warning */}
                   {unverifiedEmail ? (
-                    <div style={{ background:'#FFF7ED',border:'1px solid #FED7AA',borderRadius:12,padding:'16px 18px',marginBottom:16 }}>
+                    <div className="ll-auth-alert" style={{ background:'#FFF7ED',border:'1px solid #FED7AA',borderRadius:12,padding:'16px 18px',marginBottom:16 }}>
                       <p style={{ fontSize:14,fontWeight:700,color:'#92400E',margin:'0 0 6px' }}>📧 Email not verified</p>
                       <p style={{ fontSize:13,color:'#78350f',margin:'0 0 12px',lineHeight:1.5 }}>
                         Please verify <strong>{unverifiedEmail}</strong> before logging in. Check your inbox for the verification link.
@@ -478,7 +482,7 @@ export default function LoginPage() {
                       </button>
                     </div>
                   ) : (
-                    loginError && <div style={{ background:'#FEF2F2',color:'#DC2626',fontSize:13,padding:'10px 14px',borderRadius:10,marginBottom:16,border:'1px solid #FECACA' }}>{loginError}</div>
+                    loginError && <div className="ll-auth-alert" style={{ background:'#FEF2F2',color:'#DC2626',fontSize:13,padding:'10px 14px',borderRadius:10,marginBottom:16,border:'1px solid #FECACA' }}>{loginError}</div>
                   )}
                   <form onSubmit={handleLogin} style={{ display:adminChallenge ? 'none' : 'flex',flexDirection:'column',gap:16 }}>
                     <div>
@@ -620,7 +624,7 @@ export default function LoginPage() {
                     </div>
                   ) : (
                     <>
-                      {regErrors.general && <div style={{ background:'#FEF2F2',color:'#DC2626',fontSize:13,padding:'10px 14px',borderRadius:10,marginBottom:12,border:'1px solid #FECACA' }}>{regErrors.general[0]}</div>}
+                      {regErrors.general && <div className="ll-auth-alert" style={{ background:'#FEF2F2',color:'#DC2626',fontSize:13,padding:'10px 14px',borderRadius:10,marginBottom:12,border:'1px solid #FECACA' }}>{regErrors.general[0]}</div>}
                       <form onSubmit={handleRegister} style={{ display:'flex',flexDirection:'column',gap:12 }}>
                         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10 }}>
                           <div>
@@ -672,7 +676,7 @@ export default function LoginPage() {
           </div>
 
           {/* ── RIGHT — decorative panel ── */}
-          <div className={activeSlide===2?'ll-up ll-d1':''} style={{ flex:'0 0 50%',position:'relative',overflow:'hidden',background:'linear-gradient(145deg,#dbeafe 0%,#eff6ff 50%,#e8f4ff 100%)',display:'flex',flexDirection:'column',justifyContent:'center',padding:'40px 56px',boxSizing:'border-box',zIndex:1 }}>
+          <div className={`ll-auth-info-side ${activeSlide===2?'ll-up ll-d1':''}`} style={{ flex:'0 0 50%',position:'relative',overflow:'hidden',background:'linear-gradient(145deg,#dbeafe 0%,#eff6ff 50%,#e8f4ff 100%)',display:'flex',flexDirection:'column',justifyContent:'center',padding:'40px 56px',boxSizing:'border-box',zIndex:1 }}>
 
             {/* background organic blobs */}
             <div style={{ position:'absolute',top:-100,right:-80,width:500,height:500,borderRadius:'50%',background:'rgba(191,219,254,.55)',pointerEvents:'none' }} />

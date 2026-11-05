@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
 import ProfileAvatar from '../shared/ProfileAvatar';
 import logo from '../../assets/intellilearn-mark.png';
+import ThemeSwitch from '../shared/ThemeSwitch';
+import useSiteTheme from '../../hooks/useSiteTheme';
 
 const NAV = [
   { label: 'Dashboard', path: '/instructor', icon: (
@@ -73,6 +75,7 @@ function CourseSearchDropdown({ query, courses, onSelect, onClose }) {
 
 export default function InstructorLayout({ children, pageTitle }) {
   const { user, logout } = useAuth();
+  const [darkMode, toggleTheme] = useSiteTheme(user?.id);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -156,6 +159,7 @@ export default function InstructorLayout({ children, pageTitle }) {
           </button>
           <h1 className="instr-page-title">{title}</h1>
           <div className="instr-topbar-right">
+            <ThemeSwitch darkMode={darkMode} onToggle={toggleTheme} />
             <div className="instr-search" ref={searchRef} style={{ position: 'relative' }}>
               <svg className="instr-search-icon" viewBox="0 0 24 24" fill="none">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
