@@ -9,8 +9,6 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import MenuIcon from '@mui/icons-material/Menu';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import LogoutIcon from '@mui/icons-material/Logout';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -511,10 +509,15 @@ export default function DashboardLayout({ children }) {
 
           {user?.role === 'student' && (
             <button type="button" className="student-theme-toggle" onClick={() => setDarkMode(value => !value)}
-              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={darkMode}
+              role="switch" aria-label="Dark mode" aria-checked={darkMode}
               title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
-              {darkMode ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
-              <span>{darkMode ? 'Light mode' : 'Dark mode'}</span>
+              <span className={`student-theme-track${darkMode ? ' is-dark' : ''}`} aria-hidden="true">
+                <span className="student-theme-stars" />
+                <span className="student-theme-cloud student-theme-cloud-one" />
+                <span className="student-theme-cloud student-theme-cloud-two" />
+                <span className="student-theme-orb" />
+              </span>
+              <span className="student-theme-label">{darkMode ? 'Dark' : 'Light'}</span>
             </button>
           )}
 
