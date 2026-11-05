@@ -7,6 +7,10 @@ import { rubricError } from '../../services/rubric';
 import PdfQuizImport from '../../components/PdfQuizImport';
 import TestBankBuilder from '../../components/TestBankBuilder';
 
+const formatRetryTime = (seconds) => seconds >= 3600
+  ? `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`
+  : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+
 export default function InstructorCreateAssessmentPage() {
   const { courseId } = useParams();
   const navigate = useNavigate();
@@ -39,6 +43,8 @@ export default function InstructorCreateAssessmentPage() {
   const [quizDraftError, setQuizDraftError] = useState('');
   const [quizDraftCount, setQuizDraftCount] = useState(5);
   const [quizDraftRetrySeconds, setQuizDraftRetrySeconds] = useState(0);
+  const [quizDraftRetryUntil, setQuizDraftRetryUntil] = useState(0);
+  const [quizDraftRetryEstimated, setQuizDraftRetryEstimated] = useState(true);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
   const [questionBankMessage, setQuestionBankMessage] = useState('');
   const [lessonSourceSaving, setLessonSourceSaving] = useState(false);
@@ -74,10 +80,14 @@ export default function InstructorCreateAssessmentPage() {
   };
 
   useEffect(() => {
-    if (quizDraftRetrySeconds <= 0) return undefined;
-    const timer = window.setTimeout(() => setQuizDraftRetrySeconds(seconds => Math.max(0, seconds - 1)), 1000);
-    return () => window.clearTimeout(timer);
-  }, [quizDraftRetrySeconds]);
+    if (!quizDraftRetryUntil) return undefined;
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((quizDraftRetryUntil - Date.now()) / 1000));
+      setQuizDraftRetrySeconds(remaining);
+      if (remaining === 0) setQuizDraftRetryUntil(0);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [quizDraftRetryUntil]);
 
   function newQuestion() {
     return { 
@@ -172,10 +182,18 @@ export default function InstructorCreateAssessmentPage() {
       });
       setQuestions((response.data.questions || []).map(question => ({ ...newQuestion(), ...question })));
       setQError('Review and edit this AI-generated draft before saving it.');
+      setQuizDraftRetryUntil(0);
+      setQuizDraftRetrySeconds(0);
     } catch (err) {
       const status = err.response?.status;
-      const retryAfter = Number(err.response?.headers?.['retry-after']) || (status === 429 || status === 503 ? 60 : 0);
-      if (retryAfter > 0) setQuizDraftRetrySeconds(retryAfter);
+      const suppliedWait = Number(err.response?.data?.retry_after_seconds ?? err.response?.headers?.['retry-after']);
+      const retryAfter = Number.isFinite(suppliedWait) && suppliedWait > 0
+        ? Math.ceil(suppliedWait) : (status === 429 || status === 503 ? 60 : 0);
+      if (retryAfter > 0) {
+        setQuizDraftRetrySeconds(retryAfter);
+        setQuizDraftRetryUntil(Date.now() + retryAfter * 1000);
+        setQuizDraftRetryEstimated(err.response?.data?.retry_estimated !== false);
+      }
       setQuizDraftError(err.response?.data?.message || (status === 429 || status === 503
         ? 'The AI provider is busy or has reached a temporary request limit. Wait before trying again.'
         : 'Could not generate a question draft from this lesson.'));
@@ -619,7 +637,8 @@ export default function InstructorCreateAssessmentPage() {
                 <label style={{ fontSize: 12, color: '#334155' }}>Questions
                   <input type="number" min="1" max="20" value={quizDraftCount} onChange={e => setQuizDraftCount(e.target.value)} style={{ ...S.input, width: 88, marginTop: 5 }} />
                 </label>
-                <button type="button" onClick={generateQuizDraft} disabled={quizDraftLoading || lessonSourceSaving || quizDraftRetrySeconds > 0 || !form.lesson_id || !assessmentId} style={{ ...S.btn, alignSelf: 'flex-start', opacity: quizDraftLoading || lessonSourceSaving || quizDraftRetrySeconds > 0 ? 0.65 : 1 }}>{lessonSourceSaving ? 'Saving lesson…' : quizDraftLoading ? 'Generating…' : quizDraftRetrySeconds > 0 ? `Try again in ${quizDraftRetrySeconds}s` : 'Generate Draft from Lesson'}</button>
+                <button type="button" onClick={generateQuizDraft} disabled={quizDraftLoading || lessonSourceSaving || quizDraftRetrySeconds > 0 || !form.lesson_id || !assessmentId} style={{ ...S.btn, alignSelf: 'flex-start', opacity: quizDraftLoading || lessonSourceSaving || quizDraftRetrySeconds > 0 ? 0.65 : 1 }}>{lessonSourceSaving ? 'Saving lesson…' : quizDraftLoading ? 'Generating…' : quizDraftRetrySeconds > 0 ? `Try again in ${formatRetryTime(quizDraftRetrySeconds)}` : 'Generate Draft from Lesson'}</button>
+                {quizDraftRetrySeconds > 0 && <span style={{ fontSize: 12, color: '#475569' }}>{quizDraftRetryEstimated ? 'Suggested retry in' : 'AI provider says retry in'} {formatRetryTime(quizDraftRetrySeconds)}{quizDraftRetryEstimated ? ' (estimate; the service may need longer).' : '.'}</span>}
                 {lessonLoadError && <span role="alert" style={{ fontSize: 12, color: '#b91c1c' }}>{lessonLoadError} Refresh the page and try again.</span>}
                 {!lessonLoadError && lessons.length === 0 && <span style={{ fontSize: 12, color: '#b45309' }}>There are no lessons in this course yet. Add a lesson first.</span>}
                 {!form.lesson_id && lessons.length > 0 && <span style={{ fontSize: 12, color: '#b45309' }}>Choose a lesson above to enable AI question drafting.</span>}

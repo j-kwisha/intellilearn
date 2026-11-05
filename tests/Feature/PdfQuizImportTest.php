@@ -321,12 +321,15 @@ class PdfQuizImportTest extends TestCase
             'file_path' => 'materials/network.txt', 'extracted_text' => 'HTTP transfers web pages. SMTP sends email.',
             'extraction_version' => \App\Services\DocumentTextService::MATERIAL_EXTRACTION_VERSION]);
         Http::fake(['*/generate-quiz-draft' => Http::response(
-            ['detail' => 'AI quiz generation is busy. Please try again shortly.'], 503, ['Retry-After' => '47'])]);
+            ['detail' => 'AI quiz generation is busy. Please try again shortly.'], 503,
+            ['Retry-After' => '47', 'X-Retry-Source' => 'provider'])]);
 
         $this->postJson("/api/courses/{$course->id}/assessments/{$assessment->id}/generate-quiz-draft", [
             'lesson_id' => $lesson->id, 'question_count' => 5,
         ])->assertStatus(503)
             ->assertHeader('Retry-After', '47')
+            ->assertJsonPath('retry_after_seconds', 47)
+            ->assertJsonPath('retry_estimated', false)
             ->assertJsonPath('message', 'The AI provider is busy or has reached a temporary request limit. Wait before trying again.');
 
         $this->assertDatabaseCount('questions', 0);

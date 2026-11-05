@@ -775,11 +775,16 @@ class AssessmentController extends Controller
             ]);
             if (in_array($response->status(), [429, 503], true)) {
                 $retryAfter = max(1, (int) ($response->header('Retry-After') ?: 60));
+                $retryEstimated = $response->header('X-Retry-Source') !== 'provider';
                 $detail = strtolower((string) $response->json('detail', ''));
                 $message = str_contains($detail, 'timed out')
                     ? 'The AI provider took too long to respond. Wait briefly, then try again.'
                     : 'The AI provider is busy or has reached a temporary request limit. Wait before trying again.';
-                return response()->json(['message' => $message], 503)->header('Retry-After', (string) $retryAfter);
+                return response()->json([
+                    'message' => $message,
+                    'retry_after_seconds' => $retryAfter,
+                    'retry_estimated' => $retryEstimated,
+                ], 503)->header('Retry-After', (string) $retryAfter);
             }
             if (in_array($response->status(), [401, 403], true)) {
                 return response()->json(['message' => 'The AI service rejected its provider credentials. An administrator needs to check the AI service configuration.'], 502);
@@ -797,7 +802,11 @@ class AssessmentController extends Controller
                 'http_status' => $error instanceof \Illuminate\Http\Client\RequestException ? $error->response?->status() : null,
             ]);
             if ($error instanceof \Illuminate\Http\Client\ConnectionException) {
-                return response()->json(['message' => 'The AI service could not be reached. Wait briefly and retry; if it continues, check the AI service deployment.'], 503)
+                return response()->json([
+                    'message' => 'The AI service could not be reached. Wait briefly and retry; if it continues, check the AI service deployment.',
+                    'retry_after_seconds' => 30,
+                    'retry_estimated' => true,
+                ], 503)
                     ->header('Retry-After', '30');
             }
             return response()->json(['message' => 'The AI service did not return a usable draft. Check its deployment logs and try again.'], 502);

@@ -12,6 +12,7 @@ from essay_grading import (validate_rubric, validate_evaluation, request_json, g
 from chat_intents import matches_keyword
 from material_retrieval import select_evidence, bounded_history
 from quiz_generation import generate_quiz_draft
+from retry_timing import provider_retry_after_seconds
 
 # Suppress sklearn feature name warnings
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
@@ -193,10 +194,14 @@ def generate_quiz(data: dict):
         return generate_quiz_draft(groq_client.with_options(max_retries=0), source, data.get("question_count", 5), data.get("instructions", ""))
     except RateLimitError as exc:
         print("Quiz draft unavailable: provider_rate_limit")
-        raise HTTPException(status_code=503, detail="AI quiz generation is busy. Please try again shortly.", headers={"Retry-After": "60"}) from exc
+        provider_wait = provider_retry_after_seconds(exc)
+        raise HTTPException(status_code=503, detail="AI quiz generation is busy. Please try again shortly.",
+                            headers={"Retry-After": str(provider_wait or 60),
+                                     "X-Retry-Source": "provider" if provider_wait else "estimate"}) from exc
     except APITimeoutError as exc:
         print("Quiz draft unavailable: provider_timeout")
-        raise HTTPException(status_code=503, detail="AI quiz generation timed out. Please try again.") from exc
+        raise HTTPException(status_code=503, detail="AI quiz generation timed out. Please try again.",
+                            headers={"Retry-After": "30", "X-Retry-Source": "estimate"}) from exc
     except Exception as exc:
         print(f"Quiz draft generation failed: {type(exc).__name__}")
         raise HTTPException(status_code=502, detail="AI could not return a valid quiz draft") from exc
