@@ -766,12 +766,24 @@ class AssessmentController extends Controller
         }
         $chunks = ["## Lesson context\nTitle: {$lesson->title}\nTopic: {$lesson->topic}\nDescription: {$lesson->description}", ...$materialChunks];
         $source = mb_substr(implode("\n\n", $chunks), 0, 24000);
+        $response = null;
         try {
-            $response = Http::timeout(60)->post(rtrim(env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/') . '/generate-quiz-draft', [
+            $response = Http::timeout(75)->post(rtrim(env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/') . '/generate-quiz-draft', [
                 'source_text' => $source,
                 'question_count' => $data['question_count'] ?? 5,
                 'instructions' => $data['instructions'] ?? '',
             ]);
+            if (in_array($response->status(), [429, 503], true)) {
+                $retryAfter = max(1, (int) ($response->header('Retry-After') ?: 60));
+                $detail = strtolower((string) $response->json('detail', ''));
+                $message = str_contains($detail, 'timed out')
+                    ? 'The AI provider took too long to respond. Wait briefly, then try again.'
+                    : 'The AI provider is busy or has reached a temporary request limit. Wait before trying again.';
+                return response()->json(['message' => $message], 503)->header('Retry-After', (string) $retryAfter);
+            }
+            if (in_array($response->status(), [401, 403], true)) {
+                return response()->json(['message' => 'The AI service rejected its provider credentials. An administrator needs to check the AI service configuration.'], 502);
+            }
             $response->throw();
             $questions = $response->json('questions');
             if (!is_array($questions) || count($questions) < 1) {
@@ -784,7 +796,11 @@ class AssessmentController extends Controller
                 'source_characters' => mb_strlen($source), 'exception_type' => get_class($error),
                 'http_status' => $error instanceof \Illuminate\Http\Client\RequestException ? $error->response?->status() : null,
             ]);
-            return response()->json(['message' => 'AI quiz generation is currently unavailable. You can write questions manually and retry later.'], 503);
+            if ($error instanceof \Illuminate\Http\Client\ConnectionException) {
+                return response()->json(['message' => 'The AI service could not be reached. Wait briefly and retry; if it continues, check the AI service deployment.'], 503)
+                    ->header('Retry-After', '30');
+            }
+            return response()->json(['message' => 'The AI service did not return a usable draft. Check its deployment logs and try again.'], 502);
         }
     }
 

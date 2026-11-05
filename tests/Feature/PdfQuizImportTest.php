@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Assessment, Course, Enrollment, Question, Submission, SubmissionAnswer, User};
+use App\Models\{Assessment, Course, Enrollment, Lesson, LessonMaterial, Question, Submission, SubmissionAnswer, User};
 use Illuminate\Foundation\Testing\{RefreshDatabase, RefreshDatabaseState};
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\{Http, Storage};
@@ -30,12 +30,15 @@ class PdfQuizImportTest extends TestCase
             '2026_03_26_000002_create_enrollments_table.php',
             '2026_03_26_000003_create_lessons_table.php',
             '2026_03_26_000005_create_assessments_table.php',
+            '2026_04_26_000001_add_extracted_text_to_lesson_materials.php',
             '2026_09_26_160747_create_matching_pairs_table.php',
             '2026_09_26_162950_add_score_visibility_to_assessments_table.php',
             '2026_09_26_170354_create_rubrics_table.php',
             '2026_09_26_170400_create_rubric_criteria_table.php',
             '2026_09_26_170424_add_criterion_scores_to_submission_answers.php',
             '2026_10_04_160000_add_reference_fields_to_questions.php',
+            '2026_10_09_000001_add_original_filename_to_lesson_materials.php',
+            '2026_10_28_000001_add_extraction_version_to_lesson_materials.php',
             '2026_10_06_000001_extend_essay_rubrics_and_grading_audit.php',
             '2026_11_05_000001_add_learning_and_security_features.php',
             '2026_11_05_000002_add_attempt_unlocks_and_activity_logs.php',
@@ -307,6 +310,26 @@ class PdfQuizImportTest extends TestCase
             ->assertJsonPath('data.0.user.id', $course->instructor_id);
         Sanctum::actingAs(User::factory()->create(['role' => 'student']));
         $this->getJson('/api/admin/activity-logs')->assertForbidden();
+    }
+
+    public function test_lesson_quiz_generation_propagates_provider_cooldown_instead_of_a_generic_server_error(): void
+    {
+        [$course, $assessment] = $this->fixture();
+        $lesson = Lesson::create(['course_id' => $course->id, 'title' => 'Network Basics', 'topic' => 'Protocols', 'description' => 'Core protocols']);
+        Storage::disk('public')->put('materials/network.txt', 'HTTP transfers web pages. SMTP sends email.');
+        LessonMaterial::create(['lesson_id' => $lesson->id, 'title' => 'Network notes', 'type' => 'other',
+            'file_path' => 'materials/network.txt', 'extracted_text' => 'HTTP transfers web pages. SMTP sends email.',
+            'extraction_version' => \App\Services\DocumentTextService::MATERIAL_EXTRACTION_VERSION]);
+        Http::fake(['*/generate-quiz-draft' => Http::response(
+            ['detail' => 'AI quiz generation is busy. Please try again shortly.'], 503, ['Retry-After' => '47'])]);
+
+        $this->postJson("/api/courses/{$course->id}/assessments/{$assessment->id}/generate-quiz-draft", [
+            'lesson_id' => $lesson->id, 'question_count' => 5,
+        ])->assertStatus(503)
+            ->assertHeader('Retry-After', '47')
+            ->assertJsonPath('message', 'The AI provider is busy or has reached a temporary request limit. Wait before trying again.');
+
+        $this->assertDatabaseCount('questions', 0);
     }
 
     public function test_student_other_instructor_and_wrong_course_cannot_import(): void

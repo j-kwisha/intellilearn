@@ -190,10 +190,12 @@ def generate_quiz(data: dict):
     if not isinstance(source, str) or not source.strip() or len(source) > 24000:
         raise HTTPException(status_code=422, detail="Readable lesson text is required (max 24000 characters)")
     try:
-        return generate_quiz_draft(groq_client, source, data.get("question_count", 5), data.get("instructions", ""))
+        return generate_quiz_draft(groq_client.with_options(max_retries=0), source, data.get("question_count", 5), data.get("instructions", ""))
     except RateLimitError as exc:
+        print("Quiz draft unavailable: provider_rate_limit")
         raise HTTPException(status_code=503, detail="AI quiz generation is busy. Please try again shortly.", headers={"Retry-After": "60"}) from exc
     except APITimeoutError as exc:
+        print("Quiz draft unavailable: provider_timeout")
         raise HTTPException(status_code=503, detail="AI quiz generation timed out. Please try again.") from exc
     except Exception as exc:
         print(f"Quiz draft generation failed: {type(exc).__name__}")

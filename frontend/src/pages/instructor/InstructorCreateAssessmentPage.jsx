@@ -5,6 +5,7 @@ import { assessmentPublication, toApiDate } from '../../services/assessmentDates
 import EssayQuestionFields from '../../components/EssayQuestionFields';
 import { rubricError } from '../../services/rubric';
 import PdfQuizImport from '../../components/PdfQuizImport';
+import TestBankBuilder from '../../components/TestBankBuilder';
 
 export default function InstructorCreateAssessmentPage() {
   const { courseId } = useParams();
@@ -35,6 +36,9 @@ export default function InstructorCreateAssessmentPage() {
   const [quizDraftLoading, setQuizDraftLoading] = useState(false);
   const [quizDraftError, setQuizDraftError] = useState('');
   const [quizDraftCount, setQuizDraftCount] = useState(5);
+  const [quizDraftRetrySeconds, setQuizDraftRetrySeconds] = useState(0);
+  const [showQuestionBank, setShowQuestionBank] = useState(false);
+  const [questionBankMessage, setQuestionBankMessage] = useState('');
 
   const [pdfImport, setPdfImport] = useState(null);
   const [pdfImportPending, setPdfImportPending] = useState(false);
@@ -47,6 +51,12 @@ export default function InstructorCreateAssessmentPage() {
       .then(res => setLessons(res.data.lessons || []))
       .catch(() => {});
   }, [courseId]);
+
+  useEffect(() => {
+    if (quizDraftRetrySeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setQuizDraftRetrySeconds(seconds => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [quizDraftRetrySeconds]);
 
   function newQuestion() {
     return { 
@@ -142,7 +152,12 @@ export default function InstructorCreateAssessmentPage() {
       setQuestions((response.data.questions || []).map(question => ({ ...newQuestion(), ...question })));
       setQError('Review and edit this AI-generated draft before saving it.');
     } catch (err) {
-      setQuizDraftError(err.response?.data?.message || 'Could not generate a question draft from this lesson.');
+      const status = err.response?.status;
+      const retryAfter = Number(err.response?.headers?.['retry-after']) || (status === 429 || status === 503 ? 60 : 0);
+      if (retryAfter > 0) setQuizDraftRetrySeconds(retryAfter);
+      setQuizDraftError(err.response?.data?.message || (status === 429 || status === 503
+        ? 'The AI provider is busy or has reached a temporary request limit. Wait before trying again.'
+        : 'Could not generate a question draft from this lesson.'));
     } finally {
       setQuizDraftLoading(false);
     }
@@ -549,12 +564,21 @@ export default function InstructorCreateAssessmentPage() {
       {step === 'questions' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap', padding: 14, border: '1px solid #cbd5e1', borderRadius: 10, background: '#f8fafc' }}>
-            <div style={{ flex: 1, minWidth: 220 }}><strong>Draft questions from lesson</strong><p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>AI uses readable lesson files. Review every question and answer before saving.</p></div>
+            <div style={{ flex: '1 1 100%', minWidth: 220 }}><strong>Build questions</strong><p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>Generate a reviewable draft from the linked lesson or reuse questions from earlier assessments in this course.</p></div>
+            <button type="button" onClick={() => { setQuestionBankMessage(''); setShowQuestionBank(true); }} disabled={!assessmentId} style={{ ...S.btnGhost, borderColor: '#0d9488', color: '#0f766e' }}>Build from Question Bank</button>
+            <div style={{ flex: 1, minWidth: 180 }}><strong style={{ fontSize: 13 }}>Draft from lesson</strong><p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>AI uses readable lesson files. Review every question and answer before saving.</p></div>
             <label style={{ fontSize: 12 }}>Questions <input type="number" min="1" max="20" value={quizDraftCount} onChange={e => setQuizDraftCount(e.target.value)} style={{ ...S.input, width: 72, display: 'inline-block', marginLeft: 6 }} /></label>
-            <button type="button" onClick={generateQuizDraft} disabled={quizDraftLoading || !form.lesson_id || !assessmentId} style={S.btn}>{quizDraftLoading ? 'Generating…' : 'Generate Draft from Lesson'}</button>
+            <button type="button" onClick={generateQuizDraft} disabled={quizDraftLoading || quizDraftRetrySeconds > 0 || !form.lesson_id || !assessmentId} style={{ ...S.btn, opacity: quizDraftLoading || quizDraftRetrySeconds > 0 ? 0.65 : 1 }}>{quizDraftLoading ? 'Generating…' : quizDraftRetrySeconds > 0 ? `Try again in ${quizDraftRetrySeconds}s` : 'Generate Draft from Lesson'}</button>
             {!form.lesson_id && <span style={{ fontSize: 12, color: '#b45309' }}>Select a linked lesson in assessment details first.</span>}
             {quizDraftError && <p role="alert" style={{ flexBasis: '100%', color: '#b91c1c', margin: 0 }}>{quizDraftError}</p>}
+            {questionBankMessage && <p role="status" style={{ flexBasis: '100%', color: '#0f766e', margin: 0 }}>{questionBankMessage}</p>}
           </div>
+          {showQuestionBank && <TestBankBuilder courseId={courseId} assessmentId={assessmentId} onClose={() => setShowQuestionBank(false)} onImported={imported => {
+            setSavedQuestions(previous => [...previous, ...imported]);
+            setQuestionBankMessage(`${imported.length} question${imported.length === 1 ? '' : 's'} added from the question bank. They are saved to this draft assessment.`);
+            setQError('');
+            setShowQuestionBank(false);
+          }} />}
 
           {pdfImport && (
             <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 space-y-3">
