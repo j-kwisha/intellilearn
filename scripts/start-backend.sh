@@ -1,6 +1,10 @@
 #!/bin/sh
 set -eu
 
+if [ "${RAILWAY_SERVICE_NAME:-}" = "deadline-reminders" ]; then
+    exec php artisan assessments:send-deadline-reminders
+fi
+
 php artisan optimize:clear
 php artisan storage:link --force
 php artisan migrate --force
