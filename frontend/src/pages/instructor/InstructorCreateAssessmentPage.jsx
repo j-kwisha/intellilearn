@@ -33,6 +33,8 @@ export default function InstructorCreateAssessmentPage() {
   const [qSaving, setQSaving] = useState(false);
   const [qError, setQError] = useState('');
   const [savedQuestions, setSavedQuestions] = useState([]);
+  const [deletingQuestionId, setDeletingQuestionId] = useState(null);
+  const [savedQuestionError, setSavedQuestionError] = useState('');
   const [quizDraftLoading, setQuizDraftLoading] = useState(false);
   const [quizDraftError, setQuizDraftError] = useState('');
   const [quizDraftCount, setQuizDraftCount] = useState(5);
@@ -232,6 +234,21 @@ export default function InstructorCreateAssessmentPage() {
 
   const addQuestion = () => setQuestions(prev => [...prev, newQuestion()]);
   const removeQuestion = (idx) => { if (questions.length > 1) setQuestions(prev => prev.filter((_, i) => i !== idx)); };
+
+  const deleteSavedQuestion = async (question) => {
+    if (deletingQuestionId !== null || qSaving) return;
+    if (!window.confirm('Delete this saved question?')) return;
+    setDeletingQuestionId(question.id);
+    setSavedQuestionError('');
+    try {
+      await api.delete(`/courses/${courseId}/assessments/${assessmentId}/questions/${question.id}`);
+      setSavedQuestions(previous => previous.filter(saved => saved.id !== question.id));
+    } catch (err) {
+      setSavedQuestionError(err.response?.data?.message || 'Could not delete the saved question. Please try again.');
+    } finally {
+      setDeletingQuestionId(null);
+    }
+  };
 
   const handleSaveQuestions = async () => {
     if (qSaving) return;
@@ -641,13 +658,15 @@ export default function InstructorCreateAssessmentPage() {
                   · {savedQuestions.reduce((sum, q) => sum + parseFloat(q.points || 0), 0)} pts total
                 </span>
               </h3>
+              {savedQuestionError && <p role="alert" style={{ color: '#b91c1c', fontSize: '0.875rem', margin: '0 0 12px' }}>{savedQuestionError}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {savedQuestions.map((q, i) => (
-                  <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'white', borderRadius: 8, padding: '10px 14px', border: '1px solid #d1fae5' }}>
+                  <div key={q.id} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, background: 'white', borderRadius: 8, padding: '10px 14px', border: '1px solid #d1fae5' }}>
                     <span style={{ fontWeight: 700, color: '#0d9488', fontSize: '0.85rem', minWidth: 24 }}>Q{i + 1}</span>
-                    <span style={{ flex: 1, fontSize: '0.875rem', color: '#0f172a' }}>{q.question_text}</span>
+                    <span style={{ flex: '1 1 180px', fontSize: '0.875rem', color: '#0f172a' }}>{q.question_text}</span>
                     <span style={{ fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 99 }}>{typeLabel[q.type]}</span>
                     <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0d9488' }}>{q.points} pts</span>
+                    <button type="button" onClick={() => deleteSavedQuestion(q)} disabled={deletingQuestionId !== null || qSaving} aria-label={`Delete saved question ${i + 1}`} style={{ background: 'none', border: 'none', cursor: deletingQuestionId !== null || qSaving ? 'wait' : 'pointer', color: '#dc2626', fontSize: '0.8rem', fontWeight: 600, padding: '4px 0', opacity: (deletingQuestionId !== null && deletingQuestionId !== q.id) || qSaving ? 0.5 : 1 }}>{deletingQuestionId === q.id ? 'Deleting…' : 'Delete'}</button>
                   </div>
                 ))}
               </div>
