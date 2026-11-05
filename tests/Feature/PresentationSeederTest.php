@@ -259,6 +259,22 @@ class PresentationSeederTest extends TestCase
             ->assertJsonPath('assessment.available_from', null)->assertJsonPath('assessment.due_date', null);
     }
 
+    public function test_blank_optional_passing_score_is_normalized_to_null_on_create_and_update(): void
+    {
+        $this->dataset();
+        $course = Course::where('code', 'IT 321')->firstOrFail();
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $path = "/api/courses/{$course->id}/assessments";
+
+        $assessmentId = $this->postJson($path, [
+            'title' => 'Optional passing score', 'type' => 'quiz', 'max_attempts' => 1, 'passing_score' => '',
+        ])->assertCreated()->assertJsonPath('assessment.passing_score', null)->json('assessment.id');
+
+        $this->putJson("{$path}/{$assessmentId}", ['passing_score' => ''])
+            ->assertOk()->assertJsonPath('assessment.passing_score', null);
+        $this->assertDatabaseHas('assessments', ['id' => $assessmentId, 'passing_score' => null]);
+    }
+
     public function test_scheduled_creation_publishes_without_checkbox_and_preserves_opening_time(): void
     {
         $this->dataset();

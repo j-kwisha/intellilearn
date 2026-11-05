@@ -80,6 +80,7 @@ export default function InstructorCreateAssessmentPage() {
       // Paper-based now describes the source: students take the imported quiz online.
       if (data.type === 'paper_based') data.type = 'quiz';
       if (!data.time_limit_minutes) delete data.time_limit_minutes;
+      data.passing_score = data.passing_score === '' ? null : Number(data.passing_score);
       data.available_from = toApiDate(data.available_from);
       data.due_date = toApiDate(data.due_date, true);
       data.lesson_id = data.lesson_id || null;
