@@ -467,6 +467,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // --- ADMIN USER MANAGEMENT ---
+    Route::get('/admin/system-health', \App\Http\Controllers\AdminSystemHealthController::class);
     Route::get('/admin/reports', [\App\Http\Controllers\AdminReportController::class, 'index']);
     Route::get('/admin/activity-logs', [\App\Http\Controllers\AdminActivityLogController::class, 'index']);
     Route::get('/admin/users', [AdminController::class, 'listUsers']);

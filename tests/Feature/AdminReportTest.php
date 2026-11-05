@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\{Assessment, Course, Enrollment, Question, Submission, SubmissionAnswer, User};
 use Illuminate\Foundation\Testing\{RefreshDatabase, RefreshDatabaseState};
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\{Http, Storage};
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -78,6 +78,35 @@ class AdminReportTest extends TestCase
             $this->getJson('/api/admin/reports?include_risk=1')->assertForbidden();
         }
         Http::assertNothingSent();
+    }
+
+    public function test_system_health_is_admin_only_and_checks_ai_without_generating_content(): void
+    {
+        Http::preventStrayRequests();
+        $this->getJson('/api/admin/system-health')->assertUnauthorized();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'instructor']));
+        $this->getJson('/api/admin/system-health')->assertForbidden();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+        Storage::fake('public');
+        config([
+            'services.ai.url' => 'https://ai.example.test',
+            'mail.default' => 'array',
+            'filesystems.disks.public.driver' => 's3',
+        ]);
+        Http::fake(['https://ai.example.test/health' => Http::response(['status' => 'healthy'], 200)]);
+
+        $this->getJson('/api/admin/system-health')->assertOk()
+            ->assertJsonPath('status', 'attention')
+            ->assertJsonPath('checks.0.key', 'database')
+            ->assertJsonPath('checks.0.status', 'healthy')
+            ->assertJsonPath('checks.1.status', 'healthy')
+            ->assertJsonPath('checks.2.status', 'attention')
+            ->assertJsonPath('checks.3.status', 'healthy');
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://ai.example.test/health' && $request->method() === 'GET');
+        Http::assertSentCount(1);
     }
 
     public function test_students_are_unique_retakes_are_deduplicated_and_ungraded_work_is_not_averaged(): void
