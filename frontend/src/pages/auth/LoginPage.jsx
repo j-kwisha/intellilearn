@@ -41,6 +41,7 @@ export default function LoginPage() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [adminChallenge, setAdminChallenge] = useState('');
   const [adminCode, setAdminCode] = useState('');
+  const adminCodeInputs = useRef([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showRegPw, setShowRegPw]       = useState(false);
   const [regForm, setRegForm]   = useState({ first_name:'', last_name:'', email:'', password:'', password_confirmation:'' });
@@ -51,6 +52,10 @@ export default function LoginPage() {
   const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
+
+  useEffect(() => {
+    if (adminChallenge) adminCodeInputs.current[0]?.focus();
+  }, [adminChallenge]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -102,6 +107,44 @@ export default function LoginPage() {
     } catch (err) {
       setLoginError(err.response?.data?.message || 'Could not verify the code.');
     } finally { setLoginLoading(false); }
+  };
+
+  const updateAdminCode = (startIndex, rawValue) => {
+    const digits = rawValue.replace(/\D/g, '');
+    if (!digits) {
+      setAdminCode(code => code.length > startIndex
+        ? code.slice(0, startIndex) + code.slice(startIndex + 1)
+        : code);
+      return;
+    }
+
+    const effectiveIndex = Math.min(startIndex, adminCode.length);
+    setAdminCode(currentCode => {
+      const index = Math.min(startIndex, currentCode.length);
+      return (currentCode.slice(0, index) + digits.slice(0, 6 - index) + currentCode.slice(index + 1)).slice(0, 6);
+    });
+    const focusIndex = Math.min(effectiveIndex + digits.length, 5);
+    adminCodeInputs.current[focusIndex]?.focus();
+  };
+
+  const handleAdminCodePaste = (event, startIndex = 0) => {
+    const digits = event.clipboardData.getData('text').replace(/\D/g, '');
+    if (!digits) return;
+    event.preventDefault();
+    event.stopPropagation();
+    updateAdminCode(startIndex, digits);
+  };
+
+  const handleAdminCodeKeyDown = (event, index) => {
+    if (event.key === 'Backspace' && !adminCode[index] && index > 0) {
+      adminCodeInputs.current[index - 1]?.focus();
+    } else if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      adminCodeInputs.current[index - 1]?.focus();
+    } else if (event.key === 'ArrowRight' && index < 5) {
+      event.preventDefault();
+      adminCodeInputs.current[index + 1]?.focus();
+    }
   };
 
   const handleRegister = async (e) => {
@@ -193,6 +236,9 @@ export default function LoginPage() {
         .ll-wrap:focus-within{border-color:var(--blue-600);box-shadow:0 0 0 3px rgba(37,99,235,.15);background:#fff}
         .ll-inp{flex:1;padding:0 10px 0 0;border:none;background:transparent;font-size:14px;color:#0f172a;outline:none;font-family:'DM Sans',sans-serif;height:100%}
         .ll-inp::placeholder{color:#94a3b8}
+        .ll-otp-digit{width:100%;height:52px;box-sizing:border-box;border:1px solid #D1D5DB;border-radius:5px;background:#fff;color:#0f172a;text-align:center;font:600 20px 'DM Sans',sans-serif;outline:none;transition:border-color .15s,box-shadow .15s}
+        .ll-otp-digit:focus{border-color:#6D63F5;box-shadow:0 0 0 2px rgba(109,99,245,.18)}
+        .ll-otp-digit:disabled{background:#F1F5F9;color:#64748b;cursor:not-allowed}
 
         /* ── login button ── */
         .ll-btn{width:100%;background:linear-gradient(90deg,#2F7BFF 0%,var(--violet-end) 100%);color:#fff;border:none;border-radius:999px;padding:16px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 24px rgba(37,99,235,.35);transition:opacity .2s,transform .15s,box-shadow .2s}
@@ -464,12 +510,30 @@ export default function LoginPage() {
                   </form>
                   {adminChallenge && <form onSubmit={handleAdminCode} style={{ display:'flex', flexDirection:'column', gap:14 }}>
                     <p style={{ color:'#475569', fontSize:14, margin:0 }}>Enter the six-digit code sent to the administrator email address. The code expires in five minutes.</p>
-                    <label style={{ display:'block', fontSize:13, fontWeight:600, color:'var(--navy)' }}>Verification code
-                      <div className="ll-wrap" style={{ marginTop:7, background:'#fff', borderColor:'#C9DBF5' }}>
-                        <input aria-label="Six-digit verification code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={adminCode} onChange={e => setAdminCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="ll-inp" style={{ width:'100%', padding:'0 16px', letterSpacing:'.3em' }} />
+                    <fieldset style={{ border:0, padding:0, margin:0, minWidth:0 }}>
+                      <legend style={{ padding:0, marginBottom:8, fontSize:13, fontWeight:600, color:'var(--navy)' }}>Verification code</legend>
+                      <div role="group" aria-label="Six-digit verification code" style={{ display:'grid', gridTemplateColumns:'repeat(6, minmax(0, 1fr))', gap:10 }} onPaste={event => handleAdminCodePaste(event)}>
+                        {Array.from({ length:6 }, (_, index) => (
+                          <input
+                            key={index}
+                            ref={element => { adminCodeInputs.current[index] = element; }}
+                            aria-label={`Digit ${index + 1} of 6`}
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                            maxLength={6}
+                            required={index === 0}
+                            value={adminCode[index] || ''}
+                            onChange={event => updateAdminCode(index, event.target.value)}
+                            onKeyDown={event => handleAdminCodeKeyDown(event, index)}
+                            onPaste={event => handleAdminCodePaste(event, index)}
+                            disabled={loginLoading}
+                            className="ll-otp-digit"
+                          />
+                        ))}
                       </div>
-                    </label>
-                    <button type="submit" disabled={loginLoading || adminCode.length !== 6} className="ll-btn">{loginLoading ? 'Verifying…' : 'Verify and log in'}</button>
+                    </fieldset>
+                    <button type="submit" disabled={loginLoading || !/^\d{6}$/.test(adminCode)} className="ll-btn">{loginLoading ? 'Verifying…' : 'Verify and log in'}</button>
                     <button type="button" onClick={() => { setAdminChallenge(''); setAdminCode(''); setLoginError(''); }} style={{ background:'none', border:0, color:'#2563EB', cursor:'pointer' }}>Use a different account</button>
                   </form>}
                   
