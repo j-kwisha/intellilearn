@@ -465,7 +465,9 @@ export default function LoginPage() {
                   {adminChallenge && <form onSubmit={handleAdminCode} style={{ display:'flex', flexDirection:'column', gap:14 }}>
                     <p style={{ color:'#475569', fontSize:14, margin:0 }}>Enter the six-digit code sent to the administrator email address. The code expires in five minutes.</p>
                     <label style={{ display:'block', fontSize:13, fontWeight:600, color:'var(--navy)' }}>Verification code
-                      <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={adminCode} onChange={e => setAdminCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="ll-inp" style={{ marginTop:7, letterSpacing:'.3em' }} />
+                      <div className="ll-wrap" style={{ marginTop:7, background:'#fff', borderColor:'#C9DBF5' }}>
+                        <input aria-label="Six-digit verification code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={adminCode} onChange={e => setAdminCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="ll-inp" style={{ width:'100%', padding:'0 16px', letterSpacing:'.3em' }} />
+                      </div>
                     </label>
                     <button type="submit" disabled={loginLoading || adminCode.length !== 6} className="ll-btn">{loginLoading ? 'Verifying…' : 'Verify and log in'}</button>
                     <button type="button" onClick={() => { setAdminChallenge(''); setAdminCode(''); setLoginError(''); }} style={{ background:'none', border:0, color:'#2563EB', cursor:'pointer' }}>Use a different account</button>
