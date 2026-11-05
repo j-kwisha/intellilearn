@@ -222,6 +222,11 @@ export default function App() {
               <AdminLayout><AdminSystemHealthPage /></AdminLayout>
             </ProtectedRoute>
           } />
+          <Route path="/admin/profile" element={
+            <ProtectedRoute roles={['admin']}>
+              <AdminLayout><StudentProfilePage /></AdminLayout>
+            </ProtectedRoute>
+          } />
 
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

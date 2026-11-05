@@ -161,7 +161,7 @@ export default function StudentProfilePage() {
 
   const preview = photo.preview || (photo.remove ? null : user?.avatar);
 
-  return <div className={`profile-settings${user?.role === 'instructor' ? ' profile-settings--instructor' : ''}`}>
+  return <div className={`profile-settings${user?.role === 'instructor' ? ' profile-settings--instructor' : user?.role === 'admin' ? ' profile-settings--admin' : ''}`}>
     <section className="profile-panel profile-summary" aria-label="Your profile">
       <div className="profile-avatar profile-avatar--summary"><ProfileAvatar user={user} /></div>
       <div className="profile-summary-info"><h2>{user?.first_name} {user?.last_name}</h2><p>{user?.email}</p><span className="profile-role">{user?.role}</span></div>

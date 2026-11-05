@@ -1,5 +1,6 @@
 .profile-settings { --profile-accent: var(--accent, #7655d9); --profile-accent-hover: #5c36b5; --profile-soft: var(--accent-light, #f1eeff); --profile-ink: var(--text-dark, #17152d); --profile-muted: #5f5b73; --profile-line: #d9d4e7; width: 100%; color: var(--profile-ink); font-family: 'Inter', sans-serif; }
 .profile-settings--instructor { --profile-accent: var(--instr-green-600, #1f5342); --profile-accent-hover: #153d2f; --profile-soft: var(--instr-mint-soft, #e4f4ec); --profile-ink: var(--instr-ink, #102b21); --profile-muted: #4b6256; --profile-line: var(--instr-line, #d5e3db); }
+.profile-settings--admin { --profile-accent: #3554d1; --profile-accent-hover: #263fa7; --profile-soft: #edf1ff; --profile-ink: #17234a; --profile-muted: #526079; --profile-line: #dbe2f2; }
 .profile-settings .profile-panel { background: var(--bg-card, #fff); border: 1px solid var(--profile-line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow-card); min-width: 0; }
 .profile-settings .profile-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; margin-bottom: 20px; }
 .profile-settings .profile-summary-info { min-width: 0; }

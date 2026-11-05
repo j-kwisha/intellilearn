@@ -65,7 +65,8 @@ export default function AdminLayout({ children }) {
     path.startsWith('/admin/users') ? '/admin/users' :
     path.startsWith('/admin/reports') ? '/admin/reports' :
     path.startsWith('/admin/activity-logs') ? '/admin/activity-logs' :
-    path.startsWith('/admin/system-health') ? '/admin/system-health' : '/admin';
+    path.startsWith('/admin/system-health') ? '/admin/system-health' :
+    path.startsWith('/admin/profile') ? '/admin/profile' : '/admin';
 
   const pageLabel =
     path === '/admin' || path === '/admin/courses' ? 'Dashboard' :
@@ -73,6 +74,7 @@ export default function AdminLayout({ children }) {
     path.startsWith('/admin/reports') ? 'Reports' :
     path.startsWith('/admin/activity-logs') ? 'Activity Logs' :
     path.startsWith('/admin/system-health') ? 'System Health' :
+    path.startsWith('/admin/profile') ? 'Profile' :
     path.startsWith('/admin/courses/create') ? 'New Course' : 'Dashboard';
 
   return (
@@ -153,6 +155,14 @@ export default function AdminLayout({ children }) {
               <path d="m8 12 2.5 2.5L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span>System Health</span>
+          </Link>
+          <Link to="/admin/profile" onClick={() => setSidebarOpen(false)}
+            className={`adm-nav-item ${activeNav === '/admin/profile' ? 'adm-nav-item--active' : ''}`}>
+            <svg className="adm-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" />
+              <path d="M4 21c0-4 3.5-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span>Profile</span>
           </Link>
         </nav>
 
