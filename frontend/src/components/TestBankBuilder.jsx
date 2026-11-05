@@ -3,6 +3,7 @@ import api from '../services/api';
 
 export default function TestBankBuilder({ courseId, assessmentId, onClose, onImported }) {
   const [sources, setSources] = useState([]);
+  const [selectedSourceIds, setSelectedSourceIds] = useState([]);
   const [requestedTotal, setRequestedTotal] = useState(10);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -10,12 +11,17 @@ export default function TestBankBuilder({ courseId, assessmentId, onClose, onImp
 
   useEffect(() => {
     api.get(`/courses/${courseId}/test-bank/sources`)
-      .then(response => setSources((response.data.assessments || []).filter(item => item.id !== Number(assessmentId))))
+      .then(response => {
+        const availableSources = (response.data.assessments || []).filter(item => item.id !== Number(assessmentId));
+        setSources(availableSources);
+        setSelectedSourceIds(availableSources.filter(item => Number(item.eligible_question_count) > 0).slice(0, 10).map(item => Number(item.id)));
+      })
       .catch(requestError => setError(requestError.response?.data?.message || 'Could not load reusable questions.'))
       .finally(() => setLoading(false));
   }, [courseId, assessmentId]);
 
-  const bankSources = sources.filter(source => Number(source.eligible_question_count) > 0).slice(0, 10);
+  const selectableSources = sources.filter(source => Number(source.eligible_question_count) > 0).slice(0, 10);
+  const bankSources = selectableSources.filter(source => selectedSourceIds.includes(Number(source.id)));
   const availableTotal = bankSources.reduce((sum, source) => sum + Math.min(50, Math.max(0, Number(source.eligible_question_count) || 0)), 0);
   const selectedTotal = Math.min(Math.max(0, Number(requestedTotal) || 0), availableTotal);
   const allocation = (() => {
@@ -60,23 +66,35 @@ export default function TestBankBuilder({ courseId, assessmentId, onClose, onImp
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
     <div role="dialog" aria-modal="true" aria-labelledby="question-bank-title" className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl space-y-4">
       <div className="flex justify-between items-start gap-4">
-        <div><h2 id="question-bank-title" className="text-lg font-bold">Build from question bank</h2><p className="mt-1 text-sm text-slate-500">Choose a total. Questions are spread across earlier assessments, with a random selection from each. Essay questions are excluded.</p></div>
+        <div><h2 id="question-bank-title" className="text-lg font-bold">Build from question bank</h2><p className="mt-1 text-sm text-slate-500">Choose the assessments to use and enter a total. Questions are spread evenly across your selection, with a random pick from each. Essay questions are excluded.</p></div>
         <button type="button" onClick={onClose} aria-label="Close question bank" className="text-slate-500">×</button>
       </div>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {loading ? <p className="text-sm text-slate-500">Loading assessments…</p> : <>
+        <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
+          <p className="text-sm font-medium">Choose source assessments</p>
+          {selectableSources.map(source => <label key={source.id} className="flex items-center justify-between gap-3 py-1 text-sm">
+            <span className="flex items-center gap-2"><input type="checkbox" checked={selectedSourceIds.includes(Number(source.id))}
+              onChange={event => setSelectedSourceIds(current => event.target.checked
+                ? [...current, Number(source.id)].slice(-10)
+                : current.filter(id => id !== Number(source.id)))} />{source.title}</span>
+            <span className="text-xs text-slate-500">{source.eligible_question_count} reusable</span>
+          </label>)}
+          {sources.length === 0 && <p className="text-sm text-slate-500">No other assessments are available in this course yet.</p>}
+          {sources.length > selectableSources.length && <p className="text-xs text-slate-500">Select from the first {selectableSources.length} assessments with reusable questions.</p>}
+          {sources.length > 0 && selectableSources.length === 0 && <p className="text-sm text-slate-500">No reusable objective questions are available yet.</p>}
+        </div>
         <label className="block text-sm font-medium">Total questions needed
           <input aria-label="Total questions needed" type="number" min="1" max={Math.max(1, availableTotal)} value={requestedTotal}
             onChange={event => setRequestedTotal(event.target.value)} className="ml-3 w-28 rounded-md border border-slate-300 px-3 py-2" />
         </label>
-        <p className="text-xs text-slate-500">Up to {availableTotal} eligible questions can be selected across {bankSources.length} assessments.</p>
+        <p className="text-xs text-slate-500">Up to {availableTotal} questions can be selected across {bankSources.length} chosen assessments.</p>
         <div className="max-h-64 space-y-2 overflow-y-auto">
           {allocation.map(source => <div key={source.assessment_id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3">
             <span><span className="block text-sm font-medium">{source.title}</span><span className="text-xs text-slate-500">{source.available} eligible questions available</span></span>
             <span className="text-sm font-semibold text-teal-700">{source.count} selected</span>
           </div>)}
-          {sources.length === 0 && <p className="text-sm text-slate-500">No other assessments are available in this course yet.</p>}
-          {sources.length > 0 && allocation.length === 0 && <p className="text-sm text-slate-500">No reusable objective questions are available yet.</p>}
+          {selectableSources.length > 0 && bankSources.length === 0 && <p className="text-sm text-slate-500">Choose at least one source assessment above.</p>}
         </div>
       </>}
       {!loading && Number(requestedTotal) > availableTotal && availableTotal > 0 && <p role="status" className="text-sm text-amber-700">Only {availableTotal} eligible questions are available, so all {availableTotal} will be selected.</p>}
