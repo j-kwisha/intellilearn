@@ -5,6 +5,7 @@ import AssessmentSchedule from '../../components/AssessmentSchedule';
 import { canViewSubmissionScore } from '../../services/submissionResults';
 import { useNavigationGuard } from '../../context/NavigationGuardContextStore';
 import { getAuthSession } from '../../services/authSession.js';
+import { orderedChoices } from '../../services/choiceOrder.js';
 
 export default function StudentQuizPage() {
   const { courseId, assessmentId } = useParams();
@@ -527,9 +528,9 @@ export default function StudentQuizPage() {
           <div className="mt-4">
             {(q.type === 'multiple_choice' || q.type === 'true_false') && q.options ? (
               <div className="space-y-2">
-                {Object.values(q.options).map((option) => (
+                {orderedChoices(q, submission?.id, assessment.shuffle_choices).map((option, optionIndex) => (
                   <label
-                    key={option}
+                    key={`${optionIndex}:${option}`}
                     className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors
                       ${answers[q.id] === option
                         ? 'border-indigo-300 bg-indigo-50'

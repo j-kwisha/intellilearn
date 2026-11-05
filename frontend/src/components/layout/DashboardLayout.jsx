@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContextStore';
 import api from '../../services/api';
@@ -9,6 +9,8 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import MenuIcon from '@mui/icons-material/Menu';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import LogoutIcon from '@mui/icons-material/Logout';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -85,7 +87,7 @@ function NotificationPanel({ onClose, feed, loading, error, onRetry, triggerRef 
   return (
     <div
       ref={panelRef}
-      className="absolute right-0 top-12 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden"
+      className="student-notification-panel absolute right-0 top-12 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden"
     >
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <span className="font-semibold text-slate-800 text-sm">Notifications</span>
@@ -193,6 +195,19 @@ function CourseSearchDropdown({ query, courses, onSelect, onClose }) {
 /* ── Main Layout ── */
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
+  const studentThemeKey = `intellilearn-student-theme-${user?.id}`;
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return user?.role === 'student' && localStorage.getItem(studentThemeKey) === 'dark'; }
+    catch { return false; }
+  });
+
+  useLayoutEffect(() => {
+    if (user?.role !== 'student') return undefined;
+    document.body.dataset.studentTheme = darkMode ? 'dark' : 'light';
+    try { localStorage.setItem(studentThemeKey, darkMode ? 'dark' : 'light'); }
+    catch { /* Keep the current page usable when device storage is unavailable. */ }
+    return () => { delete document.body.dataset.studentTheme; };
+  }, [darkMode, studentThemeKey, user?.role]);
   const location = useLocation();
   const navigate = useNavigate();
   const { checkGuard } = useNavigationGuard();
@@ -223,8 +238,7 @@ export default function DashboardLayout({ children }) {
   }, []);
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+    if (await logout()) navigate('/login');
   };
 
   const handleSearchSelect = (course) => {
@@ -494,6 +508,15 @@ export default function DashboardLayout({ children }) {
               />
             )}
           </div>
+
+          {user?.role === 'student' && (
+            <button type="button" className="student-theme-toggle" onClick={() => setDarkMode(value => !value)}
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={darkMode}
+              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
+              {darkMode ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+              <span>{darkMode ? 'Light mode' : 'Dark mode'}</span>
+            </button>
+          )}
 
           {user?.role === 'student' && (
             <div className="relative">

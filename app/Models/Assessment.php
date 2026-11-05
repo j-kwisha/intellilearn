@@ -30,6 +30,7 @@ class Assessment extends Model
         'passing_score',
         'allow_late_submissions',
         'shuffle_questions',
+        'shuffle_choices',
     ];
 
     protected $appends = ['file_url'];
@@ -58,6 +59,7 @@ class Assessment extends Model
             'passing_score'      => 'decimal:2',
             'allow_late_submissions' => 'boolean',
             'shuffle_questions' => 'boolean',
+            'shuffle_choices' => 'boolean',
         ];
     }
 

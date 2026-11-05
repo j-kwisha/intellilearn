@@ -52,7 +52,7 @@ export default function AdminLayout({ children }) {
     api.get('/courses').then(res => setAllCourses(res.data.courses || [])).catch(() => {});
   }, []);
 
-  const handleLogout = async () => { await logout(); navigate('/login'); };
+  const handleLogout = async () => { if (await logout()) navigate('/login'); };
 
   const handleSearchSelect = () => { setSearchQuery(''); setSearchOpen(false); navigate('/admin/courses'); };
 

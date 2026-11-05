@@ -24,7 +24,7 @@ export default function InstructorCreateAssessmentPage() {
     title: '', description: '', lesson_id: '', type: 'quiz', topic: '',
     time_limit_minutes: '', max_attempts: 1, is_published: false,
     available_from: '', due_date: '', score_visibility: 'immediate', assessment_stage: 'regular',
-    passing_score: '', allow_late_submissions: false, shuffle_questions: false,
+    passing_score: '', allow_late_submissions: false, shuffle_questions: false, shuffle_choices: false,
   });
   const [addToCalendar, setAddToCalendar] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -507,6 +507,10 @@ export default function InstructorCreateAssessmentPage() {
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
               <input type="checkbox" checked={form.shuffle_questions} onChange={e => setForm({ ...form, shuffle_questions: e.target.checked })} />
               <span style={{ fontSize: '0.9rem', color: '#334155' }}>Randomize question order for each student attempt</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.shuffle_choices} onChange={e => setForm({ ...form, shuffle_choices: e.target.checked })} />
+              <span style={{ fontSize: '0.9rem', color: '#334155' }}>Randomize multiple-choice answer order for each student attempt</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
               <input type="checkbox" checked={form.allow_late_submissions} onChange={e => setForm({ ...form, allow_late_submissions: e.target.checked })} />

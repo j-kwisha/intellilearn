@@ -127,7 +127,7 @@ export default function InstructorDashboard() {
   const [expandedCourses, setExpandedCourses] = useState({}); // Track which courses are expanded
   const searchRef                     = useRef(null);
 
-  const handleLogout = async () => { await logout(); navigate('/login'); };
+  const handleLogout = async () => { if (await logout()) navigate('/login'); };
 
   // Toggle course expansion in at-risk section
   const toggleCourseExpansion = (courseName) => {

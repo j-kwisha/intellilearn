@@ -109,6 +109,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    if (!window.confirm('Are you sure you want to log out?')) return false;
     ++authOperation.current;
     const session = getAuthSession();
     const captured = session.snapshot();
@@ -121,6 +122,7 @@ export function AuthProvider({ children }) {
     } catch {
       // Even if API fails, clear local state
     }
+    return true;
   };
 
   const updateUser = (profile, captured) => {

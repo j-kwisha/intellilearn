@@ -86,7 +86,7 @@ export default function InstructorLayout({ children, pageTitle }) {
     api.get('/courses').then(res => setAllCourses(res.data.courses || [])).catch(() => {});
   }, []);
 
-  const handleLogout = async () => { await logout(); navigate('/login'); };
+  const handleLogout = async () => { if (await logout()) navigate('/login'); };
 
   const handleSearchSelect = (course) => {
     setSearchQuery(''); setSearchOpen(false);

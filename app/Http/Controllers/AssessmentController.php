@@ -165,6 +165,7 @@ class AssessmentController extends Controller
             'passing_score'      => ['nullable', 'numeric', 'min:0', 'max:100'],
             'allow_late_submissions' => ['sometimes', 'boolean'],
             'shuffle_questions' => ['sometimes', 'boolean'],
+            'shuffle_choices' => ['sometimes', 'boolean'],
         ]);
 
         $this->validateSchedule($validated);
@@ -275,6 +276,7 @@ class AssessmentController extends Controller
             'passing_score'      => ['nullable', 'numeric', 'min:0', 'max:100'],
             'allow_late_submissions' => ['sometimes', 'boolean'],
             'shuffle_questions' => ['sometimes', 'boolean'],
+            'shuffle_choices' => ['sometimes', 'boolean'],
         ]);
 
         $this->validateSchedule($validated, $assessment);

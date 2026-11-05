@@ -125,7 +125,7 @@ export default function InstructorCoursesListPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const handleLogout = async () => { await logout(); navigate('/login'); };
+  const handleLogout = async () => { if (await logout()) navigate('/login'); };
 
   const fetchCourses = () => {
     api.get('/courses')

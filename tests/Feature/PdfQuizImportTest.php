@@ -42,6 +42,7 @@ class PdfQuizImportTest extends TestCase
             '2026_10_06_000001_extend_essay_rubrics_and_grading_audit.php',
             '2026_11_05_000001_add_learning_and_security_features.php',
             '2026_11_05_000002_add_attempt_unlocks_and_activity_logs.php',
+            '2026_11_06_000001_add_shuffle_choices_to_assessments.php',
             '2026_10_06_000002_add_essay_grading_states.php',
         ])];
     }
@@ -193,7 +194,8 @@ class PdfQuizImportTest extends TestCase
         $path = "/api/courses/{$course->id}/assessments/{$assessment->id}";
         $this->postJson($path.'/questions', ['question_text' => 'Name two transport protocols.', 'type' => 'enumeration', 'correct_answer' => "TCP\nUDP", 'points' => 2])->assertCreated();
         $this->postJson($path.'/questions', ['question_text' => 'Which protocol is secure?', 'type' => 'multiple_choice', 'options' => ['HTTP', 'HTTPS'], 'correct_answer' => 'HTTPS', 'points' => 1])->assertCreated();
-        $this->putJson($path, ['is_published' => true, 'shuffle_questions' => true, 'assessment_stage' => 'pre_test', 'passing_score' => 70])->assertOk();
+        $this->putJson($path, ['is_published' => true, 'shuffle_questions' => true, 'shuffle_choices' => true, 'assessment_stage' => 'pre_test', 'passing_score' => 70])->assertOk();
+        $this->assertTrue($assessment->fresh()->shuffle_choices);
         $student = User::factory()->create(['role' => 'student']);
         Enrollment::create(['user_id' => $student->id, 'course_id' => $course->id, 'status' => 'active']);
         Sanctum::actingAs($student);
