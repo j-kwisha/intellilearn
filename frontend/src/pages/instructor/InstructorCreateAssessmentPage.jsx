@@ -582,23 +582,33 @@ export default function InstructorCreateAssessmentPage() {
       {/* STEP 2: Questions */}
       {step === 'questions' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap', padding: 14, border: '1px solid #cbd5e1', borderRadius: 10, background: '#f8fafc' }}>
-            <div style={{ flex: '1 1 100%', minWidth: 220 }}><strong>Build questions</strong><p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>Generate a reviewable draft from the linked lesson or reuse questions from earlier assessments in this course.</p></div>
-            <button type="button" onClick={() => { setQuestionBankMessage(''); setShowQuestionBank(true); }} disabled={!assessmentId} style={{ ...S.btnGhost, borderColor: '#0d9488', color: '#0f766e' }}>Build from Question Bank</button>
-            <div style={{ flex: 1, minWidth: 180 }}><strong style={{ fontSize: 13 }}>Draft from lesson</strong><p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>Choose a lesson here, then generate questions from its readable files. Review every question and answer before saving.</p></div>
-            <label style={{ flex: '1 1 260px', minWidth: 220, fontSize: 12, color: '#334155' }}>Lesson to use
-              <select style={{ ...S.input, marginTop: 5, background: 'white' }} value={form.lesson_id} disabled={lessonSourceSaving || lessons.length === 0} onChange={e => handleLessonSourceChange(e.target.value)}>
-                <option value="">Choose a lesson…</option>
-                {lessons.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
-              </select>
-            </label>
-            <label style={{ fontSize: 12 }}>Questions <input type="number" min="1" max="20" value={quizDraftCount} onChange={e => setQuizDraftCount(e.target.value)} style={{ ...S.input, width: 72, display: 'inline-block', marginLeft: 6 }} /></label>
-            <button type="button" onClick={generateQuizDraft} disabled={quizDraftLoading || lessonSourceSaving || quizDraftRetrySeconds > 0 || !form.lesson_id || !assessmentId} style={{ ...S.btn, opacity: quizDraftLoading || lessonSourceSaving || quizDraftRetrySeconds > 0 ? 0.65 : 1 }}>{lessonSourceSaving ? 'Saving lesson…' : quizDraftLoading ? 'Generating…' : quizDraftRetrySeconds > 0 ? `Try again in ${quizDraftRetrySeconds}s` : 'Generate Draft from Lesson'}</button>
-            {lessonLoadError && <span role="alert" style={{ flexBasis: '100%', fontSize: 12, color: '#b91c1c' }}>{lessonLoadError} Refresh the page and try again.</span>}
-            {!lessonLoadError && lessons.length === 0 && <span style={{ flexBasis: '100%', fontSize: 12, color: '#b45309' }}>There are no lessons in this course yet. Add a lesson first.</span>}
-            {!form.lesson_id && lessons.length > 0 && <span style={{ flexBasis: '100%', fontSize: 12, color: '#b45309' }}>Choose a lesson above to enable AI question drafting.</span>}
-            {quizDraftError && <p role="alert" style={{ flexBasis: '100%', color: '#b91c1c', margin: 0 }}>{quizDraftError}</p>}
-            {questionBankMessage && <p role="status" style={{ flexBasis: '100%', color: '#0f766e', margin: 0 }}>{questionBankMessage}</p>}
+          <div style={{ padding: 16, border: '1px solid #cbd5e1', borderRadius: 10, background: '#f8fafc' }}>
+            <strong>Build questions</strong>
+            <p style={{ margin: '4px 0 16px', fontSize: 12, color: '#64748b' }}>Generate a reviewable draft from a lesson or reuse questions from earlier assessments in this course.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12, padding: 16, border: '1px solid #cbd5e1', borderRadius: 10, background: '#fff' }}>
+                <div><strong style={{ fontSize: 13 }}>Question bank</strong><p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>Choose earlier assessments and the total number of questions to reuse.</p></div>
+                <button type="button" onClick={() => { setQuestionBankMessage(''); setShowQuestionBank(true); }} disabled={!assessmentId} style={{ ...S.btnGhost, borderColor: '#0d9488', color: '#0f766e' }}>Build from Question Bank</button>
+                {questionBankMessage && <p role="status" style={{ color: '#0f766e', margin: 0, fontSize: 12 }}>{questionBankMessage}</p>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 12, padding: 16, border: '1px solid #cbd5e1', borderRadius: 10, background: '#fff' }}>
+                <div><strong style={{ fontSize: 13 }}>Draft from lesson</strong><p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>AI uses readable lesson files. Review the questions and answers before saving.</p></div>
+                <label style={{ fontSize: 12, color: '#334155' }}>Lesson to use
+                  <select style={{ ...S.input, marginTop: 5, background: 'white' }} value={form.lesson_id} disabled={lessonSourceSaving || lessons.length === 0} onChange={e => handleLessonSourceChange(e.target.value)}>
+                    <option value="">Choose a lesson…</option>
+                    {lessons.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
+                  </select>
+                </label>
+                <label style={{ fontSize: 12, color: '#334155' }}>Questions
+                  <input type="number" min="1" max="20" value={quizDraftCount} onChange={e => setQuizDraftCount(e.target.value)} style={{ ...S.input, width: 88, marginTop: 5 }} />
+                </label>
+                <button type="button" onClick={generateQuizDraft} disabled={quizDraftLoading || lessonSourceSaving || quizDraftRetrySeconds > 0 || !form.lesson_id || !assessmentId} style={{ ...S.btn, alignSelf: 'flex-start', opacity: quizDraftLoading || lessonSourceSaving || quizDraftRetrySeconds > 0 ? 0.65 : 1 }}>{lessonSourceSaving ? 'Saving lesson…' : quizDraftLoading ? 'Generating…' : quizDraftRetrySeconds > 0 ? `Try again in ${quizDraftRetrySeconds}s` : 'Generate Draft from Lesson'}</button>
+                {lessonLoadError && <span role="alert" style={{ fontSize: 12, color: '#b91c1c' }}>{lessonLoadError} Refresh the page and try again.</span>}
+                {!lessonLoadError && lessons.length === 0 && <span style={{ fontSize: 12, color: '#b45309' }}>There are no lessons in this course yet. Add a lesson first.</span>}
+                {!form.lesson_id && lessons.length > 0 && <span style={{ fontSize: 12, color: '#b45309' }}>Choose a lesson above to enable AI question drafting.</span>}
+                {quizDraftError && <p role="alert" style={{ color: '#b91c1c', margin: 0, fontSize: 12 }}>{quizDraftError}</p>}
+              </div>
+            </div>
           </div>
           {showQuestionBank && <TestBankBuilder courseId={courseId} assessmentId={assessmentId} onClose={() => setShowQuestionBank(false)} onImported={imported => {
             setSavedQuestions(previous => [...previous, ...imported]);
