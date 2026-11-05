@@ -275,6 +275,18 @@ class PresentationSeederTest extends TestCase
         $this->assertDatabaseHas('assessments', ['id' => $assessmentId, 'passing_score' => null]);
     }
 
+    public function test_recent_instructor_submissions_endpoint_returns_only_dashboard_fields(): void
+    {
+        $this->dataset();
+        Sanctum::actingAs($this->user('adrian.mendoza'));
+        $this->getJson('/api/instructor/submissions/recent')->assertOk()
+            ->assertJsonStructure(['submissions' => [['id', 'student_name', 'score', 'total', 'status']]])
+            ->assertJsonCount(5, 'submissions');
+
+        Sanctum::actingAs($this->user('isabella.santos'));
+        $this->getJson('/api/instructor/submissions/recent')->assertForbidden();
+    }
+
     public function test_scheduled_creation_publishes_without_checkbox_and_preserves_opening_time(): void
     {
         $this->dataset();

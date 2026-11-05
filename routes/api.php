@@ -320,6 +320,27 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ai/chatbot', [AiController::class, 'chatbot']);
     Route::get('/ai/materials/{material}/context', [AiController::class, 'materialContext']);
 
+    // --- INSTRUCTOR DASHBOARD ---
+    Route::get('/instructor/submissions/recent', function (Request $request) {
+        $user = $request->user();
+        if (! $user->isInstructor() && ! $user->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $courseIds = \App\Models\Course::where('instructor_id', $user->id)->select('id');
+        $submissions = \App\Models\Submission::whereHas('assessment', fn ($query) => $query->whereIn('course_id', $courseIds))
+            ->with(['user:id,first_name,last_name', 'assessment:id,total_points'])
+            ->orderByDesc('submitted_at')->orderByDesc('id')->limit(5)->get();
+
+        return response()->json(['submissions' => $submissions->map(fn ($submission) => [
+            'id' => $submission->id,
+            'student_name' => trim(($submission->user?->first_name ?? '') . ' ' . ($submission->user?->last_name ?? '')),
+            'score' => $submission->score,
+            'total' => $submission->total_points ?? $submission->assessment?->total_points,
+            'status' => $submission->status === 'graded' ? 'Reviewed' : 'Pending',
+        ])->values()]);
+    });
+
     // --- INSTRUCTOR STATS ---
     Route::get('/instructor/stats', function (\Illuminate\Http\Request $request) {
         $user = $request->user();
