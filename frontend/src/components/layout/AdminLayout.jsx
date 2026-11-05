@@ -63,12 +63,14 @@ export default function AdminLayout({ children }) {
   const activeNav =
     path === '/admin' || path === '/admin/courses' ? '/admin' :
     path.startsWith('/admin/users') ? '/admin/users' :
-    path.startsWith('/admin/reports') ? '/admin/reports' : '/admin';
+    path.startsWith('/admin/reports') ? '/admin/reports' :
+    path.startsWith('/admin/activity-logs') ? '/admin/activity-logs' : '/admin';
 
   const pageLabel =
     path === '/admin' || path === '/admin/courses' ? 'Dashboard' :
     path.startsWith('/admin/users') ? 'Users' :
     path.startsWith('/admin/reports') ? 'Reports' :
+    path.startsWith('/admin/activity-logs') ? 'Activity Logs' :
     path.startsWith('/admin/courses/create') ? 'New Course' : 'Dashboard';
 
   return (
@@ -133,6 +135,14 @@ export default function AdminLayout({ children }) {
               <path d="M20 20v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             <span>Reports</span>
+          </Link>
+          <Link to="/admin/activity-logs" onClick={() => setSidebarOpen(false)}
+            className={`adm-nav-item ${activeNav === '/admin/activity-logs' ? 'adm-nav-item--active' : ''}`}>
+            <svg className="adm-nav-icon" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+              <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span>Activity Logs</span>
           </Link>
         </nav>
 

@@ -12,11 +12,18 @@ export function NavigationGuardProvider({ children }) {
   const clearGuard   = ()   => { guardRef.current = null; };
 
   // Returns true if navigation was blocked (caller should abort), false if OK to proceed
-  const checkGuard = () => {
+  const checkGuard = async () => {
     if (!guardRef.current) return false;
     const result = guardRef.current();
     if (!result?.blocked) return false;
-    return !window.confirm(result.message);
+    if (!window.confirm(result.message)) return true;
+    try {
+      await result.onProceed?.();
+      return false;
+    } catch (error) {
+      window.alert(error?.response?.data?.message || 'Could not lock your attempt. Please stay on this page and try again.');
+      return true;
+    }
   };
 
   return (

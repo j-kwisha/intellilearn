@@ -23,6 +23,8 @@ class Submission extends Model
         'submitted_at',
         'graded_at',
         'question_order',
+        'locked_at',
+        'lock_reason',
     ];
 
     protected function casts(): array
@@ -35,6 +37,7 @@ class Submission extends Model
             'submitted_at' => 'datetime',
             'graded_at'    => 'datetime',
             'question_order' => 'array',
+            'locked_at' => 'datetime',
         ];
     }
 

@@ -44,6 +44,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
 import AdminReportsPage from './pages/admin/AdminReportsPage';
 import AdminCreateCoursePage from './pages/admin/AdminCreateCoursePage';
+import AdminActivityLogsPage from './pages/admin/AdminActivityLogsPage';
 
 // Utility
 import { UnauthorizedPage } from './pages/PlaceholderPage';
@@ -208,6 +209,11 @@ export default function App() {
           <Route path="/admin/reports" element={
             <ProtectedRoute roles={['admin']}>
               <AdminLayout><AdminReportsPage /></AdminLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/activity-logs" element={
+            <ProtectedRoute roles={['admin']}>
+              <AdminLayout><AdminActivityLogsPage /></AdminLayout>
             </ProtectedRoute>
           } />
 

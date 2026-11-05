@@ -431,8 +431,13 @@ export default function DashboardLayout({ children }) {
               key={item.path}
               to={item.path}
               onClick={(e) => {
-                if (checkGuard()) { e.preventDefault(); return; }
-                setSidebarOpen(false);
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                e.preventDefault();
+                checkGuard().then(blocked => {
+                  if (blocked) return;
+                  setSidebarOpen(false);
+                  navigate(item.path);
+                });
               }}
               className={`std-nav-item ${location.pathname === item.path ? 'std-nav-item--active' : ''}`}
             >

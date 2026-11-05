@@ -1,0 +1,18 @@
+.admin-activity-logs { color: var(--adm-ink); font-family: 'Inter', sans-serif; }
+.admin-activity-logs .activity-log-heading { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:20px; }
+.admin-activity-logs h2 { margin:0 0 8px; font-size:26px; font-weight:700; }
+.admin-activity-logs p { color:var(--adm-muted); }
+.admin-activity-logs label { display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; }
+.admin-activity-logs select { min-width:220px; padding:9px 12px; border:1px solid var(--adm-line); border-radius:8px; background:#fff; }
+.admin-activity-logs :is(select,button):focus-visible { outline:2px solid var(--adm-blue-600); outline-offset:2px; }
+.admin-activity-logs .adm-table-wrap { overflow:auto; border:1px solid var(--adm-line); border-radius:14px; background:#fff; }
+.admin-activity-logs .adm-courses-table { width:100%; border-collapse:collapse; }
+.admin-activity-logs .adm-courses-table th,.admin-activity-logs .adm-courses-table td { padding:13px 15px; text-align:left; border-bottom:1px solid var(--adm-line); font-size:13px; }
+.admin-activity-logs .adm-courses-table th { background:#f7f8fb; font-weight:600; }
+.admin-activity-logs .activity-log-empty { padding:30px; text-align:center; color:var(--adm-muted); }
+.admin-activity-logs .activity-log-error { padding:14px; border-radius:10px; background:#fff0f0; color:#9f1c1c; }
+.admin-activity-logs .activity-log-pagination { display:flex; justify-content:space-between; align-items:center; padding:14px 2px; font-size:13px; color:var(--adm-muted); }
+.admin-activity-logs .activity-log-pagination div { display:flex; gap:8px; }
+.admin-activity-logs button { padding:8px 12px; border:1px solid var(--adm-line); border-radius:8px; background:#fff; cursor:pointer; }
+.admin-activity-logs button:disabled { opacity:.5; cursor:not-allowed; }
+@media(max-width:700px) { .admin-activity-logs .adm-courses-table { min-width:760px; } }

@@ -92,6 +92,7 @@ class CourseController extends Controller
         }
 
         $course = Course::create($validated);
+        \App\Models\ActivityLog::record($user, 'course.created', $course, 'course', $course->id, ['title' => $course->name, 'code' => $course->code]);
         $course->load('instructor:id,first_name,last_name,email');
 
         return response()->json([
@@ -182,6 +183,7 @@ class CourseController extends Controller
             ], 403);
         }
 
+        \App\Models\ActivityLog::record($user, 'course.deleted', $course, 'course', $course->id, ['title' => $course->name, 'code' => $course->code]);
         $course->delete();
 
         return response()->json([
@@ -518,6 +520,9 @@ class CourseController extends Controller
             'order'          => $validated['order'] ?? $course->materials()->count(),
             'extracted_text' => $extractedText,
         ]);
+        \App\Models\ActivityLog::record($user, 'course_material.uploaded', $course, 'course_material', $material->id, [
+            'title' => $material->title, 'filename' => $material->original_filename ?? null, 'type' => $material->type,
+        ]);
 
         return response()->json([
             'message'  => 'Material uploaded successfully.',
@@ -550,6 +555,9 @@ class CourseController extends Controller
             ], 404);
         }
 
+        \App\Models\ActivityLog::record($user, 'course_material.deleted', $course, 'course_material', $material->id, [
+            'title' => $material->title, 'filename' => $material->original_filename ?? null, 'type' => $material->type,
+        ]);
         $material->delete();
 
         return response()->json([

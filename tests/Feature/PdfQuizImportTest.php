@@ -38,6 +38,7 @@ class PdfQuizImportTest extends TestCase
             '2026_10_04_160000_add_reference_fields_to_questions.php',
             '2026_10_06_000001_extend_essay_rubrics_and_grading_audit.php',
             '2026_11_05_000001_add_learning_and_security_features.php',
+            '2026_11_05_000002_add_attempt_unlocks_and_activity_logs.php',
             '2026_10_06_000002_add_essay_grading_states.php',
         ])];
     }
@@ -245,6 +246,67 @@ class PdfQuizImportTest extends TestCase
             ->assertJsonPath('students.0.pre_test_average', 50)->assertJsonPath('students.0.post_test_average', 80)->assertJsonPath('students.0.gain', 30);
         $this->getJson("/api/courses/{$course->id}/assessments/{$assessment->id}/question-analysis")->assertOk()
             ->assertJsonPath('questions.0.percent_correct', 0)->assertJsonPath('questions.0.difficulty', 'Difficult');
+    }
+
+    public function test_locked_attempt_can_only_be_resumed_after_instructor_unlocks_that_student(): void
+    {
+        [$course, $assessment] = $this->fixture();
+        $path = "/api/courses/{$course->id}/assessments/{$assessment->id}";
+        $question = $this->postJson($path.'/questions', ['question_text' => 'Which protocol is encrypted?', 'type' => 'multiple_choice',
+            'options' => ['HTTP', 'HTTPS'], 'correct_answer' => 'HTTPS', 'points' => 1])->assertCreated()->json('question');
+        $assessment->update(['is_published' => true, 'max_attempts' => 1]);
+        $student = User::factory()->create(['role' => 'student']);
+        $other = User::factory()->create(['role' => 'student']);
+        foreach ([$student, $other] as $learner) Enrollment::create(['user_id' => $learner->id, 'course_id' => $course->id, 'status' => 'active']);
+
+        Sanctum::actingAs($student);
+        $submissionId = $this->postJson($path.'/start')->assertCreated()->json('submission.id');
+        $this->postJson($path.'/lock', ['submission_id' => $submissionId, 'answers' => [['question_id' => $question['id'], 'answer_text' => 'HTTP']]])
+            ->assertOk()->assertJsonPath('locked', true);
+        $this->postJson($path.'/start')->assertStatus(423);
+        $this->postJson($path.'/submit', ['submission_id' => $submissionId, 'answers' => [['question_id' => $question['id'], 'answer_text' => 'HTTPS']]])
+            ->assertNotFound();
+
+        // This learner uses their one permitted attempt; the other learner does too.
+        // Only the selected learner receives a one-time additional attempt.
+        Submission::create(['user_id' => $other->id, 'assessment_id' => $assessment->id, 'attempt_number' => 1, 'status' => 'graded', 'score' => 0, 'total_points' => 1, 'percentage' => 0]);
+        Sanctum::actingAs(User::findOrFail($course->instructor_id));
+        $this->postJson($path.'/unlock', ['student_id' => $student->id])->assertOk()->assertJsonPath('message', 'This student can resume their saved attempt.');
+        Sanctum::actingAs($student);
+        $this->postJson($path.'/start')->assertOk()->assertJsonPath('submission.id', $submissionId);
+        $this->postJson($path.'/submit', ['submission_id' => $submissionId, 'answers' => [['question_id' => $question['id'], 'answer_text' => 'HTTPS']]])->assertOk();
+        $this->postJson($path.'/start')->assertStatus(422);
+
+        Sanctum::actingAs(User::findOrFail($course->instructor_id));
+        $this->postJson($path.'/unlock', ['student_id' => $student->id])->assertOk();
+        Sanctum::actingAs($other);
+        $this->postJson($path.'/start')->assertStatus(422);
+        Sanctum::actingAs($student);
+        $this->postJson($path.'/start')->assertCreated()->assertJsonPath('submission.attempt_number', 2);
+    }
+
+    public function test_instructor_can_build_a_destination_quiz_from_selected_question_counts_and_admin_can_audit_changes(): void
+    {
+        [$course, $destination] = $this->fixture();
+        $sourceOne = $course->assessments()->create(['title' => 'Unit 1', 'type' => 'quiz', 'is_published' => true]);
+        $sourceTwo = $course->assessments()->create(['title' => 'Unit 2', 'type' => 'quiz', 'is_published' => true]);
+        $sourceOne->questions()->create(['question_text' => 'Q1', 'type' => 'multiple_choice', 'options' => ['A', 'B'], 'correct_answer' => 'A', 'points' => 1]);
+        $sourceOne->questions()->create(['question_text' => 'Q2', 'type' => 'true_false', 'options' => ['True', 'False'], 'correct_answer' => 'True', 'points' => 1]);
+        $sourceTwo->questions()->create(['question_text' => 'Q3', 'type' => 'enumeration', 'correct_answer' => 'TCP', 'points' => 2]);
+
+        Sanctum::actingAs(User::findOrFail($course->instructor_id));
+        $base = "/api/courses/{$course->id}";
+        $this->getJson($base.'/test-bank/sources')->assertOk()->assertJsonFragment(['id' => $sourceOne->id, 'eligible_question_count' => 2]);
+        $this->postJson($base.'/assessments/'.$destination->id.'/question-bank', ['sources' => [
+            ['assessment_id' => $sourceOne->id, 'count' => 1], ['assessment_id' => $sourceTwo->id, 'count' => 1],
+        ]])->assertCreated()->assertJsonCount(2, 'questions');
+        $this->assertDatabaseHas('activity_logs', ['action' => 'assessment.questions_imported', 'course_id' => $course->id]);
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+        $this->getJson('/api/admin/activity-logs')->assertOk()->assertJsonPath('data.0.action', 'assessment.questions_imported')
+            ->assertJsonPath('data.0.user.id', $course->instructor_id);
+        Sanctum::actingAs(User::factory()->create(['role' => 'student']));
+        $this->getJson('/api/admin/activity-logs')->assertForbidden();
     }
 
     public function test_student_other_instructor_and_wrong_course_cannot_import(): void

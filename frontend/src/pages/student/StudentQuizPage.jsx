@@ -4,6 +4,7 @@ import api from '../../services/api';
 import AssessmentSchedule from '../../components/AssessmentSchedule';
 import { canViewSubmissionScore } from '../../services/submissionResults';
 import { useNavigationGuard } from '../../context/NavigationGuardContextStore';
+import { getAuthSession } from '../../services/authSession.js';
 
 export default function StudentQuizPage() {
   const { courseId, assessmentId } = useParams();
@@ -20,6 +21,7 @@ export default function StudentQuizPage() {
   const [saveState, setSaveState] = useState('saved');
   const [lowDataMode, setLowDataMode] = useState(() => localStorage.getItem('intellilearn-low-data') === 'true');
   const [timerWarningOpen, setTimerWarningOpen] = useState(false);
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   const lastSyncedAnswers = useRef({});
   const timerWarningShown = useRef(false);
   const timerExpired = useRef(false);
@@ -29,6 +31,11 @@ export default function StudentQuizPage() {
   const remainingSeconds = Number.isFinite(startedAt) && timeLimitSeconds > 0
     ? Math.max(0, Math.ceil((startedAt + timeLimitSeconds * 1000 - currentTime) / 1000))
     : null;
+
+  const lockAttempt = useCallback(() => api.post(`/courses/${courseId}/assessments/${assessmentId}/lock`, {
+    submission_id: submission.id,
+    answers: Object.entries(answers).map(([question_id, answer_text]) => ({ question_id: Number(question_id), answer_text })),
+  }), [courseId, assessmentId, submission, answers]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -62,17 +69,19 @@ export default function StudentQuizPage() {
     // Browser close / tab refresh
     const handleBeforeUnload = (e) => {
       e.preventDefault();
-      e.returnValue = 'You have an assessment in progress. If you leave now, your answers will be saved but you may not be able to retake this assessment.';
+      e.returnValue = 'Leaving will lock this attempt. Your instructor will need to unlock access before you can continue.';
       return e.returnValue;
     };
 
     // Browser back button — push a dummy state so back button triggers popstate
     window.history.pushState(null, '', window.location.href);
-    const handlePopState = () => {
+    const handlePopState = async () => {
       const confirmed = window.confirm(
         'Leave Assessment?\n\nYour current answers have been saved, but you will not be able to retake this assessment once you leave — unless the instructor allows multiple attempts.\n\nClick "Cancel" to stay, or "OK" to leave.'
       );
       if (confirmed) {
+        try { await lockAttempt(); }
+        catch (lockError) { setError(lockError.response?.data?.message || 'Could not lock your attempt. Please try again.'); return; }
         navigate(`/student/courses/${courseId}`);
       } else {
         // Re-push state so back button can be intercepted again
@@ -87,20 +96,36 @@ export default function StudentQuizPage() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [submission, result, courseId, navigate]);
+  }, [submission, result, courseId, navigate, lockAttempt]);
 
   // Register nav guard so sidebar/menu links also trigger warning
   useEffect(() => {
     if (submission && !result) {
       registerGuard(() => ({
         blocked: true,
+        onProceed: lockAttempt,
         message: 'Leave Assessment?\n\nYour current answers have been saved, but you will not be able to retake this assessment once you leave — unless the instructor allows multiple attempts.\n\nClick "Cancel" to stay, or "OK" to leave.',
       }));
     } else {
       clearGuard();
     }
     return () => clearGuard();
-  }, [submission, result, registerGuard, clearGuard]);
+  }, [submission, result, lockAttempt, registerGuard, clearGuard]);
+
+  useEffect(() => {
+    if (!submission || result) return;
+    const lockOnPageHide = () => {
+      const token = getAuthSession().snapshot().token;
+      const baseURL = api.defaults.baseURL.replace(/\/$/, '');
+      fetch(`${baseURL}/courses/${courseId}/assessments/${assessmentId}/lock`, {
+        method: 'POST', keepalive: true,
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submission_id: submission.id, answers: Object.entries(answers).map(([question_id, answer_text]) => ({ question_id: Number(question_id), answer_text })) }),
+      }).catch(() => {});
+    };
+    window.addEventListener('pagehide', lockOnPageHide);
+    return () => window.removeEventListener('pagehide', lockOnPageHide);
+  }, [submission, result, answers, courseId, assessmentId]);
 
   const startQuiz = async () => {
     try {
@@ -170,9 +195,11 @@ export default function StudentQuizPage() {
     setSubmitting(true);
     setError('');
 
-    const answerArray = Object.entries(answers).map(([questionId, answerText]) => ({
-      question_id: parseInt(questionId),
-      answer_text: answerText,
+    // Include blank responses too: timed submissions must work even if a student
+    // has not answered any questions or has left some unfinished.
+    const answerArray = (assessment?.questions || []).map(question => ({
+      question_id: Number(question.id),
+      answer_text: answers[question.id] ?? '',
     }));
 
     try {
@@ -187,7 +214,7 @@ export default function StudentQuizPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [answers, assessmentId, courseId, submission, submitting]);
+  }, [answers, assessment?.questions, assessmentId, courseId, submission, submitting]);
 
   useEffect(() => {
     if (remainingSeconds !== 0 || !submission || result || submitting || timerExpired.current) return;
@@ -465,7 +492,7 @@ export default function StudentQuizPage() {
         <div>
           <p className="text-sm font-semibold text-amber-800">Assessment in Progress</p>
           <p className="text-xs text-amber-700 mt-1">
-            If you leave this page, your current answers will be saved but you may not be able to continue this attempt. Make sure to submit your answers before leaving.
+            If you leave this page, your saved attempt will lock. Your instructor must unlock it for you before you can continue.
           </p>
         </div>
       </div>
@@ -601,7 +628,7 @@ export default function StudentQuizPage() {
       ))}
 
       <button
-        onClick={handleSubmit}
+        onClick={() => setConfirmSubmitOpen(true)}
         disabled={submitting}
         className="w-full bg-indigo-600 text-white py-3 rounded-xl text-sm font-semibold
           hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
@@ -609,6 +636,19 @@ export default function StudentQuizPage() {
       >
         {submitting ? 'Submitting...' : 'Submit Answers'}
       </button>
+      {confirmSubmitOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="alertdialog" aria-modal="true" aria-labelledby="confirm-submit-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="confirm-submit-title" className="text-lg font-bold text-slate-900">Submit your answers now?</h2>
+            <p className="mt-2 text-sm text-slate-600">Submitting ends this attempt. {assessment?.max_attempts === 1 ? 'This assessment allows one attempt. To try again, ask your instructor to unlock access for you.' : 'You may have attempts remaining according to the assessment settings.'}</p>
+            {assessment?.questions?.filter(question => !String(answers[question.id] || '').trim()).length > 0 && <p className="mt-2 text-sm font-semibold text-amber-700">You still have {assessment.questions.filter(question => !String(answers[question.id] || '').trim()).length} unanswered question(s).</p>}
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setConfirmSubmitOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Continue answering</button>
+              <button type="button" disabled={submitting} onClick={() => { setConfirmSubmitOpen(false); handleSubmit(); }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{submitting ? 'Submitting…' : 'Yes, submit now'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

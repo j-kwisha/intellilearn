@@ -420,6 +420,38 @@ function AddQuestionForm({ courseId, assessmentId, onSuccess, onClose }) {
   );
 }
 
+function TestBankBuilder({ courseId, assessmentId, onClose, onImported }) {
+  const [sources, setSources] = useState([]);
+  const [counts, setCounts] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.get(`/courses/${courseId}/test-bank/sources`).then(response => {
+      setSources((response.data.assessments || []).filter(item => item.id !== Number(assessmentId)));
+    }).catch(err => setError(err.response?.data?.message || 'Could not load reusable questions.')).finally(() => setLoading(false));
+  }, [courseId, assessmentId]);
+  const selectedTotal = Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0);
+  const importQuestions = async () => {
+    const selections = Object.entries(counts).filter(([, count]) => Number(count) > 0).map(([id, count]) => ({ assessment_id: Number(id), count: Number(count) }));
+    if (!selections.length) { setError('Choose at least one question from another assessment.'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post(`/courses/${courseId}/assessments/${assessmentId}/question-bank`, { sources: selections });
+      onImported();
+    } catch (err) { setError(err.response?.data?.message || Object.values(err.response?.data?.errors || {}).flat().join(' ') || 'Could not add the selected questions.'); }
+    finally { setSaving(false); }
+  };
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+    <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+      <div className="flex justify-between items-start gap-4"><div><h2 className="text-lg font-bold">Build from question bank</h2><p className="mt-1 text-sm text-slate-500">Choose how many objective questions to draw randomly from each past assessment. Essay questions are excluded because their rubrics are assessment-specific.</p></div><button type="button" onClick={onClose} aria-label="Close" className="text-slate-500">✕</button></div>
+      {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {loading ? <p className="text-sm text-slate-500">Loading assessments…</p> : <div className="max-h-80 space-y-2 overflow-y-auto">{sources.map(source => <label key={source.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3"><span><span className="block text-sm font-medium">{source.title}</span><span className="text-xs text-slate-500">{source.eligible_question_count} reusable objective questions</span></span><input aria-label={`Questions from ${source.title}`} type="number" min="0" max={source.eligible_question_count} disabled={!source.eligible_question_count} value={counts[source.id] || ''} onChange={event => setCounts(current => ({ ...current, [source.id]: Math.min(Number(event.target.value) || 0, source.eligible_question_count) }))} className="w-24 rounded-md border border-slate-300 px-3 py-2" /></label>)}{sources.length === 0 && <p className="text-sm text-slate-500">No other assessments are available in this course.</p>}</div>}
+      <div className="flex items-center justify-between border-t pt-4"><span className="text-sm font-semibold">Total selected: {selectedTotal}</span><div className="flex gap-2"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Cancel</button><button type="button" disabled={saving || loading || selectedTotal === 0} onClick={importQuestions} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Adding…' : 'Add selected questions'}</button></div></div>
+    </div>
+  </div>;
+}
+
 export default function InstructorAssessmentPage() {
   const { courseId, assessmentId } = useParams();
   const navigate = useNavigate();
@@ -436,6 +468,8 @@ export default function InstructorAssessmentPage() {
   const [showAddQuestion, setShowAddQuestion] = useState(false);
   const [questionAnalysis, setQuestionAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [showTestBank, setShowTestBank] = useState(false);
+  const [unlocking, setUnlocking] = useState(null);
 
   const fetchAll = useCallback(() => {
     Promise.all([
@@ -516,6 +550,17 @@ export default function InstructorAssessmentPage() {
       setQuestionAnalysis(response.data);
     } catch (err) { alert(err.response?.data?.message || 'Could not load question analysis.'); }
     finally { setAnalysisLoading(false); }
+  };
+
+  const unlockStudent = async (submission) => {
+    if (!confirm(`Unlock access for ${submission.user?.first_name} ${submission.user?.last_name} only?`)) return;
+    setUnlocking(submission.user_id);
+    try {
+      const response = await api.post(`/courses/${courseId}/assessments/${assessmentId}/unlock`, { student_id: submission.user_id });
+      alert(response.data.message);
+      fetchAll();
+    } catch (err) { alert(err.response?.data?.message || 'Could not unlock this student.'); }
+    finally { setUnlocking(null); }
   };
 
   if (loading) return (
@@ -611,7 +656,8 @@ export default function InstructorAssessmentPage() {
       {tab === 'questions' && (
         <div className="space-y-3">
           {/* Add Question button */}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowTestBank(true)} className="rounded-lg border border-teal-600 px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">Build from question bank</button>
             <button
               onClick={() => setShowAddQuestion(v => !v)}
               className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors"
@@ -696,6 +742,7 @@ export default function InstructorAssessmentPage() {
                     <th className="text-left px-5 py-3 font-medium text-slate-600">Score</th>
                     <th className="text-left px-5 py-3 font-medium text-slate-600">Status</th>
                     <th className="text-left px-5 py-3 font-medium text-slate-600">Submitted</th>
+                    <th className="text-left px-5 py-3 font-medium text-slate-600">Access</th>
                     <th className="px-5 py-3"></th>
                   </tr>
                 </thead>
@@ -720,10 +767,13 @@ export default function InstructorAssessmentPage() {
                           s.status === 'graded' ? 'bg-emerald-50 text-emerald-700' :
                           s.status === 'submitted' ? 'bg-amber-50 text-amber-700' :
                           'bg-slate-100 text-slate-600'
-                        }`}>{s.status}</span>
+                        }`}>{s.locked_at ? 'locked' : s.status}</span>
                       </td>
                       <td className="px-5 py-3 text-slate-500 text-xs">
                         {s.submitted_at ? new Date(s.submitted_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                      <td className="px-5 py-3">
+                        {(s.locked_at || s.status !== 'in_progress') && <button type="button" disabled={unlocking === s.user_id} onClick={() => unlockStudent(s)} className="text-xs text-indigo-700 hover:text-indigo-900 disabled:opacity-50">{unlocking === s.user_id ? 'Unlocking…' : 'Unlock student'}</button>}
                       </td>
                       <td className="px-5 py-3">
                         <button onClick={() => openGrading(s)}
@@ -750,6 +800,8 @@ export default function InstructorAssessmentPage() {
           onSaved={() => { setEditingQuestion(null); fetchAll(); }}
         />
       )}
+
+      {showTestBank && <TestBankBuilder courseId={courseId} assessmentId={assessmentId} onClose={() => setShowTestBank(false)} onImported={() => { setShowTestBank(false); fetchAll(); }} />}
 
       {/* Grading Modal */}
       {grading && selectedSubmission && (

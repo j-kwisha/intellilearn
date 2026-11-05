@@ -114,6 +114,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- ASSESSMENTS ---
     Route::get('/courses/{course}/assessments', [AssessmentController::class, 'index']);
+    Route::get('/courses/{course}/test-bank/sources', [AssessmentController::class, 'testBankSources']);
     Route::post('/courses/{course}/assessments', [AssessmentController::class, 'store']);
     Route::get('/courses/{course}/assessments/{assessment}', [AssessmentController::class, 'show']);
     Route::put('/courses/{course}/assessments/{assessment}', [AssessmentController::class, 'update']);
@@ -130,6 +131,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- QUESTIONS ---
     Route::post('/courses/{course}/assessments/{assessment}/questions', [AssessmentController::class, 'addQuestion']);
     Route::post('/courses/{course}/assessments/{assessment}/questions/bulk', [AssessmentController::class, 'addQuestionsBulk']);
+    Route::post('/courses/{course}/assessments/{assessment}/question-bank', [AssessmentController::class, 'importQuestionBank']);
     Route::post('/courses/{course}/assessments/{assessment}/generate-quiz-draft', [AssessmentController::class, 'generateQuizDraft'])->middleware('throttle:4,1');
     Route::put('/courses/{course}/assessments/{assessment}/questions/{question}', [AssessmentController::class, 'updateQuestion']);
     Route::delete('/courses/{course}/assessments/{assessment}/questions/{question}', [AssessmentController::class, 'deleteQuestion']);
@@ -142,6 +144,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- SUBMISSIONS & GRADING ---
     Route::post('/courses/{course}/assessments/{assessment}/start', [SubmissionController::class, 'start']);
+    Route::post('/courses/{course}/assessments/{assessment}/lock', [SubmissionController::class, 'lockAttempt']);
+    Route::post('/courses/{course}/assessments/{assessment}/unlock', [SubmissionController::class, 'unlockAttempt']);
     Route::put('/courses/{course}/assessments/{assessment}/autosave', [SubmissionController::class, 'autosave']);
     Route::post('/courses/{course}/assessments/{assessment}/submit', [SubmissionController::class, 'submit']);
     Route::get('/courses/{course}/assessments/{assessment}/submissions', [SubmissionController::class, 'index']);
@@ -443,6 +447,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- ADMIN USER MANAGEMENT ---
     Route::get('/admin/reports', [\App\Http\Controllers\AdminReportController::class, 'index']);
+    Route::get('/admin/activity-logs', [\App\Http\Controllers\AdminActivityLogController::class, 'index']);
     Route::get('/admin/users', [AdminController::class, 'listUsers']);
     Route::post('/admin/users', [AdminController::class, 'createUser']);
     Route::put('/admin/users/{user}', [AdminController::class, 'updateUser']);

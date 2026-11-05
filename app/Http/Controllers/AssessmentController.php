@@ -69,6 +69,69 @@ class AssessmentController extends Controller
         return response()->json(['assessments' => $assessments]);
     }
 
+    public function testBankSources(Request $request, Course $course): JsonResponse
+    {
+        if (!$this->canManageCourse($request->user(), $course)) return response()->json(['message' => 'You do not have access to this course.'], 403);
+        $eligibleTypes = ['multiple_choice', 'true_false', 'short_answer', 'matching', 'enumeration'];
+        $sources = $course->assessments()->withCount(['questions as eligible_question_count' => fn ($query) => $query->whereIn('type', $eligibleTypes)])
+            ->orderByDesc('created_at')->get(['id', 'title', 'is_published']);
+        return response()->json(['assessments' => $sources]);
+    }
+
+    public function importQuestionBank(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        if (!$this->canManageCourse($request->user(), $course) || $assessment->course_id !== $course->id) {
+            return response()->json(['message' => 'You cannot use the question bank for this assessment.'], 403);
+        }
+        if ($assessment->is_published || $assessment->submissions()->exists()) {
+            return response()->json(['message' => 'Questions can only be added from the bank before students begin this assessment.'], 422);
+        }
+        $data = $request->validate([
+            'sources' => ['required', 'array', 'min:1', 'max:10'],
+            'sources.*.assessment_id' => ['required', 'integer', 'distinct', 'exists:assessments,id'],
+            'sources.*.count' => ['required', 'integer', 'min:1', 'max:50'],
+        ]);
+        $eligibleTypes = ['multiple_choice', 'true_false', 'short_answer', 'matching', 'enumeration'];
+        $selected = [];
+        foreach ($data['sources'] as $source) {
+            $sourceAssessment = Assessment::whereKey($source['assessment_id'])->where('course_id', $course->id)->first();
+            if (!$sourceAssessment || $sourceAssessment->id === $assessment->id) {
+                throw ValidationException::withMessages(['sources' => 'Choose other assessments from this same course.']);
+            }
+            $questions = Question::where('assessment_id', $sourceAssessment->id)->whereIn('type', $eligibleTypes)->with('matchingPairs')->inRandomOrder()->limit($source['count'])->get();
+            if ($questions->count() !== (int) $source['count']) {
+                throw ValidationException::withMessages(['sources' => "{$sourceAssessment->title} does not have enough reusable objective questions."]);
+            }
+            $selected[] = $questions;
+        }
+        $created = DB::transaction(function () use ($assessment, $selected) {
+            $order = $assessment->questions()->max('order') ?? -1;
+            $result = [];
+            foreach ($selected as $sourceQuestions) foreach ($sourceQuestions as $sourceQuestion) {
+                $question = $assessment->questions()->create([
+                    'question_text' => $sourceQuestion->question_text, 'type' => $sourceQuestion->type,
+                    'options' => $sourceQuestion->options, 'correct_answer' => $sourceQuestion->correct_answer,
+                    'points' => $sourceQuestion->points, 'order' => ++$order,
+                ]);
+                if ($sourceQuestion->type === 'matching') {
+                    foreach ($sourceQuestion->matchingPairs as $pair) {
+                        $question->matchingPairs()->create([
+                            'left_item' => $pair->left_item, 'right_item' => $pair->right_item,
+                            'correct_match' => $pair->correct_match, 'order' => $pair->order,
+                        ]);
+                    }
+                }
+                $result[] = $question;
+            }
+            $assessment->update(['total_points' => $assessment->questions()->sum('points')]);
+            return $result;
+        });
+        \App\Models\ActivityLog::record($request->user(), 'assessment.questions_imported', $course, 'assessment', $assessment->id, [
+            'title' => $assessment->title, 'question_count' => count($created),
+        ]);
+        return response()->json(['message' => count($created) . ' reusable questions added.', 'questions' => $created], 201);
+    }
+
     /**
      * CREATE AN ASSESSMENT
      *
@@ -116,6 +179,7 @@ class AssessmentController extends Controller
         $validated['total_points'] = 0;
 
         $assessment = $course->assessments()->create($validated);
+        \App\Models\ActivityLog::record($user, 'assessment.created', $course, 'assessment', $assessment->id, ['title' => $assessment->title]);
 
         // Handle file upload for paper_based assessments
         if ($validated['type'] === 'paper_based' && $request->hasFile('file')) {
@@ -236,6 +300,7 @@ class AssessmentController extends Controller
         // Recalculate total_points from questions
         $totalPoints = $assessment->questions()->sum('points');
         $assessment->update(['total_points' => $totalPoints]);
+        \App\Models\ActivityLog::record($user, 'assessment.updated', $course, 'assessment', $assessment->id, ['title' => $assessment->title]);
 
         return response()->json([
             'message'    => 'Assessment updated successfully.',
@@ -260,6 +325,7 @@ class AssessmentController extends Controller
             return response()->json(['message' => 'Assessment not found in this course.'], 404);
         }
 
+        \App\Models\ActivityLog::record($user, 'assessment.deleted', $course, 'assessment', $assessment->id, ['title' => $assessment->title]);
         $assessment->delete();
 
         return response()->json(['message' => 'Assessment deleted successfully.']);

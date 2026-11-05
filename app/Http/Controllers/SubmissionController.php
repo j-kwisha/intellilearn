@@ -53,6 +53,9 @@ class SubmissionController extends Controller
             ->first();
 
         if ($existingAttempt) {
+            if ($existingAttempt->locked_at) {
+                return response()->json(['message' => 'This attempt is locked. Ask your instructor to unlock access for you.'], 423);
+            }
             // Return the existing attempt so they can continue
             $existingAttempt->load('answers');
             if (!$existingAttempt->question_order) {
@@ -72,28 +75,34 @@ class SubmissionController extends Controller
             return response()->json(['message' => $message], 403);
         }
 
-        // Check max attempts
-        $attemptCount = Submission::where('user_id', $user->id)
-            ->where('assessment_id', $assessment->id)
-            ->count();
-
-        if ($attemptCount >= $assessment->max_attempts) {
-            return response()->json([
-                'message' => 'You have used all ' . $assessment->max_attempts . ' attempt(s) for this assessment.',
-            ], 422);
-        }
-
         // Create new submission
         $questionIds = $assessment->questions()->pluck('id')->all();
         if ($assessment->shuffle_questions) shuffle($questionIds);
-        $submission = Submission::create([
-            'user_id'        => $user->id,
-            'assessment_id'  => $assessment->id,
-            'attempt_number' => $attemptCount + 1,
-            'status'         => 'in_progress',
-            'started_at'     => now(),
-            'question_order' => $questionIds,
-        ]);
+        $submission = DB::transaction(function () use ($user, $assessment, $questionIds) {
+            // Serialize new attempts per assessment to protect single-student unlocks.
+            Assessment::whereKey($assessment->id)->lockForUpdate()->first();
+            $attemptCount = Submission::where('user_id', $user->id)->where('assessment_id', $assessment->id)->count();
+            if ($attemptCount >= $assessment->max_attempts) {
+                if (!\Illuminate\Support\Facades\Schema::hasTable('assessment_attempt_unlocks')) {
+                    throw ValidationException::withMessages(['assessment' => 'You have used all ' . $assessment->max_attempts . ' attempt(s) for this assessment. Ask your instructor to unlock another attempt.']);
+                }
+                $grant = DB::table('assessment_attempt_unlocks')->where('assessment_id', $assessment->id)
+                    ->where('user_id', $user->id)->whereNull('used_at')->orderBy('id')->lockForUpdate()->first();
+                if (!$grant) {
+                    throw ValidationException::withMessages(['assessment' => 'You have used all ' . $assessment->max_attempts . ' attempt(s) for this assessment. Ask your instructor to unlock another attempt.']);
+                }
+                $consumed = DB::table('assessment_attempt_unlocks')->where('id', $grant->id)->whereNull('used_at')
+                    ->update(['used_at' => now(), 'updated_at' => now()]);
+                if ($consumed !== 1) {
+                    throw ValidationException::withMessages(['assessment' => 'This attempt unlock has already been used. Ask your instructor to unlock another attempt.']);
+                }
+            }
+            return Submission::create([
+                'user_id' => $user->id, 'assessment_id' => $assessment->id,
+                'attempt_number' => $attemptCount + 1, 'status' => 'in_progress',
+                'started_at' => now(), 'question_order' => $questionIds,
+            ]);
+        });
 
         return response()->json([
             'message'    => 'Assessment started. Good luck!',
@@ -113,8 +122,10 @@ class SubmissionController extends Controller
             'question_id' => ['required', 'integer'],
             'answer_text' => ['nullable', 'string', 'max:50000'],
         ]);
-        $submission = Submission::whereKey($data['submission_id'])->where('assessment_id', $assessment->id)
-            ->where('user_id', $user->id)->where('status', 'in_progress')->firstOrFail();
+        $submissionQuery = Submission::whereKey($data['submission_id'])->where('assessment_id', $assessment->id)
+            ->where('user_id', $user->id)->where('status', 'in_progress');
+        if (\Illuminate\Support\Facades\Schema::hasColumn('submissions', 'locked_at')) $submissionQuery->whereNull('locked_at');
+        $submission = $submissionQuery->firstOrFail();
         if (!$assessment->questions()->whereKey($data['question_id'])->exists()) {
             return response()->json(['message' => 'Question does not belong to this assessment.'], 422);
         }
@@ -123,6 +134,60 @@ class SubmissionController extends Controller
             ['answer_text' => $data['answer_text'] ?? null]
         );
         return response()->json(['saved' => true, 'saved_at' => now()->toIso8601String()]);
+    }
+
+    /** Lock an unfinished attempt when a student intentionally leaves it. */
+    public function lockAttempt(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isStudent() || !$this->isEnrolled($user, $course) || $assessment->course_id !== $course->id) {
+            return response()->json(['message' => 'You cannot lock this assessment attempt.'], 403);
+        }
+        $data = $request->validate([
+            'submission_id' => ['required', 'integer'],
+            'answers' => ['nullable', 'array'],
+            'answers.*.question_id' => ['required_with:answers', 'integer'],
+            'answers.*.answer_text' => ['nullable', 'string', 'max:50000'],
+        ]);
+        $submission = Submission::whereKey($data['submission_id'])->where('assessment_id', $assessment->id)
+            ->where('user_id', $user->id)->where('status', 'in_progress')->firstOrFail();
+        foreach ($data['answers'] ?? [] as $answer) {
+            abort_unless($assessment->questions()->whereKey($answer['question_id'])->exists(), 422, 'A question does not belong to this assessment.');
+            SubmissionAnswer::updateOrCreate(
+                ['submission_id' => $submission->id, 'question_id' => $answer['question_id']],
+                ['answer_text' => $answer['answer_text'] ?? null]
+            );
+        }
+        $submission->forceFill(['locked_at' => now(), 'lock_reason' => 'student_left'])->save();
+        return response()->json(['locked' => true, 'message' => 'Your attempt is locked. Ask your instructor to unlock access.']);
+    }
+
+    /** Instructor grants a one-student retake or unlocks that student's saved attempt. */
+    public function unlockAttempt(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        $user = $request->user();
+        if (!$this->canManageCourse($user, $course) || $assessment->course_id !== $course->id) {
+            return response()->json(['message' => 'You cannot unlock this assessment.'], 403);
+        }
+        $data = $request->validate(['student_id' => ['required', 'integer', 'exists:users,id']]);
+        abort_unless(Enrollment::where('user_id', $data['student_id'])->where('course_id', $course->id)->where('status', 'active')->exists(), 422, 'Select an active student enrolled in this course.');
+        $active = Submission::where('assessment_id', $assessment->id)->where('user_id', $data['student_id'])
+            ->where('status', 'in_progress')->whereNotNull('locked_at')->latest('id')->first();
+        if ($active) {
+            $active->forceFill(['locked_at' => null, 'lock_reason' => null])->save();
+            \App\Models\ActivityLog::record($user, 'assessment.attempt_resumed', $course, 'assessment', $assessment->id, [
+                'assessment_title' => $assessment->title, 'student_id' => (int) $data['student_id'],
+            ]);
+            return response()->json(['message' => 'This student can resume their saved attempt.']);
+        }
+        DB::table('assessment_attempt_unlocks')->insert([
+            'assessment_id' => $assessment->id, 'user_id' => $data['student_id'], 'granted_by' => $user->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        \App\Models\ActivityLog::record($user, 'assessment.attempt_unlocked', $course, 'assessment', $assessment->id, [
+            'assessment_title' => $assessment->title, 'student_id' => (int) $data['student_id'],
+        ]);
+        return response()->json(['message' => 'One additional attempt was unlocked for this student.']);
     }
 
     /**
@@ -151,11 +216,12 @@ class SubmissionController extends Controller
         ]);
 
         // Find the submission and verify ownership
-        $submission = Submission::where('id', $validated['submission_id'])
+        $submissionQuery = Submission::where('id', $validated['submission_id'])
             ->where('user_id', $user->id)
             ->where('assessment_id', $assessment->id)
-            ->where('status', 'in_progress')
-            ->first();
+            ->where('status', 'in_progress');
+        if (\Illuminate\Support\Facades\Schema::hasColumn('submissions', 'locked_at')) $submissionQuery->whereNull('locked_at');
+        $submission = $submissionQuery->first();
 
         if (! $submission) {
             return response()->json([

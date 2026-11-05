@@ -94,6 +94,7 @@ class LessonController extends Controller
         }
 
         $lesson = $course->lessons()->create($validated);
+        \App\Models\ActivityLog::record($user, 'lesson.created', $course, 'lesson', $lesson->id, ['title' => $lesson->title]);
 
         return response()->json([
             'message' => 'Lesson created successfully.',
@@ -194,6 +195,7 @@ class LessonController extends Controller
 
         $this->snapshotLesson($lesson, $user->id, 'edit');
         $lesson->update($validated);
+        \App\Models\ActivityLog::record($user, 'lesson.updated', $course, 'lesson', $lesson->id, ['title' => $lesson->title]);
 
         return response()->json([
             'message' => 'Lesson updated successfully.',
@@ -223,6 +225,9 @@ class LessonController extends Controller
                 $lesson->materials()->create(collect($material)->only(['title', 'type', 'file_path', 'original_filename', 'url', 'order', 'extracted_text', 'extraction_version'])->all());
             }
         });
+        \App\Models\ActivityLog::record($request->user(), 'lesson.version_restored', $course, 'lesson', $lesson->id, [
+            'title' => $lesson->title, 'version_id' => $record->id,
+        ]);
         return response()->json(['message' => 'Lesson version restored.', 'lesson' => $lesson->fresh()->load('materials')]);
     }
 
@@ -248,6 +253,7 @@ class LessonController extends Controller
         }
 
         try {
+            \App\Models\ActivityLog::record($user, 'lesson.deleted', $course, 'lesson', $lesson->id, ['title' => $lesson->title]);
             // Delete lesson (materials and progress will cascade)
             $lesson->delete();
 
@@ -344,6 +350,10 @@ class LessonController extends Controller
             'extracted_text' => $extractedText,
             'extraction_version' => $extractionVersion,
         ]);
+        \App\Models\ActivityLog::record($user, 'lesson_material.uploaded', $course, 'lesson_material', $material->id, [
+            'lesson_title' => $lesson->title, 'title' => $material->title,
+            'filename' => $material->original_filename, 'type' => $material->type,
+        ]);
 
         return response()->json([
             'message'  => 'Material uploaded successfully.',
@@ -396,6 +406,10 @@ class LessonController extends Controller
             // so we reconstruct the relative path for deletion
         }
 
+        \App\Models\ActivityLog::record($user, 'lesson_material.deleted', $course, 'lesson_material', $material->id, [
+            'lesson_title' => $lesson->title, 'title' => $material->title,
+            'filename' => $material->original_filename, 'type' => $material->type,
+        ]);
         $material->delete();
 
         return response()->json([
