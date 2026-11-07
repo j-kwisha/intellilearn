@@ -88,6 +88,10 @@ export default function AiChatbot() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  });
   const bottomRef = useRef(null);
   const greetingTimer = useRef(null);
   const dismissTimer = useRef(null);
@@ -148,6 +152,20 @@ export default function AiChatbot() {
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, open]);
+
+  useEffect(() => {
+    const mediaQuery = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-color-scheme: dark)') : null;
+    if (!mediaQuery) return;
+
+    const onChange = (event) => setIsDarkMode(event.matches);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', onChange);
+      return () => mediaQuery.removeEventListener('change', onChange);
+    }
+
+    mediaQuery.addListener(onChange);
+    return () => mediaQuery.removeListener(onChange);
+  }, []);
 
   const handleToggle = () => {
     // Bounce animation on open
@@ -229,9 +247,9 @@ export default function AiChatbot() {
         {/* Chat window */}
         {open && (
           <div className="chat-window" style={{
-            width: 340, height: 460, background: '#fff',
-            borderRadius: 20, boxShadow: '0 12px 40px rgba(0,0,0,0.18)',
-            border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column',
+            width: 340, height: 460, background: isDarkMode ? '#0f172a' : '#fff',
+            borderRadius: 20, boxShadow: isDarkMode ? '0 12px 40px rgba(15,23,42,0.42)' : '0 12px 40px rgba(0,0,0,0.18)',
+            border: isDarkMode ? '1px solid rgba(148,163,184,0.2)' : '1px solid #e2e8f0', display: 'flex', flexDirection: 'column',
             overflow: 'hidden',
           }}>
             {/* Header */}
@@ -264,8 +282,10 @@ export default function AiChatbot() {
                   <div style={{
                     maxWidth: '78%', padding: '9px 13px', borderRadius: msg.from === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                     fontSize: 13, lineHeight: 1.6,
-                    background: msg.from === 'user' ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : '#f1f5f9',
-                    color: msg.from === 'user' ? '#fff' : '#334155',
+                    background: msg.from === 'user'
+                      ? 'linear-gradient(135deg, #4f46e5, #7c3aed)'
+                      : isDarkMode ? '#1e293b' : '#f1f5f9',
+                    color: msg.from === 'user' ? '#fff' : isDarkMode ? '#e2e8f0' : '#334155',
                     boxShadow: msg.from === 'user' ? '0 2px 8px rgba(79,70,229,0.25)' : 'none',
                   }}>
                     {msg.from === 'user' ? msg.text : <MarkdownText text={msg.text} />}
@@ -277,7 +297,7 @@ export default function AiChatbot() {
               {loading && (
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
                   <Avatar size={26} />
-                  <div style={{ background: '#f1f5f9', padding: '9px 13px', borderRadius: '16px 16px 16px 4px' }}>
+                  <div style={{ background: isDarkMode ? '#1e293b' : '#f1f5f9', padding: '9px 13px', borderRadius: '16px 16px 16px 4px' }}>
                     <TypingDots />
                   </div>
                 </div>
@@ -286,7 +306,7 @@ export default function AiChatbot() {
             </div>
 
             {/* Input */}
-            <div style={{ padding: '10px 12px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, background: '#fafafa' }}>
+            <div style={{ padding: '10px 12px', borderTop: isDarkMode ? '1px solid rgba(148,163,184,0.2)' : '1px solid #e2e8f0', display: 'flex', gap: 8, background: isDarkMode ? '#111827' : '#fafafa' }}>
               <input
                 className="chat-input"
                 value={input}
@@ -295,8 +315,9 @@ export default function AiChatbot() {
                 placeholder="Type a question..."
                 style={{
                   flex: 1, padding: '9px 13px', borderRadius: 10,
-                  border: '1.5px solid #e2e8f0', fontSize: 13, outline: 'none',
-                  fontFamily: "'DM Sans', sans-serif", background: 'white',
+                  border: isDarkMode ? '1.5px solid rgba(148,163,184,0.2)' : '1.5px solid #e2e8f0', fontSize: 13, outline: 'none',
+                  fontFamily: "'DM Sans', sans-serif", background: isDarkMode ? '#0b1220' : 'white',
+                  color: isDarkMode ? '#e2e8f0' : '#0f172a', WebkitTextFillColor: isDarkMode ? '#e2e8f0' : '#0f172a',
                   transition: 'border-color 0.2s, box-shadow 0.2s',
                 }}
               />

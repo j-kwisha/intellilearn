@@ -72,6 +72,10 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  });
   const [hasContext, setHasContext] = useState(false);
   const [contextStatus, setContextStatus] = useState('loading');
   const [loadedContextId, setLoadedContextId] = useState(null);
@@ -141,6 +145,20 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
   useEffect(() => {
     if (chatOpen) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, chatOpen]);
+
+  useEffect(() => {
+    const mediaQuery = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-color-scheme: dark)') : null;
+    if (!mediaQuery) return;
+
+    const onChange = (event) => setIsDarkMode(event.matches);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', onChange);
+      return () => mediaQuery.removeEventListener('change', onChange);
+    }
+
+    mediaQuery.addListener(onChange);
+    return () => mediaQuery.removeListener(onChange);
+  }, []);
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -257,7 +275,7 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
 
         {/* Chat window */}
         {chatOpen && (
-          <div className="mc-window" style={{ width: 340, height: 460, background: '#fff', borderRadius: 20, boxShadow: '0 12px 40px rgba(0,0,0,0.18)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="mc-window" style={{ width: 340, height: 460, background: isDarkMode ? '#0f172a' : '#fff', borderRadius: 20, boxShadow: isDarkMode ? '0 12px 40px rgba(15,23,42,0.42)' : '0 12px 40px rgba(0,0,0,0.18)', border: isDarkMode ? '1px solid rgba(148,163,184,0.2)' : '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Header */}
             <div style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #a78bfa)', border: '2px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
@@ -286,7 +304,7 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
                       <img src={chatbotAvatar} alt="Bot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
                   )}
-                  <div className={msg.from === 'bot' ? 'mc-bot-bubble' : undefined} style={{ maxWidth: '78%', padding: '9px 13px', borderRadius: msg.from === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: 13, lineHeight: 1.6, background: msg.from === 'user' ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : '#f1f5f9', color: msg.from === 'user' ? '#fff' : '#334155', boxShadow: msg.from === 'user' ? '0 2px 8px rgba(79,70,229,0.25)' : 'none' }}>
+                  <div className={msg.from === 'bot' ? 'mc-bot-bubble' : undefined} style={{ maxWidth: '78%', padding: '9px 13px', borderRadius: msg.from === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: 13, lineHeight: 1.6, background: msg.from === 'user' ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : isDarkMode ? '#1e293b' : '#f1f5f9', color: msg.from === 'user' ? '#fff' : isDarkMode ? '#e2e8f0' : '#334155', boxShadow: msg.from === 'user' ? '0 2px 8px rgba(79,70,229,0.25)' : 'none' }}>
                     {msg.from === 'user' ? msg.text : <MarkdownText text={msg.text} />}
                     {msg.from === 'bot' && msg.sources?.length > 0 && (
                       <p className="mc-source-excerpts" style={{ margin: '8px 0 0', paddingTop: 6, borderTop: '1px solid #cbd5e1', fontSize: 11, color: '#475569' }}>
@@ -301,7 +319,7 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
                   <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
                     <img src={chatbotAvatar} alt="Bot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
-                  <div className="mc-loading-bubble" style={{ background: '#f1f5f9', padding: '9px 13px', borderRadius: '16px 16px 16px 4px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div className="mc-loading-bubble" style={{ background: isDarkMode ? '#1e293b' : '#f1f5f9', padding: '9px 13px', borderRadius: '16px 16px 16px 4px', display: 'flex', alignItems: 'center', gap: 4 }}>
                     {[0,1,2].map(i => (
                       <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#94a3b8', animation: 'mcDot 1.2s ease-in-out infinite', animationDelay: `${i * 0.2}s` }} />
                     ))}
@@ -312,10 +330,10 @@ function MaterialViewer({ courseId, lessonId, materialId, initialMaterial }) {
             </div>
 
             {/* Input */}
-            <div className="mc-input-area" style={{ padding: '10px 12px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, background: '#fafafa' }}>
+            <div className="mc-input-area" style={{ padding: '10px 12px', borderTop: isDarkMode ? '1px solid rgba(148,163,184,0.2)' : '1px solid #e2e8f0', display: 'flex', gap: 8, background: isDarkMode ? '#111827' : '#fafafa' }}>
               <input className="mc-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
                 placeholder="Ask about this material..." aria-label="Question about this material" maxLength={500}
-                style={{ flex: 1, padding: '9px 13px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 13, outline: 'none', fontFamily: "'DM Sans', sans-serif", background: 'white', transition: 'border-color 0.2s, box-shadow 0.2s' }} />
+                style={{ flex: 1, padding: '9px 13px', borderRadius: 10, border: isDarkMode ? '1.5px solid rgba(148,163,184,0.2)' : '1.5px solid #e2e8f0', fontSize: 13, outline: 'none', fontFamily: "'DM Sans', sans-serif", background: isDarkMode ? '#0b1220' : 'white', color: isDarkMode ? '#e2e8f0' : '#0f172a', WebkitTextFillColor: isDarkMode ? '#e2e8f0' : '#0f172a', transition: 'border-color 0.2s, box-shadow 0.2s' }} />
               <button onClick={sendMessage} disabled={loading || !input.trim() || !contextReady || contextStatus !== 'ready'}
                 style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 700, opacity: loading || !input.trim() || !contextReady || contextStatus !== 'ready' ? 0.45 : 1, transition: 'opacity 0.2s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                 Send
