@@ -16,6 +16,29 @@ function filenamePart(value) {
   return String(value || 'course').normalize('NFKD').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'course';
 }
 
+function printWhenReady(printWindow) {
+  let hasPrinted = false;
+  const runPrint = async () => {
+    if (hasPrinted || printWindow.closed) return;
+    hasPrinted = true;
+    try {
+      await printWindow.document.fonts?.ready;
+    } catch {
+      // Use the browser's available fonts if font readiness is unavailable.
+    }
+    window.setTimeout(() => {
+      if (!printWindow.closed) {
+        printWindow.focus();
+        printWindow.print();
+      }
+    }, 250);
+  };
+
+  printWindow.addEventListener('load', runPrint, { once: true });
+  // Some browsers do not fire a new load event after document.write().
+  window.setTimeout(runPrint, 1200);
+}
+
 export default function InstructorGradePage() {
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
@@ -126,30 +149,41 @@ export default function InstructorGradePage() {
                 onClick={async () => {
                 const printWindow = window.open('', '_blank');
                 if (!printWindow) { alert('Please allow popups to print course grades.'); return; }
-                printWindow.document.body.textContent = 'Loading course grades...';
+                printWindow.document.open();
+                printWindow.document.write('<!doctype html><html><head><title>Preparing course grades</title></head><body style="font-family:system-ui,sans-serif;padding:32px">Loading course grades...</body></html>');
+                printWindow.document.close();
                 const courseName = escapeHtml(courses.find(c => c.id === selectedCourse)?.name || 'Course');
                 const course = courses.find(c => c.id === selectedCourse);
                 try {
-                  // The window is opened during the click so popup blockers allow it.
                   const res = await api.get(`/courses/${selectedCourse}/grades`);
                   const rows = (res.data.grades || []).map(g =>
                     `<tr><td>${escapeHtml(g.user?.first_name)} ${escapeHtml(g.user?.last_name)}</td><td>${formatGrade(g.quiz_average)}</td><td>${formatGrade(g.exam_average)}</td><td>${formatGrade(g.activity_average)}</td><td class="${g.overall_grade>=75?'grade-high':g.overall_grade>=60?'grade-fair':'grade-low'}">${formatGrade(g.overall_grade)}</td><td>${escapeHtml(g.remarks || '\u2014')}</td></tr>`
                   ).join('');
                   const html = `<!DOCTYPE html><html><head><title>${courseName} - Course Grades</title>
-                    <style>body{font-family:system-ui,sans-serif;margin:40px;color:#333}h1{font-size:28px;margin-bottom:5px}.meta{color:#666;margin-bottom:20px;font-size:14px}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#f3f4f6;padding:12px;text-align:left;font-weight:600;border-bottom:2px solid #d1d5db}td{padding:12px;border-bottom:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.grade-high{color:#10b981;font-weight:600}.grade-low{color:#ef4444;font-weight:600}.grade-fair{color:#f59e0b;font-weight:600}</style>
+                    <style>
+                      body{font-family:system-ui,sans-serif;margin:32px;color:#333}
+                      h1{font-size:28px;margin:0 0 5px}
+                      .meta{color:#666;margin:0 0 12px;font-size:14px}
+                      table{width:100%;border-collapse:collapse;margin-top:20px;table-layout:fixed}
+                      th,td{padding:10px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+                      th{background:#f3f4f6;font-weight:600;border-bottom:2px solid #d1d5db}
+                      td{border-bottom:1px solid #e5e7eb}
+                      tr:nth-child(even){background:#f9fafb}
+                      .grade-high{color:#10b981;font-weight:600}.grade-low{color:#ef4444;font-weight:600}.grade-fair{color:#f59e0b;font-weight:600}
+                      @page{size:auto;margin:15mm}
+                      @media print{body{margin:0}thead{display:table-header-group}tr{break-inside:avoid}th{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+                    </style>
                     </head><body><h1>${courseName}</h1><div class="meta">${escapeHtml(course?.code)} · ${escapeHtml(course?.section || '')}</div><div class="meta">Printed on: ${new Date().toLocaleString('en-PH')}</div>
                     <table><thead><tr><th>Student</th><th>Quiz Avg</th><th>Exam Avg</th><th>Activity Avg</th><th>Overall Grade</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
-                  // Write the fetched grades into the already-open print window.
-                  if (printWindow) {
-                    printWindow.document.open();
-                    printWindow.document.write(html);
-                    printWindow.document.close();
-                    printWindow.focus();
-                    setTimeout(() => printWindow.print(), 500);
-                  }
+                  printWhenReady(printWindow);
+                  printWindow.document.open();
+                  printWindow.document.write(html);
+                  printWindow.document.close();
                 } catch (err) {
-                  printWindow.close();
                   console.error('Print failed:', err);
+                  if (!printWindow.closed) {
+                    printWindow.document.body.textContent = 'Could not load course grades. Close this tab and try again.';
+                  }
                   alert('Failed to load grades for printing. Please try again.');
                 }
                 }}
