@@ -32,6 +32,12 @@ const features = [
   { img: imgLMS,          icon: <SchoolIcon sx={{ fontSize:22, color:'#fff' }} />, title: 'Complete LMS Tools', desc: 'Everything in one platform. (Course management, Assignments & quizzes, Progress tracking, Announcements)' },
 ];
 
+const journeySteps = [
+  { title: 'Explore', description: 'Find your lessons and course materials.' },
+  { title: 'Learn', description: 'Practice and get feedback as you go.' },
+  { title: 'Succeed', description: 'Follow your progress and keep improving.' },
+];
+
 export default function LoginPage() {
   const { login, completeAdminLogin, register } = useAuth();
   const [darkMode, toggleTheme] = useSiteTheme();
@@ -66,12 +72,29 @@ export default function LoginPage() {
     el.focus();
     const onScroll = () => setActiveSlide(Math.round(el.scrollTop / el.clientHeight));
     el.addEventListener('scroll', onScroll, { passive:true });
-    const onWheel = (e) => { e.preventDefault(); el.scrollBy({ top:e.deltaY, behavior:'auto' }); };
+    const onWheel = (e) => {
+      const featuresSlide = e.target instanceof Element ? e.target.closest('.ll-features-slide') : null;
+      if (featuresSlide && featuresSlide.scrollHeight > featuresSlide.clientHeight) {
+        const canScroll = e.deltaY > 0
+          ? featuresSlide.scrollTop + featuresSlide.clientHeight < featuresSlide.scrollHeight - 1
+          : featuresSlide.scrollTop > 1;
+        if (canScroll) {
+          e.preventDefault();
+          featuresSlide.scrollBy({ top: e.deltaY, behavior: 'auto' });
+          return;
+        }
+      }
+      e.preventDefault();
+      el.scrollBy({ top:e.deltaY, behavior:'auto' });
+    };
     document.addEventListener('wheel', onWheel, { passive:false });
     return () => { el.removeEventListener('scroll', onScroll); document.removeEventListener('wheel', onWheel); };
   }, []);
 
-  const scrollTo = (idx) => containerRef.current?.scrollTo({ top: idx * containerRef.current.clientHeight, behavior:'smooth' });
+  const scrollTo = (idx) => {
+    if (idx === 1) containerRef.current?.querySelector('.ll-features-slide')?.scrollTo({ top: 0 });
+    containerRef.current?.scrollTo({ top: idx * containerRef.current.clientHeight, behavior:'smooth' });
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault(); setLoginError(''); setLoginLoading(true);
@@ -233,6 +256,22 @@ export default function LoginPage() {
           width:0;flex:1;
         }
         .feat-card:hover{transform:translateY(-6px);box-shadow:0 12px 30px rgba(37,99,235,.18)}
+        .ll-features-header{display:flex;align-items:flex-start;justify-content:space-between;gap:32px;padding:40px 48px 24px}
+        .ll-features-header,.ll-features-slide .feat-grid,.ll-journey{flex-shrink:0}
+        .ll-features-title{font-size:clamp(38px,3.4vw,64px);font-weight:800;color:var(--navy);line-height:1.1;margin:0;letter-spacing:-.03em}
+        .ll-features-intro{flex:0 0 320px;font-size:17px;color:var(--muted);line-height:1.75;margin:0;text-align:right;padding-top:16px;font-family:'DM Sans',sans-serif}
+        .ll-journey{margin:auto 48px 36px;padding:20px 26px 22px;background:var(--journey-bg,#f8fbff);border:1px solid var(--journey-border,#cfe0f8);border-radius:22px;box-shadow:0 6px 24px rgba(37,99,235,.06)}
+        .ll-journey-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px}
+        .ll-journey-eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--blue-600);margin:0 0 3px}
+        .ll-journey-title{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.2;color:var(--navy);margin:0}
+        .ll-journey-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+        .ll-journey-step{display:flex;align-items:flex-start;gap:12px;min-width:0}
+        .ll-journey-number{display:flex;align-items:center;justify-content:center;flex:0 0 32px;height:32px;border-radius:50%;background:var(--journey-number-bg,#e2edff);color:var(--journey-number-ink,#1e40af);font-size:12px;font-weight:800}
+        .ll-journey-step strong{display:block;color:var(--navy);font-size:14px;margin:0 0 2px}
+        .ll-journey-step p{color:var(--muted);font-size:12.5px;line-height:1.45;margin:0}
+        .ll-journey-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex-shrink:0;border:0;border-radius:999px;padding:10px 17px;background:#2457cb;color:#fff;font:700 12.5px 'Plus Jakarta Sans',sans-serif;cursor:pointer;box-shadow:0 5px 16px rgba(37,99,235,.18);transition:background .15s,transform .15s}
+        .ll-journey-cta:hover{background:#1d47a5;transform:translateY(-2px)}
+        .ll-journey-cta:focus-visible{outline:3px solid #7ba7ff;outline-offset:3px}
 
         /* ── inputs ── */
         .ll-wrap{display:flex;align-items:center;border:1.5px solid #C9DBF5;border-radius:16px;background:#F5F9FF;overflow:hidden;transition:border-color .2s,box-shadow .2s;height:58px}
@@ -260,12 +299,25 @@ export default function LoginPage() {
         .ll-float{animation:floatImg 6s ease-in-out infinite}
 
         /* ── feature section responsive ── */
+        @media(max-width:1200px){
+          .ll-features-header{padding:32px 32px 20px}
+          .feat-grid{padding-left:32px!important;padding-right:32px!important}
+          .ll-journey{margin-left:32px;margin-right:32px}
+        }
         @media(max-width:1024px){
+          .ll-features-header{flex-direction:column;gap:8px}
+          .ll-features-intro{flex:initial;text-align:left;padding-top:0;max-width:650px}
           .feat-grid{flex-wrap:wrap!important}
           .feat-card{flex:0 0 calc(50% - 10px)!important;width:calc(50% - 10px)!important}
         }
         @media(max-width:640px){
+          .ll-features-header{padding:26px 20px 18px}
+          .ll-features-intro{font-size:15px}
+          .feat-grid{padding-left:20px!important;padding-right:20px!important}
           .feat-card{flex:0 0 100%!important;width:100%!important}
+          .ll-journey{margin:0 20px 28px;padding:20px}
+          .ll-journey-heading{align-items:flex-start;flex-direction:column}
+          .ll-journey-steps{grid-template-columns:1fr;gap:16px}
         }
       `}</style>
 
@@ -407,21 +459,21 @@ export default function LoginPage() {
         {/* ════════════════════════════════
             (B) SLIDE 2 — FEATURES
         ════════════════════════════════ */}
-        <div className="ll-slide ll-features-slide" style={{ background:'var(--page-bg)',display:'flex',flexDirection:'column',paddingTop:64,boxSizing:'border-box',position:'relative',overflow:'hidden' }}>
+        <div className="ll-slide ll-features-slide" style={{ background:'var(--page-bg)',display:'flex',flexDirection:'column',paddingTop:64,boxSizing:'border-box',position:'relative',height:'100vh',overflowY:'auto',overflowX:'hidden' }}>
           {/* subtle blob top-right */}
           <div style={{ position:'absolute',top:-100,right:-80,width:380,height:380,borderRadius:'50%',background:'rgba(37,99,235,.06)',pointerEvents:'none' }} />
 
-          <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',padding:'40px 48px 24px' }}>
-            <h1 className={activeSlide===1?'ll-up':''} style={{ fontSize:64,fontWeight:800,color:'var(--navy)',lineHeight:1.1,margin:0,letterSpacing:'-.03em' }}>
+          <div className="ll-features-header">
+            <h1 className={`ll-features-title ${activeSlide===1?'ll-up':''}`}>
               Smart Features.<br />Real Impact.
             </h1>
-            <p className={activeSlide===1?'ll-up ll-d1':''} style={{ flex:'0 0 320px',fontSize:17,color:'var(--muted)',lineHeight:1.75,margin:0,textAlign:'right',paddingTop:16,fontFamily:"'DM Sans',sans-serif" }}>
+            <p className={`ll-features-intro ${activeSlide===1?'ll-up ll-d1':''}`}>
               IntelliLearn integrates artificial intelligence to improve how students learn and how instructors teach.
             </p>
           </div>
 
           {/* cards row — fixed height, aligned */}
-          <div className={`feat-grid ${activeSlide===1?'ll-up ll-d2':''}`} style={{ display:'flex',gap:22,padding:'0 48px 48px',alignItems:'flex-start' }}>
+          <div className={`feat-grid ${activeSlide===1?'ll-up ll-d2':''}`} style={{ display:'flex',gap:22,padding:'0 48px 22px',alignItems:'flex-start' }}>
             {features.map((f,idx)=>(
               <div key={f.title} className="feat-card" style={{ animationDelay:`${idx*.06}s` }}>
                 {/* illustration panel — fixed height */}
@@ -440,6 +492,26 @@ export default function LoginPage() {
               </div>
             ))}
           </div>
+
+          <section className={`ll-journey ${activeSlide===1?'ll-up ll-d2':''}`} aria-label="How IntelliLearn works">
+            <div className="ll-journey-heading">
+              <div>
+                <p className="ll-journey-eyebrow">HOW IT WORKS</p>
+                <h2 className="ll-journey-title">Explore. Learn. Succeed.</h2>
+              </div>
+              <button className="ll-journey-cta" onClick={() => { scrollTo(2); setAuthMode('signup'); }}>
+                Start learning <ArrowForwardIcon sx={{ fontSize: 16 }} />
+              </button>
+            </div>
+            <div className="ll-journey-steps">
+              {journeySteps.map((step, index) => (
+                <div className="ll-journey-step" key={step.title}>
+                  <span className="ll-journey-number" aria-hidden="true">{index + 1}</span>
+                  <div><strong>{step.title}</strong><p>{step.description}</p></div>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
 
         {/* ════════════════════════════════
