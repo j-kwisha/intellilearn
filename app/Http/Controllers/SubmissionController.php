@@ -13,7 +13,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Services\EssayGradingService;
 use App\Services\RubricService;
+use App\Services\ActivitySubmissionFileService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class SubmissionController extends Controller
@@ -206,6 +208,10 @@ class SubmissionController extends Controller
 
         if (! $user->isStudent()) {
             return response()->json(['message' => 'Only students can submit answers.'], 403);
+        }
+
+        if ($assessment->type === 'individual_activity' && $assessment->file_path) {
+            return response()->json(['message' => 'Upload your completed file to submit this activity.'], 422);
         }
 
         $validated = $request->validate([
@@ -427,13 +433,13 @@ class SubmissionController extends Controller
         $visibility = $assessment->score_visibility ?? 'immediate';
         
         if ($visibility === 'hidden') {
-            $submission->makeHidden(['score', 'percentage', 'total_points']);
+            $submission->makeHidden(['score', 'percentage', 'total_points', 'ai_feedback']);
             $submission->answers->each(function ($answer) {
                 $answer->makeHidden(['points_earned', 'is_correct', 'ai_feedback']);
             });
         } elseif ($visibility === 'instructor_release') {
             // Scores exist but not visible until released
-            $submission->makeHidden(['score', 'percentage', 'total_points']);
+            $submission->makeHidden(['score', 'percentage', 'total_points', 'ai_feedback']);
             $submission->answers->each(function ($answer) {
                 $answer->makeHidden(['points_earned', 'is_correct', 'ai_feedback']);
             });
@@ -447,6 +453,81 @@ class SubmissionController extends Controller
                 : 'Assessment submitted. Some answers are waiting to be graded by the instructor.'),
             'submission' => $submission,
         ]);
+    }
+
+    /** Accept one completed activity file for an active student attempt. */
+    public function submitActivity(Request $request, Course $course, Assessment $assessment): JsonResponse
+    {
+        abort_unless($assessment->course_id === $course->id && $assessment->type === 'individual_activity'
+            && $assessment->file_path, 404);
+        $user = $request->user();
+        abort_unless($user->isStudent() && $this->isEnrolled($user, $course), 403);
+        $validated = $request->validate([
+            'submission_id' => ['required', 'integer', 'exists:submissions,id'],
+            'file' => ['required', 'file', 'mimes:pdf,doc,docx,ppt,pptx', 'extensions:pdf,doc,docx,ppt,pptx', 'max:51200'],
+        ]);
+        $submission = Submission::whereKey($validated['submission_id'])
+            ->where('assessment_id', $assessment->id)->where('user_id', $user->id)
+            ->where('status', 'in_progress')->whereNull('locked_at')->first();
+        if (!$submission) return response()->json(['message' => 'No unlocked attempt is available. Ask your instructor to unlock it.'], 423);
+        $file = $validated['file'];
+        try {
+            $path = app(ActivitySubmissionFileService::class)->store($file, $assessment->id, $user->id);
+        } catch (\Throwable $error) {
+            \Log::error('Activity submission storage failed', ['assessment_id' => $assessment->id, 'error' => $error->getMessage()]);
+            return response()->json(['message' => 'Could not store the submitted file. Please retry.'], 500);
+        }
+        $name = mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', basename(str_replace('\\', '/', $file->getClientOriginalName()))), 0, 255);
+        $updated = Submission::whereKey($submission->id)->where('status', 'in_progress')->whereNull('locked_at')->update([
+            'file_path' => $path, 'original_filename' => $name,
+            'status' => 'submitted', 'grading_status' => 'pending',
+            'submitted_at' => now(), 'total_points' => 100,
+        ]);
+        if ($updated !== 1) {
+            Storage::disk('public')->delete($path);
+            return response()->json(['message' => 'This attempt has already been submitted or locked.'], 423);
+        }
+        \App\Models\ActivityLog::record($user, 'activity.submitted', $course, 'assessment', $assessment->id, ['submission_id' => $submission->id]);
+        return response()->json(['message' => 'Activity submitted for instructor review.', 'submission' => $submission->fresh()]);
+    }
+
+    /** Download the student's private submission after checking course and ownership. */
+    public function downloadActivityFile(Request $request, Course $course, Assessment $assessment, Submission $submission)
+    {
+        abort_unless($assessment->course_id === $course->id && $assessment->type === 'individual_activity'
+            && $assessment->file_path
+            && $submission->assessment_id === $assessment->id, 404);
+        $user = $request->user();
+        abort_unless(($user->isStudent() && $submission->user_id === $user->id && $this->isEnrolled($user, $course))
+            || $this->canManageCourse($user, $course), 403);
+        abort_unless($submission->file_path && Storage::disk('public')->exists($submission->file_path), 404);
+        return response()->streamDownload(
+            fn () => app(ActivitySubmissionFileService::class)->stream($submission->file_path),
+            $submission->original_filename ?: 'activity-submission',
+            ['Content-Type' => 'application/octet-stream'],
+        );
+    }
+
+    /** Instructor scores a file activity after reviewing the uploaded work. */
+    public function gradeActivity(Request $request, Course $course, Assessment $assessment, Submission $submission): JsonResponse
+    {
+        abort_unless($assessment->course_id === $course->id && $assessment->type === 'individual_activity'
+            && $assessment->file_path
+            && $submission->assessment_id === $assessment->id, 404);
+        abort_unless($this->canManageCourse($request->user(), $course), 403);
+        abort_unless(in_array($submission->status, ['submitted', 'graded'], true) && $submission->file_path, 422);
+        $validated = $request->validate([
+            'score' => ['required', 'numeric', 'min:0', 'max:100', 'decimal:0,2'],
+            'feedback' => ['nullable', 'string', 'max:10000'],
+        ]);
+        $submission->update([
+            'score' => $validated['score'], 'total_points' => 100,
+            'percentage' => $validated['score'], 'ai_feedback' => $validated['feedback'] ?? null,
+            'status' => 'graded', 'grading_status' => 'graded', 'graded_at' => now(),
+        ]);
+        app(\App\Services\GradeCalculationService::class)->recalculateStudent($course, $submission->user_id);
+        \App\Models\ActivityLog::record($request->user(), 'activity.graded', $course, 'assessment', $assessment->id, ['submission_id' => $submission->id]);
+        return response()->json(['message' => 'Activity graded.', 'submission' => $submission->fresh()]);
     }
 
     /**
@@ -494,14 +575,14 @@ class SubmissionController extends Controller
             
             if ($visibility === 'hidden') {
                 // Hide all score-related fields
-                $submission->makeHidden(['score', 'percentage', 'total_points']);
+                $submission->makeHidden(['score', 'percentage', 'total_points', 'ai_feedback']);
                 $submission->answers->each(function ($answer) {
                     $answer->makeHidden(['points_earned', 'is_correct', 'ai_feedback']);
                 });
             } elseif ($visibility === 'instructor_release') {
                 // Hide scores unless released
                 if (!$assessment->scores_released_at) {
-                    $submission->makeHidden(['score', 'percentage', 'total_points']);
+                    $submission->makeHidden(['score', 'percentage', 'total_points', 'ai_feedback']);
                     $submission->answers->each(function ($answer) {
                         $answer->makeHidden(['points_earned', 'is_correct', 'ai_feedback']);
                     });
@@ -537,12 +618,12 @@ class SubmissionController extends Controller
             
             if ($visibility === 'hidden') {
                 $submissions->each(function ($submission) {
-                    $submission->makeHidden(['score', 'percentage', 'total_points']);
+                    $submission->makeHidden(['score', 'percentage', 'total_points', 'ai_feedback']);
                 });
             } elseif ($visibility === 'instructor_release') {
                 if (!$assessment->scores_released_at) {
                     $submissions->each(function ($submission) {
-                        $submission->makeHidden(['score', 'percentage', 'total_points']);
+                        $submission->makeHidden(['score', 'percentage', 'total_points', 'ai_feedback']);
                     });
                 }
             }

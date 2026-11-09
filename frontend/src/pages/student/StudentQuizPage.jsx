@@ -6,6 +6,7 @@ import { canViewSubmissionScore } from '../../services/submissionResults';
 import { useNavigationGuard } from '../../context/NavigationGuardContextStore';
 import { getAuthSession } from '../../services/authSession.js';
 import { orderedChoices } from '../../services/choiceOrder.js';
+import IndividualActivityAssessment from './IndividualActivityAssessment';
 
 export default function StudentQuizPage() {
   const { courseId, assessmentId } = useParams();
@@ -143,8 +144,10 @@ export default function StudentQuizPage() {
         const order = new Map(res.data.submission.question_order.map((id, idx) => [Number(id), idx]));
         setAssessment(current => ({ ...current, questions: [...(current?.questions || [])].sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999)) }));
       }
+      return true;
     } catch (err) {
       setError(err.response?.data?.message || 'Could not start assessment.');
+      return false;
     }
   };
 
@@ -231,6 +234,11 @@ export default function StudentQuizPage() {
   }
 
   if (!assessment) return <p className="text-slate-500">Assessment not found.</p>;
+
+  if (assessment.type === 'individual_activity' && assessment.file_path) {
+    return <IndividualActivityAssessment courseId={courseId} assessment={assessment} submission={submission}
+      result={result} setResult={setResult} startActivity={startQuiz} error={error} setError={setError} navigate={navigate} />;
+  }
 
   // Paper-based assessment — just show the file viewer
   if (assessment.type === 'paper_based') {

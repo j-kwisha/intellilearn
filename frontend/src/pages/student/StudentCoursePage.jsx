@@ -134,7 +134,7 @@ export default function StudentCoursePage() {
                         {assessment.type.replace('_', ' ')}
                       </span>
                       <span className="text-xs text-slate-400">
-                        {assessment.questions_count} questions · {assessment.total_points} pts
+                        {assessment.type === 'individual_activity' && assessment.file_path ? 'File assignment' : `${assessment.questions_count} questions · ${assessment.total_points} pts`}
                       </span>
                       {assessment.time_limit_minutes && (
                         <span className="text-xs text-slate-400">

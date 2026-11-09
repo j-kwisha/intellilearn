@@ -120,6 +120,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/courses/{course}/assessments/{assessment}', [AssessmentController::class, 'update']);
     Route::delete('/courses/{course}/assessments/{assessment}', [AssessmentController::class, 'destroy']);
     Route::post('/courses/{course}/assessments/{assessment}/upload-file', [AssessmentController::class, 'uploadFile']);
+    Route::get('/courses/{course}/assessments/{assessment}/file/download', [AssessmentController::class, 'downloadFile']);
     Route::post('/courses/{course}/assessments/{assessment}/import-pdf', [AssessmentController::class, 'importPdf']);
     Route::post('/courses/{course}/upload-reference-text', [AssessmentController::class, 'uploadReferenceText']);
     Route::post('/courses/{course}/assessments/{assessment}/release-scores', [AssessmentController::class, 'releaseScores']);
@@ -148,8 +149,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/courses/{course}/assessments/{assessment}/unlock', [SubmissionController::class, 'unlockAttempt']);
     Route::put('/courses/{course}/assessments/{assessment}/autosave', [SubmissionController::class, 'autosave']);
     Route::post('/courses/{course}/assessments/{assessment}/submit', [SubmissionController::class, 'submit']);
+    Route::post('/courses/{course}/assessments/{assessment}/submit-activity', [SubmissionController::class, 'submitActivity']);
     Route::get('/courses/{course}/assessments/{assessment}/submissions', [SubmissionController::class, 'index']);
     Route::get('/courses/{course}/assessments/{assessment}/submissions/{submission}', [SubmissionController::class, 'show']);
+    Route::get('/courses/{course}/assessments/{assessment}/submissions/{submission}/file/download', [SubmissionController::class, 'downloadActivityFile']);
+    Route::put('/courses/{course}/assessments/{assessment}/submissions/{submission}/grade-activity', [SubmissionController::class, 'gradeActivity']);
     Route::put('/courses/{course}/assessments/{assessment}/submissions/{submission}/grade', [SubmissionController::class, 'grade']);
 
     // --- ANNOUNCEMENTS ---

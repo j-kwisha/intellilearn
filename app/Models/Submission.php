@@ -23,6 +23,8 @@ class Submission extends Model
         'submitted_at',
         'graded_at',
         'question_order',
+        'file_path',
+        'original_filename',
         'locked_at',
         'lock_reason',
     ];

@@ -26,6 +26,7 @@ export default function InstructorCreateAssessmentPage() {
     available_from: '', due_date: '', score_visibility: 'immediate', assessment_stage: 'regular',
     passing_score: '', allow_late_submissions: false, shuffle_questions: false, shuffle_choices: false,
   });
+  const [activityFile, setActivityFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [finishing, setFinishing] = useState(false);
@@ -107,6 +108,8 @@ export default function InstructorCreateAssessmentPage() {
     if (!form.type) return 'Please select an assessment type.';
     if (!form.max_attempts || parseInt(form.max_attempts) < 1) return 'Max attempts must be at least 1.';
     if (!form.score_visibility) return 'Please select a score visibility option.';
+    if (isIndividualActivity && !activityFile) return 'Upload a PDF, DOCX, or PowerPoint file for this activity.';
+    if (isIndividualActivity && activityFile && activityFile.size > 50 * 1024 * 1024) return 'The activity file must be 50 MB or smaller.';
     return null;
   };
 
@@ -151,10 +154,18 @@ export default function InstructorCreateAssessmentPage() {
         setAssessmentId(created.id);
       }
       setAssessmentTitle(created.title);
+      if (isIndividualActivity) {
+        const upload = new FormData();
+        upload.append('file', activityFile);
+        await api.post(`/courses/${courseId}/assessments/${created.id}/upload-file`, upload);
+        await api.put(`/courses/${courseId}/assessments/${created.id}`, { is_published: true });
+        navigate(`/instructor/courses/${courseId}`);
+        return;
+      }
 
       setStep(form.type === 'paper_based' && !pdfImport ? 'import_pdf' : 'questions');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save assessment.');
+      setError(err.response?.data?.message || (isIndividualActivity ? 'Could not save the activity file. The activity remains a draft; retry to finish.' : 'Failed to save assessment.'));
     } finally {
       setSaving(false);
     }
@@ -486,6 +497,11 @@ export default function InstructorCreateAssessmentPage() {
             <label style={S.label}>Instructions / description
               <textarea style={S.input} rows={3} value={form.description} onChange={e => setForm({...form, description:e.target.value})} />
             </label>
+            {isIndividualActivity && <label style={S.label}>Activity file (PDF, DOC, DOCX, PPT, or PPTX) *
+              <input style={S.input} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx" required
+                onChange={event => setActivityFile(event.target.files?.[0] || null)} />
+              <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: 5 }}>Students can preview and download this file, then upload their completed work. Maximum 50 MB.</span>
+            </label>}
             <div style={{ display: isIndividualActivity ? 'none' : 'contents' }}>
             <label style={S.label}>Linked lesson
               <select style={S.input} value={form.lesson_id} onChange={e => setForm({...form, lesson_id:e.target.value})}>
@@ -606,7 +622,7 @@ export default function InstructorCreateAssessmentPage() {
             </div>
             <div style={{ display: 'flex', gap: 12, paddingTop: 8 }}>
               <button type="submit" disabled={saving} style={{ ...S.btn, opacity: saving ? 0.7 : 1 }}>
-                {saving ? 'Saving...' : assessmentId ? 'Save Changes →' : 'Create & Add Questions →'}
+                {saving ? 'Saving...' : isIndividualActivity ? 'Create Activity' : assessmentId ? 'Save Changes →' : 'Create & Add Questions →'}
               </button>
               <button type="button" onClick={() => navigate(`/instructor/courses/${courseId}`)} style={S.btnGhost}>Cancel</button>
             </div>

@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Course;
 use App\Models\User;
 use Illuminate\Foundation\Testing\{RefreshDatabase, RefreshDatabaseState};
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AssessmentCalendarEventTest extends TestCase
@@ -31,6 +33,7 @@ class AssessmentCalendarEventTest extends TestCase
 
     public function test_scheduled_assessment_calendar_event_is_created_updated_and_removed_automatically(): void
     {
+        Storage::fake('public');
         $instructor = User::factory()->create(['role' => 'instructor']);
         $course = Course::create([
             'name' => 'Learning Materials',
@@ -57,6 +60,10 @@ class AssessmentCalendarEventTest extends TestCase
             'event_type' => 'activity',
             'title' => 'Due: Individual reflection',
         ]);
+
+        $this->post("/api/courses/{$course->id}/assessments/{$created['id']}/upload-file", [
+            'file' => UploadedFile::fake()->create('reflection.pdf', 10, 'application/pdf'),
+        ])->assertOk();
 
         $this->putJson("/api/courses/{$course->id}/assessments/{$created['id']}", [
             'title' => 'Updated reflection',

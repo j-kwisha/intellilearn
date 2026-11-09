@@ -15,6 +15,7 @@ use App\Services\EssayReferenceService;
 use App\Services\DocumentTextService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AssessmentController extends Controller
@@ -167,9 +168,17 @@ class AssessmentController extends Controller
             'allow_late_submissions' => ['sometimes', 'boolean'],
             'shuffle_questions' => ['sometimes', 'boolean'],
             'shuffle_choices' => ['sometimes', 'boolean'],
+            'file' => ['sometimes', 'file', 'mimes:pdf,doc,docx,ppt,pptx', 'extensions:pdf,doc,docx,ppt,pptx', 'max:51200'],
         ]);
 
         $this->validateSchedule($validated);
+        if ($request->hasFile('file') && !in_array($validated['type'], ['individual_activity', 'paper_based'], true)) {
+            throw ValidationException::withMessages(['file' => 'Files can only be attached to file activities or paper-based assessments.']);
+        }
+        if ($validated['type'] === 'individual_activity' && (!empty($validated['is_published']) || !empty($validated['available_from'])) && empty($validated['defer_publication']) && !$request->hasFile('file')) {
+            throw ValidationException::withMessages(['file' => 'Upload the activity file before publishing.']);
+        }
+        unset($validated['file']);
 
         // A scheduled assessment is published without a separate checkbox.
         // The multi-step creator defers publication until questions/files are saved.
@@ -184,12 +193,16 @@ class AssessmentController extends Controller
         \App\Models\ActivityLog::record($user, 'assessment.created', $course, 'assessment', $assessment->id, ['title' => $assessment->title]);
         $this->syncAssessmentCalendarEvent($assessment, $course, $user->id);
 
-        // Handle file upload for paper_based assessments
-        if ($validated['type'] === 'paper_based' && $request->hasFile('file')) {
+        if ($request->hasFile('file')) {
             $filePath = $this->uploadAssessmentFile($request->file('file'), $course->id, $assessment->id);
-            if ($filePath) {
-                $assessment->update(['file_path' => $filePath]);
+            if (!$filePath) {
+                $assessment->delete();
+                return response()->json(['message' => 'File upload failed. Please retry.'], 500);
             }
+            $assessment->update([
+                'file_path' => $filePath,
+                'original_filename' => $this->safeFilename($request->file('file')->getClientOriginalName()),
+            ]);
         }
 
         return response()->json([
@@ -279,9 +292,18 @@ class AssessmentController extends Controller
             'allow_late_submissions' => ['sometimes', 'boolean'],
             'shuffle_questions' => ['sometimes', 'boolean'],
             'shuffle_choices' => ['sometimes', 'boolean'],
+            'file' => ['sometimes', 'file', 'mimes:pdf,doc,docx,ppt,pptx', 'extensions:pdf,doc,docx,ppt,pptx', 'max:51200'],
         ]);
 
         $this->validateSchedule($validated, $assessment);
+        if ($request->hasFile('file') && !in_array($validated['type'] ?? $assessment->type, ['individual_activity', 'paper_based'], true)) {
+            throw ValidationException::withMessages(['file' => 'Files can only be attached to file activities or paper-based assessments.']);
+        }
+        unset($validated['file']);
+        if (($validated['is_published'] ?? $assessment->is_published) && ($validated['type'] ?? $assessment->type) === 'individual_activity'
+            && !$assessment->file_path && !$assessment->questions()->exists() && !$request->hasFile('file')) {
+            throw ValidationException::withMessages(['file' => 'Upload the activity file before publishing.']);
+        }
 
         if ($validated['is_published'] ?? false) {
             foreach ($assessment->questions()->where('type', 'essay')->with('rubric.criteria.levels')->get() as $essay) {
@@ -294,12 +316,16 @@ class AssessmentController extends Controller
         $assessment->update($validated);
         $assessment->refresh();
 
-        // Handle file upload for paper_based assessments
         if ($request->hasFile('file')) {
+            abort_unless(in_array($assessment->type, ['individual_activity', 'paper_based'], true), 422);
+            $oldPath = $assessment->publicStoragePath();
             $filePath = $this->uploadAssessmentFile($request->file('file'), $course->id, $assessment->id);
-            if ($filePath) {
-                $assessment->update(['file_path' => $filePath]);
-            }
+            if (!$filePath) return response()->json(['message' => 'File upload failed.'], 500);
+            $assessment->update([
+                'file_path' => $filePath,
+                'original_filename' => $this->safeFilename($request->file('file')->getClientOriginalName()),
+            ]);
+            if ($oldPath && $oldPath !== $filePath) Storage::disk('public')->delete($oldPath);
         }
 
         // Recalculate total_points from questions
@@ -331,8 +357,12 @@ class AssessmentController extends Controller
             return response()->json(['message' => 'Assessment not found in this course.'], 404);
         }
 
+        $taskPath = $assessment->publicStoragePath();
+        $submissionPaths = $assessment->submissions()->whereNotNull('file_path')->pluck('file_path')->all();
         \App\Models\ActivityLog::record($user, 'assessment.deleted', $course, 'assessment', $assessment->id, ['title' => $assessment->title]);
         $assessment->delete();
+        if ($taskPath) Storage::disk('public')->delete($taskPath);
+        if ($submissionPaths) Storage::disk('public')->delete($submissionPaths);
 
         return response()->json(['message' => 'Assessment deleted successfully.']);
     }
@@ -630,21 +660,39 @@ class AssessmentController extends Controller
         return response()->json(['message' => 'Question deleted successfully.']);
     }
 
-    /**
-     * UPLOAD FILE FOR PAPER-BASED ASSESSMENT
-     */
+    /** Upload or replace the file provided by the instructor. */
     public function uploadFile(Request $request, Course $course, Assessment $assessment): JsonResponse
     {
-        if (! $this->canManageCourse($request->user(), $course)) {
-            return response()->json(['message' => 'Unauthorized.'], 403);
-        }
-        $request->validate(['file' => ['required', 'file', 'mimes:pdf,doc,docx', 'max:102400']]);
-        $filePath = $this->uploadAssessmentFile($request->file('file'), $course->id, $assessment->id);
-        if (! $filePath) {
-            return response()->json(['message' => 'File upload failed.'], 500);
-        }
-        $assessment->update(['file_path' => $filePath]);
+        abort_unless($assessment->course_id === $course->id, 404);
+        abort_unless($this->canManageCourse($request->user(), $course), 403);
+        abort_unless(in_array($assessment->type, ['individual_activity', 'paper_based'], true), 422);
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:pdf,doc,docx,ppt,pptx', 'extensions:pdf,doc,docx,ppt,pptx', 'max:51200'],
+        ]);
+        $oldPath = $assessment->publicStoragePath();
+        $filePath = $this->uploadAssessmentFile($validated['file'], $course->id, $assessment->id);
+        if (!$filePath) return response()->json(['message' => 'File upload failed.'], 500);
+        $assessment->update([
+            'file_path' => $filePath,
+            'original_filename' => $this->safeFilename($validated['file']->getClientOriginalName()),
+        ]);
+        if ($oldPath && $oldPath !== $filePath) Storage::disk('public')->delete($oldPath);
         return response()->json(['file_url' => $assessment->fresh()->file_url]);
+    }
+
+    public function downloadFile(Request $request, Course $course, Assessment $assessment)
+    {
+        abort_unless($assessment->course_id === $course->id, 404);
+        abort_unless($this->canAccessCourse($request->user(), $course), 403);
+        abort_if($request->user()->isStudent() && !$assessment->is_published, 403);
+        $path = $assessment->publicStoragePath();
+        abort_unless($path && Storage::disk('public')->exists($path), 404);
+        return Storage::disk('public')->download($path, $assessment->downloadName());
+    }
+
+    private function safeFilename(string $name): string
+    {
+        return mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', basename(str_replace('\\', '/', $name))), 0, 255);
     }
 
     /** Extract a reviewable quiz draft. Do not publish, save questions, or expose the source PDF. */
@@ -938,17 +986,12 @@ class AssessmentController extends Controller
         return false;
     }
 
-    /**
-     * Upload a PDF/DOCX file for a paper-based assessment to Cloudinary.
-     * Returns the file URL on success, null on failure.
-     */
+    /** Store an instructor assessment file on the persistent public disk. */
     private function uploadAssessmentFile($file, int $courseId, int $assessmentId): ?string
     {
         try {
-            // Store locally for reliability  
             $folder = "assessments/course_{$courseId}/assessment_{$assessmentId}";
-            $stored = $file->store($folder, 'public');
-            return \Illuminate\Support\Facades\Storage::disk('public')->url($stored);
+            return $file->store($folder, 'public') ?: null;
         } catch (\Exception $e) {
             \Log::error('Assessment file upload failed', ['error' => $e->getMessage()]);
             return null;
@@ -1040,6 +1083,8 @@ class AssessmentController extends Controller
 
     private function syncAssessmentCalendarEvent(Assessment $assessment, Course $course, int $userId): void
     {
+        // Older installations and focused test schemas may not have calendar events yet.
+        if (!\Illuminate\Support\Facades\Schema::hasTable('calendar_events')) return;
         $date = $assessment->due_date ?? $assessment->available_from;
         if (!$date) {
             CalendarEvent::where('assessment_id', $assessment->id)->delete();

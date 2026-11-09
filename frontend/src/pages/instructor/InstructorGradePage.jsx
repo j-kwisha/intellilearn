@@ -2,6 +2,7 @@
 import api from '../../services/api';
 import { formatGrade, escapeHtml } from '../../services/gradePrint';
 import EssayGradingDetails from '../../components/EssayGradingDetails';
+import { downloadActivitySubmission } from '../../services/assessmentFiles';
 
 async function downloadXlsx(filename, sheetName, headers, rows, columnWidths) {
   const XLSX = await import('xlsx');
@@ -226,6 +227,7 @@ export default function InstructorGradePage() {
       {gradingSubmission && (
         <GradingPanel
           submission={gradingSubmission}
+          fileActivity={assessments.some(item => item.id === selectedAssessment && item.type === 'individual_activity' && item.file_path)}
           courseId={selectedCourse}
           assessmentId={selectedAssessment}
           onClose={() => setGradingSubmission(null)}
@@ -290,8 +292,10 @@ export default function InstructorGradePage() {
   );
 }
 
-function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded }) {
+function GradingPanel({ submission, fileActivity, courseId, assessmentId, onClose, onGraded }) {
   const [grades, setGrades] = useState({});
+  const [activityScore, setActivityScore] = useState(submission.percentage ?? '');
+  const [activityFeedback, setActivityFeedback] = useState(submission.ai_feedback || '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -308,7 +312,13 @@ function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded })
       .filter(([, g]) => g.points_earned !== '' && g.points_earned !== null)
       .map(([qId, g]) => ({ question_id: parseInt(qId), points_earned: parseFloat(g.points_earned), ai_feedback: g.ai_feedback || null, ...(g.criterion_scores ? { criterion_scores: g.criterion_scores } : {}) }));
     try {
-      await api.put(`/courses/${courseId}/assessments/${assessmentId}/submissions/${submission.id}/grade`, { grades: gradeArray });
+      if (fileActivity) {
+        await api.put(`/courses/${courseId}/assessments/${assessmentId}/submissions/${submission.id}/grade-activity`, {
+          score: Number(activityScore), feedback: activityFeedback,
+        });
+      } else {
+        await api.put(`/courses/${courseId}/assessments/${assessmentId}/submissions/${submission.id}/grade`, { grades: gradeArray });
+      }
       onGraded();
     } catch (err) { alert(err.response?.data?.message || 'Failed to save grades.'); }
     finally { setSaving(false); }
@@ -325,6 +335,18 @@ function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded })
       </div>
 
       <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
+        {fileActivity && <div className="instr-panel" style={{ padding: '16px' }}>
+          <p style={{ color: 'var(--instr-ink)', margin: '0 0 12px' }}>Submitted file: {submission.original_filename || 'Activity work'}</p>
+          {submission.file_path && <button type="button" className="instr-outline-btn" onClick={() => downloadActivitySubmission(courseId, assessmentId, submission).catch(() => alert('Could not download the submitted file.'))}>Download student work</button>}
+          <div style={{ marginTop: 14 }}>
+            <label className="instr-form-label">Score (0–100)</label>
+            <input type="number" min="0" max="100" step="0.01" value={activityScore} onChange={event => setActivityScore(event.target.value)} className="instr-form-input" />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className="instr-form-label">Feedback</label>
+            <textarea value={activityFeedback} onChange={event => setActivityFeedback(event.target.value)} className="instr-form-input" rows={3} />
+          </div>
+        </div>}
         {submission.answers?.map((answer, idx) => (
           <div key={answer.id} className="instr-panel" style={{ padding:'16px' }}>
             <p style={{ fontFamily:'Poppins,sans-serif', fontWeight:600, fontSize:'14.5px', color:'var(--instr-ink)', margin:'0 0 4px' }}>Q{idx+1}: {answer.question?.question_text}</p>
@@ -360,7 +382,7 @@ function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded })
       </div>
 
       <div style={{ display:'flex', gap:'10px', marginTop:'16px' }}>
-        <button onClick={handleSubmitGrades} disabled={saving} className="instr-pill-btn">{saving ? 'Saving...' : 'Save Grades'}</button>
+        <button onClick={handleSubmitGrades} disabled={saving || (fileActivity && (activityScore === '' || !submission.file_path))} className="instr-pill-btn">{saving ? 'Saving...' : 'Save Grades'}</button>
         <button onClick={onClose} className="instr-outline-btn">Cancel</button>
       </div>
     </div>

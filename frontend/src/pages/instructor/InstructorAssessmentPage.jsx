@@ -6,6 +6,8 @@ import EssayQuestionFields from '../../components/EssayQuestionFields';
 import TestBankBuilder from '../../components/TestBankBuilder';
 import { rubricError } from '../../services/rubric';
 import EssayGradingDetails from '../../components/EssayGradingDetails';
+import AssessmentFileViewer from '../../components/AssessmentFileViewer';
+import { downloadActivitySubmission } from '../../services/assessmentFiles';
 
 // ── Inline question editor (for published assessments) ──────────────────────
 function EditQuestionModal({ question, courseId, assessmentId, onClose, onSaved }) {
@@ -431,6 +433,8 @@ export default function InstructorAssessmentPage() {
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [grading, setGrading] = useState(false);
   const [grades, setGrades] = useState({});
+  const [activityScore, setActivityScore] = useState('');
+  const [activityFeedback, setActivityFeedback] = useState('');
   const [gradeSaving, setGradeSaving] = useState(false);
   const [gradeError, setGradeError] = useState('');
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -459,6 +463,8 @@ export default function InstructorAssessmentPage() {
     const res = await api.get(`/courses/${courseId}/assessments/${assessmentId}/submissions/${submission.id}`);
     const full = res.data.submission;
     setSelectedSubmission(full);
+    setActivityScore(full.score ?? '');
+    setActivityFeedback(full.ai_feedback ?? '');
     // Pre-fill grades with existing points_earned
     const initial = {};
     full.answers?.forEach((a) => {
@@ -471,6 +477,12 @@ export default function InstructorAssessmentPage() {
   const saveGrades = async () => {
     setGradeSaving(true); setGradeError('');
     try {
+      if (assessment.type === 'individual_activity' && assessment.file_path) {
+        await api.put(`/courses/${courseId}/assessments/${assessmentId}/submissions/${selectedSubmission.id}/grade-activity`, { score: Number(activityScore), feedback: activityFeedback });
+        setGrading(false);
+        fetchAll();
+        return;
+      }
       const gradeArray = Object.entries(grades).filter(([, g]) => g.points_earned !== '' && g.points_earned !== null).map(([qId, g]) => ({
         question_id: parseInt(qId),
         points_earned: parseFloat(g.points_earned) || 0,
@@ -541,9 +553,9 @@ export default function InstructorAssessmentPage() {
   if (!assessment) return <p className="text-slate-500">Assessment not found.</p>;
 
   const pendingCount = submissions.filter((s) => s.status === 'submitted').length;
-  const avgScore = submissions.length
-    ? (submissions.filter(s => s.percentage != null).reduce((sum, s) => sum + parseFloat(s.percentage), 0) /
-       (submissions.filter(s => s.percentage != null).length || 1)).toFixed(1)
+  const scoredSubmissions = submissions.filter(s => s.percentage != null);
+  const avgScore = scoredSubmissions.length
+    ? (scoredSubmissions.reduce((sum, s) => sum + parseFloat(s.percentage), 0) / scoredSubmissions.length).toFixed(1)
     : null;
 
   return (
@@ -561,7 +573,7 @@ export default function InstructorAssessmentPage() {
               <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full capitalize">
                 {assessment.type.replace(/_/g, ' ')}
               </span>
-              <span className="text-xs text-slate-400">{assessment.questions?.length || 0} questions · {assessment.total_points} pts</span>
+              <span className="text-xs text-slate-400">{assessment.type === 'individual_activity' && assessment.file_path ? 'File assignment · scored out of 100' : `${assessment.questions?.length || 0} questions · ${assessment.total_points} pts`}</span>
               {assessment.time_limit_minutes && <span className="text-xs text-slate-400">⏱ {assessment.time_limit_minutes} min</span>}
               <span className={`text-xs px-2 py-0.5 rounded-full ${assessment.is_published ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
                 {assessment.is_published ? 'Published' : 'Draft'}
@@ -601,7 +613,7 @@ export default function InstructorAssessmentPage() {
             <p className="text-xs text-slate-500 mt-0.5">Pending Review</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-teal-600">{avgScore ?? '—'}%</p>
+            <p className="text-2xl font-bold text-teal-600">{avgScore === null ? '—' : `${avgScore}%`}</p>
             <p className="text-xs text-slate-500 mt-0.5">Avg Score</p>
           </div>
         </div>
@@ -613,7 +625,7 @@ export default function InstructorAssessmentPage() {
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-md text-sm font-medium capitalize transition-colors
               ${tab === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-            {t}
+            {t === 'questions' && assessment.type === 'individual_activity' && assessment.file_path ? 'Activity file' : t}
             {t === 'results' && pendingCount > 0 && (
               <span className="ml-1.5 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>
             )}
@@ -622,7 +634,9 @@ export default function InstructorAssessmentPage() {
       </div>
 
       {/* Questions tab */}
-      {tab === 'questions' && (
+      {tab === 'questions' && (assessment.type === 'individual_activity' && assessment.file_path ? (
+        <AssessmentFileViewer courseId={courseId} assessment={assessment} />
+      ) : (
         <div className="space-y-3">
           {/* Add Question button */}
           <div className="flex justify-end gap-2">
@@ -690,7 +704,7 @@ export default function InstructorAssessmentPage() {
             ))
           )}
         </div>
-      )}
+      ))}
 
       {/* Results tab */}
       {tab === 'results' && (
@@ -790,7 +804,15 @@ export default function InstructorAssessmentPage() {
 
             <div className="p-6 space-y-4">
               {gradeError && <p className="text-red-500 text-sm">{gradeError}</p>}
-              {selectedSubmission.answers?.map((answer, idx) => (
+              {assessment.type === 'individual_activity' && assessment.file_path ? <div className="space-y-4">
+                {selectedSubmission.file_path ? <button type="button" onClick={() => downloadActivitySubmission(courseId, assessmentId, selectedSubmission).catch(() => setGradeError('Could not download the submitted file.'))} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Download submitted file: {selectedSubmission.original_filename || 'activity'}</button> : <p className="text-sm text-slate-500">No submitted file.</p>}
+                <label className="block text-sm font-medium text-slate-700">Score out of 100
+                  <input type="number" min="0" max="100" step="0.01" value={activityScore} onChange={event => setActivityScore(event.target.value)} className="mt-2 block w-full rounded-lg border border-slate-300 p-2" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Feedback
+                  <textarea rows={3} value={activityFeedback} onChange={event => setActivityFeedback(event.target.value)} className="mt-2 block w-full rounded-lg border border-slate-300 p-2" />
+                </label>
+              </div> : selectedSubmission.answers?.map((answer, idx) => (
                 <div key={answer.id} className="border border-slate-200 rounded-xl p-4 space-y-3">
                   <p className="text-sm font-medium text-slate-800">
                     Q{idx + 1}: {answer.question?.question_text}
@@ -848,7 +870,7 @@ export default function InstructorAssessmentPage() {
             </div>
 
             <div className="p-6 border-t border-slate-200 flex gap-3">
-              <button onClick={saveGrades} disabled={gradeSaving}
+              <button onClick={saveGrades} disabled={gradeSaving || (assessment.type === 'individual_activity' && assessment.file_path && activityScore === '')}
                 className="bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 transition-colors">
                 {gradeSaving ? 'Saving...' : 'Save Grades'}
               </button>

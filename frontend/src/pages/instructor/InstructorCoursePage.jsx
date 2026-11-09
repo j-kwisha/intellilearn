@@ -4,6 +4,7 @@ import api from '../../services/api';
 import AssessmentSchedule from '../../components/AssessmentSchedule';
 import { toApiDate, toLocalInput } from '../../services/assessmentDates';
 import { downloadMaterial } from '../../services/materialDownload';
+import { downloadAssessmentFile } from '../../services/assessmentFiles';
 import { materialPreviewUrl } from '../../services/materialPreview';
 import EssayQuestionFields from '../../components/EssayQuestionFields';
 import { rubricError } from '../../services/rubric';
@@ -587,7 +588,8 @@ function AssessmentForm({ courseId, lessons, onClose, onSuccess, editAssessment 
     max_attempts: editAssessment.max_attempts || 1,
     is_published: editAssessment.is_published || false,
   } : { title: '', description: '', lesson_id: '', available_from: '', due_date: '', score_visibility: 'immediate', type: 'quiz', topic: '', time_limit_minutes: '', max_attempts: 1, is_published: false });
-  const [paperFile, setPaperFile] = useState(null);
+  const [attachmentFile, setAttachmentFile] = useState(null);
+  const isActivity = form.type === 'individual_activity' && (!isEdit || editAssessment.type !== 'individual_activity' || editAssessment.file_path || !editAssessment.questions_count);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   
@@ -603,6 +605,14 @@ function AssessmentForm({ courseId, lessons, onClose, onSuccess, editAssessment 
       setError('Assessment type is required.');
       return;
     }
+    if (isActivity && !attachmentFile && !editAssessment?.file_path) {
+      setError('Upload a PDF, DOCX, or PowerPoint file for this activity.');
+      return;
+    }
+    if (attachmentFile && attachmentFile.size > 50 * 1024 * 1024) {
+      setError('The file must be 50 MB or smaller.');
+      return;
+    }
     if (!form.max_attempts || form.max_attempts < 1) {
       setError('Max attempts must be at least 1.');
       return;
@@ -616,6 +626,11 @@ function AssessmentForm({ courseId, lessons, onClose, onSuccess, editAssessment 
       data.lesson_id = data.lesson_id || null;
       data.available_from = toApiDate(data.available_from);
       data.due_date = toApiDate(data.due_date, true);
+      if (isActivity) {
+        data.lesson_id = null; data.topic = null; data.time_limit_minutes = null;
+        data.max_attempts = 1; data.score_visibility = 'immediate';
+        if (!editAssessment?.file_path) data.is_published = false;
+      }
       // Remove total_points - will be calculated from questions
       delete data.total_points;
       
@@ -624,10 +639,13 @@ function AssessmentForm({ courseId, lessons, onClose, onSuccess, editAssessment 
       } else {
         await api.post(`/courses/${courseId}/assessments`, data);
       }
-      if (isEdit && paperFile && form.type === 'paper_based') {
+      if (isEdit && attachmentFile && ['individual_activity', 'paper_based'].includes(form.type)) {
         const upload = new FormData();
-        upload.append('file', paperFile);
+        upload.append('file', attachmentFile);
         await api.post(`/courses/${courseId}/assessments/${editAssessment.id}/upload-file`, upload);
+        if (isActivity && !editAssessment.file_path) {
+          await api.put(`/courses/${courseId}/assessments/${editAssessment.id}`, { is_published: true });
+        }
       }
       onSuccess();
     }
@@ -638,25 +656,25 @@ function AssessmentForm({ courseId, lessons, onClose, onSuccess, editAssessment 
     <FormCard title={isEdit ? 'Edit Assessment' : '🆕 CREATE NEW ASSESSMENT - UPDATED VERSION 2.0'} error={error}>
       <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
         <input type="text" placeholder="Assessment title *" value={form.title} required onChange={e => setForm({...form, title:e.target.value})} className={FI} />
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:isActivity?'1fr':'1fr 1fr', gap:'12px' }}>
           <select value={form.type} onChange={e => setForm({...form, type:e.target.value})} className={FI} required>
             <option value="quiz">Quiz</option><option value="long_exam">Long Exam</option><option value="individual_activity">Individual Activity</option>{isEdit && <option value="paper_based">Paper-Based</option>}
           </select>
-          <input type="text" placeholder="Topic tag (optional)" value={form.topic} onChange={e => setForm({...form, topic:e.target.value})} className={FI} />
+          {!isActivity && <input type="text" placeholder="Topic tag (optional)" value={form.topic} onChange={e => setForm({...form, topic:e.target.value})} className={FI} />}
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+        {!isActivity && <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
           <div><label className="instr-form-label">Time limit (minutes)</label><input type="number" value={form.time_limit_minutes} placeholder="No limit" min={1} onChange={e => setForm({...form, time_limit_minutes:e.target.value})} className={FI} /></div>
           <div><label className="instr-form-label">Max attempts *</label><input type="number" value={form.max_attempts} min={1} required onChange={e => setForm({...form, max_attempts:parseInt(e.target.value)||1})} className={FI} /></div>
-        </div>
+        </div>}
         <label className="instr-form-label">Instructions / description
           <textarea value={form.description} rows={3} onChange={e => setForm({...form, description:e.target.value})} className={FI} />
         </label>
-        <label className="instr-form-label">Linked lesson
+        {!isActivity && <label className="instr-form-label">Linked lesson
           <select value={form.lesson_id} onChange={e => setForm({...form, lesson_id:e.target.value})} className={FI}>
             <option value="">No linked lesson</option>
             {lessons.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
           </select>
-        </label>
+        </label>}
         <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12}}>
           <label className="instr-form-label">Available from (your local time)
             <input type="datetime-local" value={form.available_from} onChange={e => setForm({...form, available_from:e.target.value})} className={FI} />
@@ -665,18 +683,19 @@ function AssessmentForm({ courseId, lessons, onClose, onSuccess, editAssessment 
             <input type="datetime-local" value={form.due_date} onChange={e => setForm({...form, due_date:e.target.value})} className={FI} />
           </label>
         </div>
-        <label className="instr-form-label">Score visibility
+        {!isActivity && <label className="instr-form-label">Score visibility
           <select value={form.score_visibility} onChange={e => setForm({...form, score_visibility:e.target.value})} className={FI}>
             <option value="immediate">Show immediately</option><option value="instructor_release">Release manually</option><option value="hidden">Hidden</option>
           </select>
-        </label>
-        {isEdit && form.type === 'paper_based' && <label className="instr-form-label">Replace assessment file (optional)
-          <input type="file" accept=".pdf,.doc,.docx" onChange={e => setPaperFile(e.target.files[0] || null)} className={FI} />
         </label>}
-        <label className="instr-form-check"><input type="checkbox" checked={form.is_published} onChange={e => setForm({...form, is_published:e.target.checked})} /> Publish immediately</label>
-        <p style={{ fontSize:'12px', color:'var(--instr-muted)', background:'var(--instr-bg)', padding:'8px 12px', borderRadius:'6px', margin:0 }}>
+        {isEdit && (isActivity || form.type === 'paper_based') && <label className="instr-form-label">{isActivity ? 'Activity file (PDF, DOCX, or PowerPoint)' : 'Replace assessment file (optional)'}
+          <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx" onChange={e => setAttachmentFile(e.target.files[0] || null)} className={FI} />
+          {editAssessment.file_path && <button type="button" onClick={() => downloadAssessmentFile(courseId, editAssessment).catch(() => setError('Could not download the current file.'))} className="instr-link-action">Download current file: {editAssessment.original_filename || editAssessment.title}</button>}
+        </label>}
+        {!isActivity && <label className="instr-form-check"><input type="checkbox" checked={form.is_published} onChange={e => setForm({...form, is_published:e.target.checked})} /> Publish immediately</label>}
+        {!isActivity && <p style={{ fontSize:'12px', color:'var(--instr-muted)', background:'var(--instr-bg)', padding:'8px 12px', borderRadius:'6px', margin:0 }}>
           ℹ️ Total points will be calculated based on the questions you add.
-        </p>
+        </p>}
         <BtnRow>
           <button type="submit" disabled={saving} className="instr-pill-btn" style={{opacity:saving?0.6:1}}>{saving ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Assessment')}</button>
           <button type="button" onClick={onClose} className="instr-outline-btn">Cancel</button>

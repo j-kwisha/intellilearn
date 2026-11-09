@@ -1,5 +1,15 @@
 # Recent Changes Summary
 
+## Individual Activity file assignments (November 10, 2026)
+
+- Instructors can attach a PDF, DOC, DOCX, PPT, or PPTX file when creating or editing an Individual Activity. The activity publishes after the file is saved.
+- Students can preview the instructor's file (PDF and DOCX in-app; Office preview for DOC/PPT), download it, and upload a completed file in any of the same formats. The submission uses the existing attempt lock and instructor unlock rules.
+- Instructors can download submitted work and assign a score out of 100 with feedback from either the assessment detail or Grading page. The result contributes to course activity grades.
+- Student files are encrypted on the persistent public storage volume; readable downloads require course/ownership authorization. The backend startup migration adds the file metadata columns automatically.
+- Existing question-based Individual Activities continue to use their earlier quiz flow.
+
+To test: create an Individual Activity with a small PDF or DOCX, open it as an enrolled student, preview/download the task, start the activity, upload a completed file, then grade it as the instructor. Confirm that another student's account cannot access that submission.
+
 ## Changes Made (May 7, 2026)
 
 ### 1. ✅ Removed Email Verification from Registration
