@@ -223,6 +223,15 @@ export default function LoginPage() {
           --muted: #4A6FA5;
           --violet-end: #5B5BE6;
         }
+        .ll-page{
+          --ambient-feature-a:rgba(59,130,246,.11);
+          --ambient-feature-b:rgba(91,151,232,.09);
+          --ambient-form:rgba(78,139,231,.10);
+          --auth-blob-one:rgba(191,219,254,.55);
+          --auth-blob-two:rgba(219,234,254,.6);
+          --auth-blob-three:rgba(147,197,253,.35);
+          --auth-blob-four:rgba(147,197,253,.4);
+        }
 
         /* ── scrollbar hide ── */
         .ll-scroll::-webkit-scrollbar{display:none}
@@ -252,6 +261,17 @@ export default function LoginPage() {
         .feat-card:hover{transform:translateY(-6px);box-shadow:0 12px 30px rgba(37,99,235,.18)}
         .ll-features-header{display:flex;align-items:flex-start;justify-content:space-between;gap:32px;padding:40px 48px 24px}
         .ll-features-header,.ll-features-slide .feat-grid,.ll-journey{flex-shrink:0}
+        .ll-features-header,.ll-features-slide .feat-grid,.ll-journey{position:relative;z-index:1}
+        .ll-ambient-orb{position:absolute;z-index:0;pointer-events:none;border-radius:50%;will-change:transform}
+        .ll-ambient-orb--feature-a{top:72px;right:24px;width:clamp(240px,30vw,440px);aspect-ratio:1;background:radial-gradient(circle,var(--ambient-feature-a) 0%,transparent 70%);animation:llAmbientDrift 24s ease-in-out infinite alternate}
+        .ll-ambient-orb--feature-b{bottom:28px;left:24px;width:clamp(260px,35vw,520px);aspect-ratio:1;background:radial-gradient(circle,var(--ambient-feature-b) 0%,transparent 72%);animation:llAmbientDrift 31s ease-in-out infinite alternate-reverse}
+        .ll-ambient-orb--form{bottom:-170px;left:-180px;width:480px;height:480px;background:radial-gradient(circle,var(--ambient-form) 0%,transparent 72%);animation:llAmbientDrift 28s ease-in-out infinite alternate-reverse}
+        .ll-auth-blob{will-change:transform;animation:llAmbientDrift 26s ease-in-out infinite alternate}
+        .ll-auth-blob--two{animation-duration:32s;animation-direction:alternate-reverse}
+        .ll-auth-blob--three{animation-duration:29s}
+        .ll-auth-blob--four{animation-duration:22s;animation-direction:alternate-reverse}
+        @keyframes llAmbientDrift{from{transform:translate3d(-14px,10px,0)}to{transform:translate3d(18px,-14px,0)}}
+        @media(prefers-reduced-motion:reduce){.ll-ambient-orb,.ll-auth-blob{animation:none;will-change:auto}}
         .ll-features-title{font-size:clamp(38px,3.4vw,64px);font-weight:800;color:var(--navy);line-height:1.1;margin:0;letter-spacing:-.03em}
         .ll-features-intro{flex:0 0 320px;font-size:17px;color:var(--muted);line-height:1.75;margin:0;text-align:right;padding-top:16px;font-family:'DM Sans',sans-serif}
         .ll-journey{margin:auto 48px;padding:20px 0 32px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center}
@@ -448,8 +468,8 @@ export default function LoginPage() {
             (B) SLIDE 2 — FEATURES
         ════════════════════════════════ */}
         <div className="ll-slide ll-features-slide" style={{ background:'var(--page-bg)',display:'flex',flexDirection:'column',paddingTop:64,boxSizing:'border-box',position:'relative',height:'100vh',overflowY:'auto',overflowX:'hidden' }}>
-          {/* subtle blob top-right */}
-          <div style={{ position:'absolute',top:-100,right:-80,width:380,height:380,borderRadius:'50%',background:'rgba(37,99,235,.06)',pointerEvents:'none' }} />
+          <div className="ll-ambient-orb ll-ambient-orb--feature-a" aria-hidden="true" />
+          <div className="ll-ambient-orb ll-ambient-orb--feature-b" aria-hidden="true" />
 
           <div className="ll-features-header">
             <h1 className={`ll-features-title ${activeSlide===1?'ll-up':''}`}>
@@ -500,12 +520,13 @@ export default function LoginPage() {
 
           {/* ── LEFT — form panel (white -> very light blue) ── */}
           <div className={`ll-auth-form-side ${activeSlide===2?'ll-up':''}`} style={{ flex:'0 0 50%',display:'flex',alignItems:'center',justifyContent:'center',padding:'32px 52px',boxSizing:'border-box',background:'linear-gradient(160deg,#ffffff 0%,#f0f6ff 100%)',position:'relative',zIndex:2 }}>
+            <div className="ll-ambient-orb ll-ambient-orb--form" aria-hidden="true" />
             {/* dot grid top-left of form side */}
             {Array.from({length:9},(_,i)=>(
               <div key={'fl'+i} style={{ position:'absolute',left:20+(i%3)*20,top:72+Math.floor(i/3)*20,width:5,height:5,borderRadius:'50%',background:'rgba(37,99,235,.15)',pointerEvents:'none' }} />
             ))}
 
-            <div style={{ width:'100%',maxWidth:390 }}>
+            <div style={{ width:'100%',maxWidth:390,position:'relative',zIndex:1 }}>
               {authMode==='login' ? (
                 <>
                   <div style={{ width:36,height:4,background:'var(--blue-600)',borderRadius:2,marginBottom:18 }} />
@@ -730,11 +751,11 @@ export default function LoginPage() {
           <div className={`ll-auth-info-side ${activeSlide===2?'ll-up ll-d1':''}`} style={{ flex:'0 0 50%',position:'relative',overflow:'hidden',background:'linear-gradient(145deg,#dbeafe 0%,#eff6ff 50%,#e8f4ff 100%)',display:'flex',flexDirection:'column',justifyContent:'center',padding:'40px 56px',boxSizing:'border-box',zIndex:1 }}>
 
             {/* background organic blobs */}
-            <div style={{ position:'absolute',top:-100,right:-80,width:500,height:500,borderRadius:'50%',background:'rgba(191,219,254,.55)',pointerEvents:'none' }} />
-            <div style={{ position:'absolute',top:'25%',right:-30,width:340,height:340,borderRadius:'50%',background:'rgba(219,234,254,.6)',pointerEvents:'none' }} />
-            <div style={{ position:'absolute',bottom:-80,right:40,width:260,height:260,borderRadius:'50%',background:'rgba(147,197,253,.35)',pointerEvents:'none' }} />
+            <div className="ll-auth-blob" aria-hidden="true" style={{ position:'absolute',top:-100,right:-80,width:500,height:500,borderRadius:'50%',background:'var(--auth-blob-one)',pointerEvents:'none' }} />
+            <div className="ll-auth-blob ll-auth-blob--two" aria-hidden="true" style={{ position:'absolute',top:'25%',right:-30,width:340,height:340,borderRadius:'50%',background:'var(--auth-blob-two)',pointerEvents:'none' }} />
+            <div className="ll-auth-blob ll-auth-blob--three" aria-hidden="true" style={{ position:'absolute',bottom:-80,right:40,width:260,height:260,borderRadius:'50%',background:'var(--auth-blob-three)',pointerEvents:'none' }} />
             {/* small accent circle mid-right */}
-            <div style={{ position:'absolute',top:'52%',right:'18%',width:55,height:55,borderRadius:'50%',background:'rgba(147,197,253,.4)',pointerEvents:'none' }} />
+            <div className="ll-auth-blob ll-auth-blob--four" aria-hidden="true" style={{ position:'absolute',top:'52%',right:'18%',width:55,height:55,borderRadius:'50%',background:'var(--auth-blob-four)',pointerEvents:'none' }} />
 
             {/* sparkles */}
             <svg style={{ position:'absolute',top:'36%',right:'30%',pointerEvents:'none' }} width="16" height="16" viewBox="0 0 26 26"><path d="M13 0 L14.3 11.7 L26 13 L14.3 14.3 L13 26 L11.7 14.3 L0 13 L11.7 11.7 Z" fill="#3b82f6" opacity=".55"/></svg>
