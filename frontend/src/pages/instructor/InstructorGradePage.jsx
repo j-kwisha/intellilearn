@@ -3,24 +3,6 @@ import api from '../../services/api';
 import { formatGrade, escapeHtml } from '../../services/gradePrint';
 import EssayGradingDetails from '../../components/EssayGradingDetails';
 
-function csvCell(value) {
-  const text = String(value ?? '');
-  const safeText = /^[\s]*[=+\-@]/.test(text) ? `'${text}` : text;
-  return `"${safeText.replaceAll('"', '""')}"`;
-}
-
-function downloadCsv(filename, headers, rows) {
-  const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
-  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 async function downloadXlsx(filename, sheetName, headers, rows, columnWidths) {
   const XLSX = await import('xlsx');
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -70,33 +52,6 @@ export default function InstructorGradePage() {
     } catch (err) { console.error(err); }
   };
 
-  const exportCourseGrades = async () => {
-    if (!selectedCourse || exportingCourseGrades) return;
-    setExportingCourseGrades('csv');
-    try {
-      const response = await api.get(`/courses/${selectedCourse}/grades`);
-      const course = courses.find(item => item.id === selectedCourse);
-      const rows = (response.data.grades || []).map(grade => [
-        `${grade.user?.first_name || ''} ${grade.user?.last_name || ''}`.trim(),
-        grade.user?.email,
-        grade.quiz_average,
-        grade.exam_average,
-        grade.activity_average,
-        grade.overall_grade,
-        grade.remarks,
-      ]);
-      const headers = [
-        'Student Name', 'Email', 'Quiz Average (%)', 'Exam Average (%)',
-        'Activity Average (%)', 'Overall Grade (%)', 'Remarks',
-      ];
-      downloadCsv(`${filenamePart(course?.name)}-course-grades.csv`, headers, rows);
-    } catch (error) {
-      alert(error.response?.data?.message || 'Could not export course grades. Please try again.');
-    } finally {
-      setExportingCourseGrades('');
-    }
-  };
-
   const exportCourseGradesXlsx = async () => {
     if (!selectedCourse || exportingCourseGrades) return;
     setExportingCourseGrades('xlsx');
@@ -121,23 +76,6 @@ export default function InstructorGradePage() {
     } finally {
       setExportingCourseGrades('');
     }
-  };
-
-  const exportAssessmentGrades = () => {
-    const course = courses.find(item => item.id === selectedCourse);
-    const assessment = assessments.find(item => item.id === selectedAssessment);
-    const rows = submissions.map(submission => [
-      `${submission.user?.first_name || ''} ${submission.user?.last_name || ''}`.trim(),
-      submission.user?.email,
-      submission.attempt_number,
-      submission.percentage,
-      submission.status,
-      submission.submitted_at ? new Date(submission.submitted_at).toLocaleString('en-PH') : '',
-    ]);
-    const headers = [
-      'Student Name', 'Email', 'Attempt', 'Score (%)', 'Status', 'Submitted At',
-    ];
-    downloadCsv(`${filenamePart(course?.name)}-${filenamePart(assessment?.title)}-grades.csv`, headers, rows);
   };
 
   const exportAssessmentGradesXlsx = async () => {
@@ -180,9 +118,6 @@ export default function InstructorGradePage() {
           <h3 style={{ fontFamily:'Poppins,sans-serif', fontWeight:700, fontSize:'17px', color:'var(--instr-ink)', margin:0 }}>Course Grades</h3>
           {selectedCourse && (
             <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'flex-end', gap:8 }}>
-              <button className="instr-pill-btn" onClick={exportCourseGrades} disabled={exportingCourseGrades}>
-                {exportingCourseGrades === 'csv' ? 'Preparing CSV...' : 'Export Course Grades CSV'}
-              </button>
               <button className="instr-pill-btn" onClick={exportCourseGradesXlsx} disabled={exportingCourseGrades}>
                 {exportingCourseGrades === 'xlsx' ? 'Preparing Excel...' : 'Export Excel (.xlsx)'}
               </button>
@@ -244,10 +179,7 @@ export default function InstructorGradePage() {
         </div>
         {selectedAssessment && (
           <>
-          <button className="instr-pill-btn" style={{ marginLeft:'auto' }} onClick={exportAssessmentGrades}>
-            Export Assessment CSV
-          </button>
-          <button className="instr-pill-btn" onClick={exportAssessmentGradesXlsx}>
+          <button className="instr-pill-btn" style={{ marginLeft:'auto' }} onClick={exportAssessmentGradesXlsx}>
             Export Excel (.xlsx)
           </button>
           <button className="instr-pill-btn"
