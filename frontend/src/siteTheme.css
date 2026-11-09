@@ -9,10 +9,6 @@ body[data-site-theme="dark"] .ll-page {
   --blue-600: #afbdcf;
   --muted: #c0beb8;
   --page-bg: #1b1c1e;
-  --journey-bg: #292b2e;
-  --journey-border: #484a4d;
-  --journey-number-bg: #39465a;
-  --journey-number-ink: #d6e2f1;
   color: #e3e1dc;
 }
 body[data-site-theme="dark"] .ll-navbar { background: #242629 !important; border-color: #414347 !important; }

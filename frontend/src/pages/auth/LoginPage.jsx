@@ -32,12 +32,6 @@ const features = [
   { img: imgLMS,          icon: <SchoolIcon sx={{ fontSize:22, color:'#fff' }} />, title: 'Complete LMS Tools', desc: 'Everything in one platform. (Course management, Assignments & quizzes, Progress tracking, Announcements)' },
 ];
 
-const journeySteps = [
-  { title: 'Explore', description: 'Find your lessons and course materials.' },
-  { title: 'Learn', description: 'Practice and get feedback as you go.' },
-  { title: 'Succeed', description: 'Follow your progress and keep improving.' },
-];
-
 export default function LoginPage() {
   const { login, completeAdminLogin, register } = useAuth();
   const [darkMode, toggleTheme] = useSiteTheme();
@@ -260,17 +254,11 @@ export default function LoginPage() {
         .ll-features-header,.ll-features-slide .feat-grid,.ll-journey{flex-shrink:0}
         .ll-features-title{font-size:clamp(38px,3.4vw,64px);font-weight:800;color:var(--navy);line-height:1.1;margin:0;letter-spacing:-.03em}
         .ll-features-intro{flex:0 0 320px;font-size:17px;color:var(--muted);line-height:1.75;margin:0;text-align:right;padding-top:16px;font-family:'DM Sans',sans-serif}
-        .ll-journey{margin:auto 48px 36px;padding:20px 26px 22px;background:var(--journey-bg,#f8fbff);border:1px solid var(--journey-border,#cfe0f8);border-radius:22px;box-shadow:0 6px 24px rgba(37,99,235,.06)}
-        .ll-journey-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px}
-        .ll-journey-eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--blue-600);margin:0 0 3px}
-        .ll-journey-title{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.2;color:var(--navy);margin:0}
-        .ll-journey-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
-        .ll-journey-step{display:flex;align-items:flex-start;gap:12px;min-width:0}
-        .ll-journey-number{display:flex;align-items:center;justify-content:center;flex:0 0 32px;height:32px;border-radius:50%;background:var(--journey-number-bg,#e2edff);color:var(--journey-number-ink,#1e40af);font-size:12px;font-weight:800}
-        .ll-journey-step strong{display:block;color:var(--navy);font-size:14px;margin:0 0 2px}
-        .ll-journey-step p{color:var(--muted);font-size:12.5px;line-height:1.45;margin:0}
-        .ll-journey-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex-shrink:0;border:0;border-radius:999px;padding:10px 17px;background:#2457cb;color:#fff;font:700 12.5px 'Plus Jakarta Sans',sans-serif;cursor:pointer;box-shadow:0 5px 16px rgba(37,99,235,.18);transition:background .15s,transform .15s}
-        .ll-journey-cta:hover{background:#1d47a5;transform:translateY(-2px)}
+        .ll-journey{margin:auto 48px;padding:20px 0 32px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center}
+        .ll-journey-title{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:clamp(14px,2.2vw,38px);font:italic 700 clamp(34px,3.6vw,66px)/1.2 'Poppins',sans-serif;letter-spacing:-.035em;color:var(--navy);margin:0}
+        .ll-journey-separator{display:block;flex:0 0 clamp(12px,1.1vw,19px);width:clamp(12px,1.1vw,19px);height:clamp(12px,1.1vw,19px);border:2px solid var(--blue-600);border-radius:50%}
+        .ll-journey-cta{border:0;border-bottom:2px solid var(--blue-600);background:transparent;color:var(--navy);padding:9px 2px;font:700 15px 'Plus Jakarta Sans',sans-serif;letter-spacing:.08em;cursor:pointer;transition:color .15s,transform .15s}
+        .ll-journey-cta:hover{color:var(--blue-600);transform:translateY(-2px)}
         .ll-journey-cta:focus-visible{outline:3px solid #7ba7ff;outline-offset:3px}
 
         /* ── inputs ── */
@@ -315,9 +303,9 @@ export default function LoginPage() {
           .ll-features-intro{font-size:15px}
           .feat-grid{padding-left:20px!important;padding-right:20px!important}
           .feat-card{flex:0 0 100%!important;width:100%!important}
-          .ll-journey{margin:0 20px 28px;padding:20px}
-          .ll-journey-heading{align-items:flex-start;flex-direction:column}
-          .ll-journey-steps{grid-template-columns:1fr;gap:16px}
+          .ll-journey{margin:16px 20px 28px;padding:20px 0}
+          .ll-journey-title{font-size:clamp(20px,5vw,28px);gap:8px}
+          .ll-journey-separator{flex-basis:10px;width:10px;height:10px}
         }
       `}</style>
 
@@ -494,23 +482,14 @@ export default function LoginPage() {
           </div>
 
           <section className={`ll-journey ${activeSlide===1?'ll-up ll-d2':''}`} aria-label="How IntelliLearn works">
-            <div className="ll-journey-heading">
-              <div>
-                <p className="ll-journey-eyebrow">HOW IT WORKS</p>
-                <h2 className="ll-journey-title">Explore. Learn. Succeed.</h2>
-              </div>
-              <button className="ll-journey-cta" onClick={() => { scrollTo(2); setAuthMode('signup'); }}>
-                Start learning <ArrowForwardIcon sx={{ fontSize: 16 }} />
-              </button>
-            </div>
-            <div className="ll-journey-steps">
-              {journeySteps.map((step, index) => (
-                <div className="ll-journey-step" key={step.title}>
-                  <span className="ll-journey-number" aria-hidden="true">{index + 1}</span>
-                  <div><strong>{step.title}</strong><p>{step.description}</p></div>
-                </div>
-              ))}
-            </div>
+            <h2 className="ll-journey-title" aria-label="Explore. Learn. Succeed.">
+              <span>Explore</span><span className="ll-journey-separator" aria-hidden="true" />
+              <span>Learn</span><span className="ll-journey-separator" aria-hidden="true" />
+              <span>Succeed</span>
+            </h2>
+            <button className="ll-journey-cta" onClick={() => { scrollTo(2); setAuthMode('signup'); }}>
+              GET STARTED
+            </button>
           </section>
         </div>
 
