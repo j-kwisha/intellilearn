@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Assessment;
+use App\Models\CalendarEvent;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Question;
@@ -181,6 +182,7 @@ class AssessmentController extends Controller
 
         $assessment = $course->assessments()->create($validated);
         \App\Models\ActivityLog::record($user, 'assessment.created', $course, 'assessment', $assessment->id, ['title' => $assessment->title]);
+        $this->syncAssessmentCalendarEvent($assessment, $course, $user->id);
 
         // Handle file upload for paper_based assessments
         if ($validated['type'] === 'paper_based' && $request->hasFile('file')) {
@@ -290,6 +292,7 @@ class AssessmentController extends Controller
             }
         }
         $assessment->update($validated);
+        $assessment->refresh();
 
         // Handle file upload for paper_based assessments
         if ($request->hasFile('file')) {
@@ -302,6 +305,7 @@ class AssessmentController extends Controller
         // Recalculate total_points from questions
         $totalPoints = $assessment->questions()->sum('points');
         $assessment->update(['total_points' => $totalPoints]);
+        $this->syncAssessmentCalendarEvent($assessment, $course, $user->id);
         \App\Models\ActivityLog::record($user, 'assessment.updated', $course, 'assessment', $assessment->id, ['title' => $assessment->title]);
 
         return response()->json([
@@ -1032,6 +1036,42 @@ class AssessmentController extends Controller
         if ($open && $due && \Carbon\Carbon::parse($due)->lte(\Carbon\Carbon::parse($open))) {
             throw ValidationException::withMessages(['due_date' => 'The due date must be after the opening date.']);
         }
+    }
+
+    private function syncAssessmentCalendarEvent(Assessment $assessment, Course $course, int $userId): void
+    {
+        $date = $assessment->due_date ?? $assessment->available_from;
+        if (!$date) {
+            CalendarEvent::where('assessment_id', $assessment->id)->delete();
+            return;
+        }
+
+        $eventType = match ($assessment->type) {
+            'long_exam' => 'exam',
+            'individual_activity' => 'activity',
+            default => 'quiz',
+        };
+        $when = $assessment->due_date ? 'Due' : 'Available';
+        $color = match ($eventType) {
+            'exam' => '#918080',
+            'activity' => '#7d9182',
+            default => '#7c879a',
+        };
+
+        CalendarEvent::updateOrCreate(
+            ['assessment_id' => $assessment->id],
+            [
+                'course_id' => $course->id,
+                'user_id' => $userId,
+                'title' => "{$when}: {$assessment->title}",
+                'description' => $assessment->description,
+                'event_type' => $eventType,
+                'color' => $color,
+                'start_date' => $date,
+                'end_date' => null,
+                'all_day' => false,
+            ],
+        );
     }
 
 }

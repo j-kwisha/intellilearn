@@ -26,11 +26,11 @@ export default function InstructorCreateAssessmentPage() {
     available_from: '', due_date: '', score_visibility: 'immediate', assessment_stage: 'regular',
     passing_score: '', allow_late_submissions: false, shuffle_questions: false, shuffle_choices: false,
   });
-  const [addToCalendar, setAddToCalendar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [finishing, setFinishing] = useState(false);
-  const publishOnCompletion = assessmentPublication(form);
+  const isIndividualActivity = form.type === 'individual_activity';
+  const publishOnCompletion = isIndividualActivity || assessmentPublication(form);
 
   // Questions
   const [questions, setQuestions] = useState([newQuestion()]);
@@ -120,6 +120,18 @@ export default function InstructorCreateAssessmentPage() {
       const data = { ...form };
       // Paper-based now describes the source: students take the imported quiz online.
       if (data.type === 'paper_based') data.type = 'quiz';
+      if (data.type === 'individual_activity') {
+        data.lesson_id = null;
+        data.topic = null;
+        delete data.time_limit_minutes;
+        data.max_attempts = 1;
+        data.assessment_stage = 'regular';
+        data.passing_score = null;
+        data.allow_late_submissions = false;
+        data.shuffle_questions = false;
+        data.shuffle_choices = false;
+        data.score_visibility = 'immediate';
+      }
       if (!data.time_limit_minutes) delete data.time_limit_minutes;
       data.passing_score = data.passing_score === '' ? null : Number(data.passing_score);
       data.available_from = toApiDate(data.available_from);
@@ -139,16 +151,6 @@ export default function InstructorCreateAssessmentPage() {
         setAssessmentId(created.id);
       }
       setAssessmentTitle(created.title);
-
-      if (!assessmentId && addToCalendar && form.due_date) {
-        await api.post(`/courses/${courseId}/calendar`, {
-          title: `📝 ${created.title}`,
-          event_type: form.type === 'long_exam' ? 'exam' : 'quiz',
-          start_date: data.due_date,
-          description: `${data.type.replace(/_/g, ' ')}`,
-          color: form.type === 'long_exam' ? '#ef4444' : '#f59e0b',
-        });
-      }
 
       setStep(form.type === 'paper_based' && !pdfImport ? 'import_pdf' : 'questions');
     } catch (err) {
@@ -464,7 +466,7 @@ export default function InstructorCreateAssessmentPage() {
                 onChange={e => setForm({ ...form, title: e.target.value })}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isIndividualActivity ? '1fr' : '1fr 1fr', gap: 16 }}>
               <div>
                 <label style={S.label}>Type *</label>
                 <select style={{ ...S.input, background: 'white' }} value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
@@ -474,16 +476,17 @@ export default function InstructorCreateAssessmentPage() {
                   <option value="paper_based">📄 Paper-Based (Import quiz from PDF)</option>
                 </select>
               </div>
-              <div>
+              {!isIndividualActivity && <div>
                 <label style={S.label}>Topic Tag</label>
                 <input style={S.input} type="text" placeholder="e.g. html_basics" value={form.topic}
                   onChange={e => setForm({ ...form, topic: e.target.value })} />
-              </div>
+              </div>}
             </div>
 
             <label style={S.label}>Instructions / description
               <textarea style={S.input} rows={3} value={form.description} onChange={e => setForm({...form, description:e.target.value})} />
             </label>
+            <div style={{ display: isIndividualActivity ? 'none' : 'contents' }}>
             <label style={S.label}>Linked lesson
               <select style={S.input} value={form.lesson_id} onChange={e => setForm({...form, lesson_id:e.target.value})}>
                 <option value="">No linked lesson</option>
@@ -578,6 +581,8 @@ export default function InstructorCreateAssessmentPage() {
               </div>
             </div>
 
+            </div>
+
             {/* Scheduling */}
             <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, padding: 20, background: '#f8fafc' }}>
               <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#334155', marginBottom: 14, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -597,16 +602,7 @@ export default function InstructorCreateAssessmentPage() {
                   <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>Deadline for submissions.</p>
                 </div>
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginTop: 14 }}>
-                <input type="checkbox" checked={addToCalendar} onChange={e => setAddToCalendar(e.target.checked)}
-                  style={{ width: 16, height: 16, accentColor: '#0d9488' }} />
-                <span style={{ fontSize: '0.875rem', color: '#334155', fontWeight: 500 }}>
-                  Add due date to students' calendar
-                </span>
-              </label>
-              {addToCalendar && !form.due_date && (
-                <p style={{ fontSize: '0.78rem', color: '#f59e0b', marginTop: 6 }}>⚠ Set a due date above to add it to the calendar.</p>
-              )}
+              <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 14 }}>Scheduled assessments appear in students' calendars automatically.</p>
             </div>
             <div style={{ display: 'flex', gap: 12, paddingTop: 8 }}>
               <button type="submit" disabled={saving} style={{ ...S.btn, opacity: saving ? 0.7 : 1 }}>

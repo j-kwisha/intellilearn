@@ -28,6 +28,10 @@ class CalendarController extends Controller
                 ->where('status', 'active')
                 ->pluck('course_id');
             $query->whereIn('course_id', $courseIds);
+            $query->where(function ($events) {
+                $events->whereNull('assessment_id')
+                    ->orWhereHas('assessment', fn ($assessment) => $assessment->where('is_published', true));
+            });
         } elseif ($user->isInstructor()) {
             $query->whereHas('course', fn($q) => $q->where('instructor_id', $user->id));
         }

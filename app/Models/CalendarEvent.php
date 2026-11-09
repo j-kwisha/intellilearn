@@ -11,6 +11,7 @@ class CalendarEvent extends Model
 
     protected $fillable = [
         'course_id',
+        'assessment_id',
         'user_id',
         'title',
         'description',
@@ -38,5 +39,10 @@ class CalendarEvent extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function assessment()
+    {
+        return $this->belongsTo(Assessment::class);
     }
 }

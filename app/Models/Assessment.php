@@ -94,4 +94,9 @@ class Assessment extends Model
     {
         return $this->hasMany(Submission::class);
     }
+
+    public function calendarEvent()
+    {
+        return $this->hasOne(CalendarEvent::class);
+    }
 }

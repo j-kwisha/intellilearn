@@ -109,3 +109,9 @@ The instructor account password is `password` (not `Admin123!`) because the data
 - Course deletion requires explicit confirmation
 - Instructors can only delete their own courses
 - All tokens are invalidated after password reset
+
+### Assessment calendar sync and dark-mode readability (2026-11-10)
+- Scheduled assessments now create or update a linked calendar event automatically; students see it after the assessment is published. Removing all schedule dates removes the linked event.
+- Removed the optional calendar checkbox from instructor assessment setup.
+- Individual activities show only activity essentials and schedule controls; quiz-only options are hidden and normalized before saving.
+- Softened dark-mode surfaces and accent colors and improved contrast for student pages, chatbot messages and inputs, and workspace navigation.
