@@ -17,7 +17,7 @@ function MarkdownText({ text }) {
       {lines.map((line, i) => {
         if (/^[-*]\s/.test(line)) return (
           <div key={i} style={{ display: 'flex', gap: 6 }}>
-            <span style={{ color: '#6366f1', fontWeight: 700, flexShrink: 0 }}>•</span>
+            <span className="chat-list-marker" style={{ color: '#6366f1', fontWeight: 700, flexShrink: 0 }}>•</span>
             <span>{renderInline(line.replace(/^[-*]\s/, ''))}</span>
           </div>
         );
@@ -25,7 +25,7 @@ function MarkdownText({ text }) {
           const num = line.match(/^(\d+)\./)[1];
           return (
             <div key={i} style={{ display: 'flex', gap: 6 }}>
-              <span style={{ color: '#6366f1', fontWeight: 700, flexShrink: 0 }}>{num}.</span>
+              <span className="chat-list-marker" style={{ color: '#6366f1', fontWeight: 700, flexShrink: 0 }}>{num}.</span>
               <span>{renderInline(line.replace(/^\d+\.\s/, ''))}</span>
             </div>
           );
@@ -88,10 +88,6 @@ export default function AiChatbot() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-  });
   const bottomRef = useRef(null);
   const greetingTimer = useRef(null);
   const dismissTimer = useRef(null);
@@ -152,20 +148,6 @@ export default function AiChatbot() {
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, open]);
-
-  useEffect(() => {
-    const mediaQuery = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-color-scheme: dark)') : null;
-    if (!mediaQuery) return;
-
-    const onChange = (event) => setIsDarkMode(event.matches);
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', onChange);
-      return () => mediaQuery.removeEventListener('change', onChange);
-    }
-
-    mediaQuery.addListener(onChange);
-    return () => mediaQuery.removeListener(onChange);
-  }, []);
 
   const handleToggle = () => {
     // Bounce animation on open
@@ -247,9 +229,9 @@ export default function AiChatbot() {
         {/* Chat window */}
         {open && (
           <div className="chat-window" style={{
-            width: 340, height: 460, background: isDarkMode ? '#0f172a' : '#fff',
-            borderRadius: 20, boxShadow: isDarkMode ? '0 12px 40px rgba(15,23,42,0.42)' : '0 12px 40px rgba(0,0,0,0.18)',
-            border: isDarkMode ? '1px solid rgba(148,163,184,0.2)' : '1px solid #e2e8f0', display: 'flex', flexDirection: 'column',
+            width: 340, height: 460, background: '#fff',
+            borderRadius: 20, boxShadow: '0 12px 40px rgba(0,0,0,0.18)',
+            border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column',
             overflow: 'hidden',
           }}>
             {/* Header */}
@@ -275,17 +257,15 @@ export default function AiChatbot() {
             </div>
 
             {/* Messages */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {messages.map((msg, idx) => (
                 <div key={idx} style={{ display: 'flex', justifyContent: msg.from === 'user' ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 8 }}>
                   {msg.from === 'bot' && <Avatar size={26} />}
-                  <div style={{
+                  <div className={msg.from === 'bot' ? 'chat-bot-bubble' : 'chat-user-bubble'} style={{
                     maxWidth: '78%', padding: '9px 13px', borderRadius: msg.from === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                     fontSize: 13, lineHeight: 1.6,
-                    background: msg.from === 'user'
-                      ? 'linear-gradient(135deg, #4f46e5, #7c3aed)'
-                      : isDarkMode ? '#1e293b' : '#f1f5f9',
-                    color: msg.from === 'user' ? '#fff' : isDarkMode ? '#e2e8f0' : '#334155',
+                    background: msg.from === 'user' ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : '#f1f5f9',
+                    color: msg.from === 'user' ? '#fff' : '#334155',
                     boxShadow: msg.from === 'user' ? '0 2px 8px rgba(79,70,229,0.25)' : 'none',
                   }}>
                     {msg.from === 'user' ? msg.text : <MarkdownText text={msg.text} />}
@@ -297,7 +277,7 @@ export default function AiChatbot() {
               {loading && (
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
                   <Avatar size={26} />
-                  <div style={{ background: isDarkMode ? '#1e293b' : '#f1f5f9', padding: '9px 13px', borderRadius: '16px 16px 16px 4px' }}>
+                  <div className="chat-loading-bubble" style={{ background: '#f1f5f9', padding: '9px 13px', borderRadius: '16px 16px 16px 4px' }}>
                     <TypingDots />
                   </div>
                 </div>
@@ -306,7 +286,7 @@ export default function AiChatbot() {
             </div>
 
             {/* Input */}
-            <div style={{ padding: '10px 12px', borderTop: isDarkMode ? '1px solid rgba(148,163,184,0.2)' : '1px solid #e2e8f0', display: 'flex', gap: 8, background: isDarkMode ? '#111827' : '#fafafa' }}>
+            <div className="chat-input-area" style={{ padding: '10px 12px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, background: '#fafafa' }}>
               <input
                 className="chat-input"
                 value={input}
@@ -315,9 +295,8 @@ export default function AiChatbot() {
                 placeholder="Type a question..."
                 style={{
                   flex: 1, padding: '9px 13px', borderRadius: 10,
-                  border: isDarkMode ? '1.5px solid rgba(148,163,184,0.2)' : '1.5px solid #e2e8f0', fontSize: 13, outline: 'none',
-                  fontFamily: "'DM Sans', sans-serif", background: isDarkMode ? '#0b1220' : 'white',
-                  color: isDarkMode ? '#e2e8f0' : '#0f172a', WebkitTextFillColor: isDarkMode ? '#e2e8f0' : '#0f172a',
+                  border: '1.5px solid #e2e8f0', fontSize: 13, outline: 'none',
+                  fontFamily: "'DM Sans', sans-serif", background: 'white', color: '#334155',
                   transition: 'border-color 0.2s, box-shadow 0.2s',
                 }}
               />
@@ -353,7 +332,7 @@ export default function AiChatbot() {
             </button>
             👋 <strong>Hi there!</strong> Need help? Ask me anything about your courses!
             {/* Tail */}
-            <div style={{
+            <div className="chat-greeting-tail" style={{
               position: 'absolute', bottom: -8, right: 22,
               width: 0, height: 0,
               borderLeft: '8px solid transparent',

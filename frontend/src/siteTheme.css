@@ -65,12 +65,22 @@ body[data-site-theme="dark"] .instr-main [style*="background: #f8fafc"],
 body[data-site-theme="dark"] .instr-main [style*="background: rgb(248, 250, 252)"] {
   background: #1a3029 !important; border-color: #3b574c !important;
 }
+body[data-site-theme="dark"] .instr-main [style*="background: #fff;"],
+body[data-site-theme="dark"] .instr-main [style$="background: #fff"] {
+  background: #1a3029 !important; border-color: #3b574c !important;
+}
+body[data-site-theme="dark"] .instr-main [style*="background: rgb(240, 253, 250)"],
+body[data-site-theme="dark"] .instr-main [style*="background: #f0fdfa"] {
+  background: #214537 !important; border-color: #4a8066 !important;
+}
 body[data-site-theme="dark"] .instr-main [style*="color: rgb(15, 23, 42)"],
 body[data-site-theme="dark"] .instr-main [style*="color: #0f172a"],
 body[data-site-theme="dark"] .instr-main [style*="color: rgb(71, 85, 105)"],
 body[data-site-theme="dark"] .instr-main [style*="color: #475569"] { color: #f1f7f4 !important; }
 body[data-site-theme="dark"] .instr-main [style*="color: rgb(100, 116, 139)"],
 body[data-site-theme="dark"] .instr-main [style*="color: #64748b"] { color: #b9cfc3 !important; }
+body[data-site-theme="dark"] .instr-main [style*="color: rgb(51, 65, 85)"],
+body[data-site-theme="dark"] .instr-main [style*="color: #334155"] { color: #e3f3e9 !important; }
 body[data-site-theme="dark"] .instr-main label[style*="cursor: pointer"] span[style] { color: #e3f3e9 !important; }
 body[data-site-theme="dark"] :is(.adm-action-menu, .instr-action-menu, .search-dropdown) { background: #20304b; border-color: #475978; }
 body[data-site-theme="dark"] :is(.adm-row-menu, .instr-row-menu) { background: #24334e; border-color: #526381; color: #e4ecff; }
@@ -80,7 +90,7 @@ body[data-site-theme="dark"] :is(.adm-courses-table, .instr-students-table, .ins
 body[data-site-theme="dark"] :is(.adm-courses-table, .instr-students-table) tbody tr:hover,
 body[data-site-theme="dark"] .instr-risk-row:hover { background: #263a52; }
 body[data-site-theme="dark"] :is(.adm-form-input, .instr-form-input, .adm-content input:not([type="radio"]):not([type="checkbox"]), .adm-content textarea, .adm-content select:not(.adm-role-badge), .instr-main input:not([type="radio"]):not([type="checkbox"]), .instr-main textarea, .instr-main select) {
-  background-color: #101d31; color: #f1f4ff; border-color: #526381;
+  background-color: #101d31 !important; color: #f1f4ff !important; border-color: #526381;
 }
 body[data-site-theme="dark"] :is(.adm-content, .instr-main) :is(input, textarea)::placeholder { color: #aebcda; opacity: 1; }
 body[data-site-theme="dark"] :is(.adm-content, .instr-main) label { color: #e4ecff; }
@@ -119,6 +129,22 @@ body[data-site-theme="dark"] :is(.adm-content, .instr-main) .profile-settings :i
 body[data-site-theme="dark"] :is(.adm-content, .instr-main) .profile-settings .profile-password-toggle { color: #dce6f9; }
 body[data-site-theme="dark"] :is(.adm-content, .instr-main) .profile-settings .profile-password-toggle:hover { background: #2d3f5e; }
 body[data-site-theme="dark"] :is(.adm-content, .instr-main) .profile-settings .profile-role { color: #c4dbff; }
+body[data-site-theme="dark"] .admin-reports :is(.report-filters, .report-stat),
+body[data-site-theme="dark"] .admin-activity-logs .adm-table-wrap {
+  background: #1b2942; color: #e4ecff; border-color: #3b4b6b;
+}
+body[data-site-theme="dark"] .admin-reports button:not(.adm-new-course-btn),
+body[data-site-theme="dark"] .admin-activity-logs button {
+  background: #24334e; color: #e4ecff; border-color: #526381;
+}
+body[data-site-theme="dark"] .admin-reports .report-error,
+body[data-site-theme="dark"] .admin-activity-logs .activity-log-error {
+  background: #4b2934; color: #ffbdc5;
+}
+body[data-site-theme="dark"] .admin-reports :is(.report-warning, .report-risk--unavailable) { background: #4b3926; color: #ffe0a2; }
+@media (max-width: 760px) {
+  body[data-site-theme="dark"]:has(.admin-reports) .adm-app { background: #0d1528; }
+}
 @media (max-width: 760px) {
   .ll-navbar { overflow-x: auto; gap: 4px; padding: 0 12px !important; }
   .ll-navbar .student-theme-toggle { flex: none; }

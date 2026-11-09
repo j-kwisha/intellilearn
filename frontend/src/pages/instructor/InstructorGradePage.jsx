@@ -3,6 +3,28 @@ import api from '../../services/api';
 import { formatGrade, escapeHtml } from '../../services/gradePrint';
 import EssayGradingDetails from '../../components/EssayGradingDetails';
 
+function csvCell(value) {
+  const text = String(value ?? '');
+  const safeText = /^[\s]*[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safeText.replaceAll('"', '""')}"`;
+}
+
+function downloadCsv(filename, headers, rows) {
+  const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function filenamePart(value) {
+  return String(value || 'course').normalize('NFKD').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'course';
+}
+
 export default function InstructorGradePage() {
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
@@ -11,6 +33,7 @@ export default function InstructorGradePage() {
   const [submissions, setSubmissions] = useState([]);
   const [gradingSubmission, setGradingSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [exportingCourseGrades, setExportingCourseGrades] = useState(false);
 
   useEffect(() => {
     api.get('/courses')
@@ -38,6 +61,48 @@ export default function InstructorGradePage() {
     } catch (err) { console.error(err); }
   };
 
+  const exportCourseGrades = async () => {
+    if (!selectedCourse || exportingCourseGrades) return;
+    setExportingCourseGrades(true);
+    try {
+      const response = await api.get(`/courses/${selectedCourse}/grades`);
+      const course = courses.find(item => item.id === selectedCourse);
+      const rows = (response.data.grades || []).map(grade => [
+        `${grade.user?.first_name || ''} ${grade.user?.last_name || ''}`.trim(),
+        grade.user?.email,
+        grade.quiz_average,
+        grade.exam_average,
+        grade.activity_average,
+        grade.overall_grade,
+        grade.remarks,
+      ]);
+      downloadCsv(`${filenamePart(course?.name)}-course-grades.csv`, [
+        'Student Name', 'Email', 'Quiz Average (%)', 'Exam Average (%)',
+        'Activity Average (%)', 'Overall Grade (%)', 'Remarks',
+      ], rows);
+    } catch (error) {
+      alert(error.response?.data?.message || 'Could not export course grades. Please try again.');
+    } finally {
+      setExportingCourseGrades(false);
+    }
+  };
+
+  const exportAssessmentGrades = () => {
+    const course = courses.find(item => item.id === selectedCourse);
+    const assessment = assessments.find(item => item.id === selectedAssessment);
+    const rows = submissions.map(submission => [
+      `${submission.user?.first_name || ''} ${submission.user?.last_name || ''}`.trim(),
+      submission.user?.email,
+      submission.attempt_number,
+      submission.percentage,
+      submission.status,
+      submission.submitted_at ? new Date(submission.submitted_at).toLocaleString('en-PH') : '',
+    ]);
+    downloadCsv(`${filenamePart(course?.name)}-${filenamePart(assessment?.title)}-grades.csv`, [
+      'Student Name', 'Email', 'Attempt', 'Score (%)', 'Status', 'Submitted At',
+    ], rows);
+  };
+
   if (loading) {
     return (
       <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'240px' }}>
@@ -56,9 +121,13 @@ export default function InstructorGradePage() {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
           <h3 style={{ fontFamily:'Poppins,sans-serif', fontWeight:700, fontSize:'17px', color:'var(--instr-ink)', margin:0 }}>Course Grades</h3>
           {selectedCourse && (
-            <button
-              className="instr-pill-btn"
-              onClick={async () => {
+            <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'flex-end', gap:8 }}>
+              <button className="instr-pill-btn" onClick={exportCourseGrades} disabled={exportingCourseGrades}>
+                {exportingCourseGrades ? 'Preparing CSV...' : 'Export Course Grades CSV'}
+              </button>
+              <button
+                className="instr-pill-btn"
+                onClick={async () => {
                 const printWindow = window.open('', '_blank');
                 if (!printWindow) { alert('Please allow popups to print course grades.'); return; }
                 printWindow.document.body.textContent = 'Loading course grades...';
@@ -87,13 +156,14 @@ export default function InstructorGradePage() {
                   console.error('Print failed:', err);
                   alert('Failed to load grades for printing. Please try again.');
                 }
-              }}
-            >
-              Print Course Grades
-            </button>
+                }}
+              >
+                Print Course Grades
+              </button>
+            </div>
           )}
         </div>
-        <p style={{ fontFamily:'Inter,sans-serif', fontSize:'14px', color:'var(--instr-muted)', margin:0 }}>Select a course above to view and print final grades.</p>
+        <p style={{ fontFamily:'Inter,sans-serif', fontSize:'14px', color:'var(--instr-muted)', margin:0 }}>Select a course above to view, export, or print final grades.</p>
       </div>
 
       {/* Filters row */}
@@ -112,7 +182,11 @@ export default function InstructorGradePage() {
           </select>
         </div>
         {selectedAssessment && (
-          <button className="instr-pill-btn" style={{ marginLeft:'auto' }}
+          <>
+          <button className="instr-pill-btn" style={{ marginLeft:'auto' }} onClick={exportAssessmentGrades}>
+            Export Assessment CSV
+          </button>
+          <button className="instr-pill-btn"
             onClick={() => {
               const courseName = escapeHtml(courses.find(c=>c.id===selectedCourse)?.name||'Course');
               const assessmentName = escapeHtml(assessments.find(a=>a.id===selectedAssessment)?.title||'Assessment');
@@ -132,6 +206,7 @@ export default function InstructorGradePage() {
           >
             Print Grades
           </button>
+          </>
         )}
       </div>
 
