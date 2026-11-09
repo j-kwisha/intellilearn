@@ -21,6 +21,15 @@ function downloadCsv(filename, headers, rows) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+async function downloadXlsx(filename, sheetName, headers, rows, columnWidths) {
+  const XLSX = await import('xlsx');
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  worksheet['!cols'] = columnWidths.map(wch => ({ wch }));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.writeFile(workbook, filename, { compression: true });
+}
+
 function filenamePart(value) {
   return String(value || 'course').normalize('NFKD').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'course';
 }
@@ -33,7 +42,7 @@ export default function InstructorGradePage() {
   const [submissions, setSubmissions] = useState([]);
   const [gradingSubmission, setGradingSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [exportingCourseGrades, setExportingCourseGrades] = useState(false);
+  const [exportingCourseGrades, setExportingCourseGrades] = useState('');
 
   useEffect(() => {
     api.get('/courses')
@@ -63,7 +72,7 @@ export default function InstructorGradePage() {
 
   const exportCourseGrades = async () => {
     if (!selectedCourse || exportingCourseGrades) return;
-    setExportingCourseGrades(true);
+    setExportingCourseGrades('csv');
     try {
       const response = await api.get(`/courses/${selectedCourse}/grades`);
       const course = courses.find(item => item.id === selectedCourse);
@@ -76,14 +85,41 @@ export default function InstructorGradePage() {
         grade.overall_grade,
         grade.remarks,
       ]);
-      downloadCsv(`${filenamePart(course?.name)}-course-grades.csv`, [
+      const headers = [
         'Student Name', 'Email', 'Quiz Average (%)', 'Exam Average (%)',
         'Activity Average (%)', 'Overall Grade (%)', 'Remarks',
-      ], rows);
+      ];
+      downloadCsv(`${filenamePart(course?.name)}-course-grades.csv`, headers, rows);
     } catch (error) {
       alert(error.response?.data?.message || 'Could not export course grades. Please try again.');
     } finally {
-      setExportingCourseGrades(false);
+      setExportingCourseGrades('');
+    }
+  };
+
+  const exportCourseGradesXlsx = async () => {
+    if (!selectedCourse || exportingCourseGrades) return;
+    setExportingCourseGrades('xlsx');
+    try {
+      const response = await api.get(`/courses/${selectedCourse}/grades`);
+      const course = courses.find(item => item.id === selectedCourse);
+      const rows = (response.data.grades || []).map(grade => [
+        `${grade.user?.first_name || ''} ${grade.user?.last_name || ''}`.trim(),
+        grade.user?.email,
+        grade.quiz_average,
+        grade.exam_average,
+        grade.activity_average,
+        grade.overall_grade,
+        grade.remarks,
+      ]);
+      await downloadXlsx(`${filenamePart(course?.name)}-course-grades.xlsx`, 'Course Grades', [
+        'Student Name', 'Email', 'Quiz Average (%)', 'Exam Average (%)',
+        'Activity Average (%)', 'Overall Grade (%)', 'Remarks',
+      ], rows, [26, 34, 18, 18, 22, 20, 24]);
+    } catch (error) {
+      alert(error.response?.data?.message || 'Could not export course grades. Please try again.');
+    } finally {
+      setExportingCourseGrades('');
     }
   };
 
@@ -98,9 +134,31 @@ export default function InstructorGradePage() {
       submission.status,
       submission.submitted_at ? new Date(submission.submitted_at).toLocaleString('en-PH') : '',
     ]);
-    downloadCsv(`${filenamePart(course?.name)}-${filenamePart(assessment?.title)}-grades.csv`, [
+    const headers = [
       'Student Name', 'Email', 'Attempt', 'Score (%)', 'Status', 'Submitted At',
-    ], rows);
+    ];
+    downloadCsv(`${filenamePart(course?.name)}-${filenamePart(assessment?.title)}-grades.csv`, headers, rows);
+  };
+
+  const exportAssessmentGradesXlsx = async () => {
+    const course = courses.find(item => item.id === selectedCourse);
+    const assessment = assessments.find(item => item.id === selectedAssessment);
+    const rows = submissions.map(submission => [
+      `${submission.user?.first_name || ''} ${submission.user?.last_name || ''}`.trim(),
+      submission.user?.email,
+      submission.attempt_number,
+      submission.percentage,
+      submission.status,
+      submission.submitted_at ? new Date(submission.submitted_at).toLocaleString('en-PH') : '',
+    ]);
+    try {
+      await downloadXlsx(`${filenamePart(course?.name)}-${filenamePart(assessment?.title)}-grades.xlsx`, 'Assessment Grades', [
+        'Student Name', 'Email', 'Attempt', 'Score (%)', 'Status', 'Submitted At',
+      ], rows, [26, 34, 12, 14, 16, 26]);
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      alert('Could not export assessment grades. Please try again.');
+    }
   };
 
   if (loading) {
@@ -123,7 +181,10 @@ export default function InstructorGradePage() {
           {selectedCourse && (
             <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'flex-end', gap:8 }}>
               <button className="instr-pill-btn" onClick={exportCourseGrades} disabled={exportingCourseGrades}>
-                {exportingCourseGrades ? 'Preparing CSV...' : 'Export Course Grades CSV'}
+                {exportingCourseGrades === 'csv' ? 'Preparing CSV...' : 'Export Course Grades CSV'}
+              </button>
+              <button className="instr-pill-btn" onClick={exportCourseGradesXlsx} disabled={exportingCourseGrades}>
+                {exportingCourseGrades === 'xlsx' ? 'Preparing Excel...' : 'Export Excel (.xlsx)'}
               </button>
               <button
                 className="instr-pill-btn"
@@ -185,6 +246,9 @@ export default function InstructorGradePage() {
           <>
           <button className="instr-pill-btn" style={{ marginLeft:'auto' }} onClick={exportAssessmentGrades}>
             Export Assessment CSV
+          </button>
+          <button className="instr-pill-btn" onClick={exportAssessmentGradesXlsx}>
+            Export Excel (.xlsx)
           </button>
           <button className="instr-pill-btn"
             onClick={() => {
