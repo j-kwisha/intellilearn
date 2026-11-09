@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { formatGrade, escapeHtml } from '../../services/gradePrint';
 import EssayGradingDetails from '../../components/EssayGradingDetails';
@@ -16,27 +16,42 @@ function filenamePart(value) {
   return String(value || 'course').normalize('NFKD').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'course';
 }
 
-function printWhenReady(printWindow) {
-  let hasPrinted = false;
-  const runPrint = async () => {
-    if (hasPrinted || printWindow.closed) return;
-    hasPrinted = true;
-    try {
-      await printWindow.document.fonts?.ready;
-    } catch {
-      // Use the browser's available fonts if font readiness is unavailable.
-    }
-    window.setTimeout(() => {
-      if (!printWindow.closed) {
-        printWindow.focus();
-        printWindow.print();
+function printGradePage(title, content) {
+  document.getElementById('grade-print-root')?.remove();
+  const printRoot = document.createElement('section');
+  printRoot.id = 'grade-print-root';
+  printRoot.innerHTML = `
+    <style>
+      #grade-print-root{display:none}
+      @media print{
+        body *{visibility:hidden!important}
+        #grade-print-root,#grade-print-root *{visibility:visible!important}
+        #grade-print-root{display:block!important;position:absolute;inset:0;width:100%;box-sizing:border-box;padding:15mm;background:#fff;color:#333;font:12px system-ui,sans-serif}
+        #grade-print-root h1{font-size:24px;margin:0 0 8px}
+        #grade-print-root .print-meta{color:#555;margin:0 0 8px}
+        #grade-print-root table{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:20px}
+        #grade-print-root th,#grade-print-root td{padding:8px;text-align:left;vertical-align:top;overflow-wrap:anywhere;border-bottom:1px solid #ddd}
+        #grade-print-root th{background:#f1f3f5;font-weight:700}
+        #grade-print-root thead{display:table-header-group}
+        #grade-print-root tr{break-inside:avoid}
+        #grade-print-root .grade-high,#grade-print-root .score-high{color:#15803d;font-weight:700}
+        #grade-print-root .grade-fair{color:#b45309;font-weight:700}
+        #grade-print-root .grade-low,#grade-print-root .score-low{color:#dc2626;font-weight:700}
       }
-    }, 250);
-  };
+    </style>
+    <main><h1>${escapeHtml(title)}</h1>${content}</main>`;
+  document.body.appendChild(printRoot);
 
-  printWindow.addEventListener('load', runPrint, { once: true });
-  // Some browsers do not fire a new load event after document.write().
-  window.setTimeout(runPrint, 1200);
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    printRoot.remove();
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup, { once: true });
+  window.setTimeout(cleanup, 60000);
+  window.requestAnimationFrame(() => window.print());
 }
 
 export default function InstructorGradePage() {
@@ -147,43 +162,18 @@ export default function InstructorGradePage() {
               <button
                 className="instr-pill-btn"
                 onClick={async () => {
-                const printWindow = window.open('', '_blank');
-                if (!printWindow) { alert('Please allow popups to print course grades.'); return; }
-                printWindow.document.open();
-                printWindow.document.write('<!doctype html><html><head><title>Preparing course grades</title></head><body style="font-family:system-ui,sans-serif;padding:32px">Loading course grades...</body></html>');
-                printWindow.document.close();
-                const courseName = escapeHtml(courses.find(c => c.id === selectedCourse)?.name || 'Course');
                 const course = courses.find(c => c.id === selectedCourse);
                 try {
                   const res = await api.get(`/courses/${selectedCourse}/grades`);
                   const rows = (res.data.grades || []).map(g =>
                     `<tr><td>${escapeHtml(g.user?.first_name)} ${escapeHtml(g.user?.last_name)}</td><td>${formatGrade(g.quiz_average)}</td><td>${formatGrade(g.exam_average)}</td><td>${formatGrade(g.activity_average)}</td><td class="${g.overall_grade>=75?'grade-high':g.overall_grade>=60?'grade-fair':'grade-low'}">${formatGrade(g.overall_grade)}</td><td>${escapeHtml(g.remarks || '\u2014')}</td></tr>`
                   ).join('');
-                  const html = `<!DOCTYPE html><html><head><title>${courseName} - Course Grades</title>
-                    <style>
-                      body{font-family:system-ui,sans-serif;margin:32px;color:#333}
-                      h1{font-size:28px;margin:0 0 5px}
-                      .meta{color:#666;margin:0 0 12px;font-size:14px}
-                      table{width:100%;border-collapse:collapse;margin-top:20px;table-layout:fixed}
-                      th,td{padding:10px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
-                      th{background:#f3f4f6;font-weight:600;border-bottom:2px solid #d1d5db}
-                      td{border-bottom:1px solid #e5e7eb}
-                      tr:nth-child(even){background:#f9fafb}
-                      .grade-high{color:#10b981;font-weight:600}.grade-low{color:#ef4444;font-weight:600}.grade-fair{color:#f59e0b;font-weight:600}
-                      @page{size:auto;margin:15mm}
-                      @media print{body{margin:0}thead{display:table-header-group}tr{break-inside:avoid}th{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
-                    </style>
-                    </head><body><h1>${courseName}</h1><div class="meta">${escapeHtml(course?.code)} · ${escapeHtml(course?.section || '')}</div><div class="meta">Printed on: ${new Date().toLocaleString('en-PH')}</div>
-                    <table><thead><tr><th>Student</th><th>Quiz Avg</th><th>Exam Avg</th><th>Activity Avg</th><th>Overall Grade</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
-                  printWhenReady(printWindow);
-                  printWindow.document.open();
-                  printWindow.document.write(html);
-                  printWindow.document.close();
+                  printGradePage(course?.name || 'Course Grades', `
+                    <p class="print-meta">${escapeHtml(course?.code)} · ${escapeHtml(course?.section || '')}</p>
+                    <p class="print-meta">Printed on: ${new Date().toLocaleString('en-PH')}</p>
+                    <table><thead><tr><th>Student</th><th>Quiz Avg</th><th>Exam Avg</th><th>Activity Avg</th><th>Overall Grade</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table>`);
                 } catch (err) {
                   console.error('Print failed:', err);
-                  if (!printWindow.closed) {
-                    printWindow.document.body.textContent = 'Could not load course grades. Close this tab and try again.';
-                  }
                   alert('Failed to load grades for printing. Please try again.');
                 }
                 }}
@@ -218,20 +208,12 @@ export default function InstructorGradePage() {
           </button>
           <button className="instr-pill-btn"
             onClick={() => {
-              const courseName = escapeHtml(courses.find(c=>c.id===selectedCourse)?.name||'Course');
-              const assessmentName = escapeHtml(assessments.find(a=>a.id===selectedAssessment)?.title||'Assessment');
-              const printWindow = window.open('','_blank');
-              if (!printWindow) { alert('Please allow popups to print grades.'); return; }
-              const html = `<!DOCTYPE html><html><head><title>${courseName} - ${assessmentName}</title>
-                <style>body{font-family:system-ui,sans-serif;margin:40px;color:#333}h1{font-size:24px}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#f3f4f6;padding:12px;text-align:left;font-weight:600;border-bottom:2px solid #d1d5db}td{padding:12px;border-bottom:1px solid #e5e7eb}.score-high{color:#10b981;font-weight:600}.score-low{color:#ef4444;font-weight:600}</style>
-                </head><body><h1>${courseName}</h1><div style="color:#666;font-size:14px;margin-bottom:20px">Assessment: ${assessmentName} · Printed: ${new Date().toLocaleString('en-PH')}</div>
-                <table><thead><tr><th>Student</th><th>Attempt</th><th>Score</th><th>Status</th><th>Submitted</th></tr></thead>
-                <tbody>${submissions.map(sub=>`<tr><td>${escapeHtml(sub.user?.first_name)} ${escapeHtml(sub.user?.last_name)}</td><td>#${sub.attempt_number}</td><td class="${sub.percentage>=75?'score-high':'score-low'}">${sub.percentage!=null?sub.percentage+'%':'—'}</td><td>${sub.status}</td><td>${sub.submitted_at?new Date(sub.submitted_at).toLocaleDateString('en-PH'):'—'}</td></tr>`).join('')}
-                </tbody></table></body></html>`;
-              printWindow.document.write(html);
-              printWindow.document.close();
-              printWindow.focus();
-              printWindow.print();
+              const courseName = courses.find(c => c.id === selectedCourse)?.name || 'Course';
+              const assessment = assessments.find(a => a.id === selectedAssessment);
+              const rows = submissions.map(sub => `<tr><td>${escapeHtml(sub.user?.first_name)} ${escapeHtml(sub.user?.last_name)}</td><td>#${sub.attempt_number}</td><td class="${sub.percentage >= 75 ? 'score-high' : 'score-low'}">${sub.percentage != null ? `${sub.percentage}%` : '\u2014'}</td><td>${escapeHtml(sub.status)}</td><td>${sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString('en-PH') : '\u2014'}</td></tr>`).join('');
+              printGradePage(`${courseName} — ${assessment?.title || 'Assessment'}`, `
+                <p class="print-meta">Assessment results · Printed: ${new Date().toLocaleString('en-PH')}</p>
+                <table><thead><tr><th>Student</th><th>Attempt</th><th>Score</th><th>Status</th><th>Submitted</th></tr></thead><tbody>${rows}</tbody></table>`);
             }}
           >
             Print Grades
@@ -279,7 +261,7 @@ export default function InstructorGradePage() {
                     <td>
                       {sub.percentage != null
                         ? <span style={{ fontWeight:700, color: sub.percentage >= 75 ? '#15803d' : '#dc2626' }}>{sub.percentage}%</span>
-                        : <span style={{ color:'var(--instr-muted)' }}>—</span>
+                        : <span style={{ color:'var(--instr-muted)' }}>â€”</span>
                       }
                     </td>
                     <td>
@@ -288,7 +270,7 @@ export default function InstructorGradePage() {
                       </span>
                     </td>
                     <td style={{ fontSize:'13px', color:'var(--instr-muted)' }}>
-                      {sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('en-PH') : '—'}
+                      {sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('en-PH') : 'â€”'}
                     </td>
                     <td style={{ textAlign:'right' }}>
                       <button onClick={() => openGrading(sub)} className="instr-link-action">
@@ -346,14 +328,14 @@ function GradingPanel({ submission, courseId, assessmentId, onClose, onGraded })
         {submission.answers?.map((answer, idx) => (
           <div key={answer.id} className="instr-panel" style={{ padding:'16px' }}>
             <p style={{ fontFamily:'Poppins,sans-serif', fontWeight:600, fontSize:'14.5px', color:'var(--instr-ink)', margin:'0 0 4px' }}>Q{idx+1}: {answer.question?.question_text}</p>
-            <p style={{ fontSize:'12px', color:'var(--instr-muted)', margin:'0 0 10px' }}>{answer.question?.type?.replace('_',' ')} · {answer.question?.points} pts max</p>
+            <p style={{ fontSize:'12px', color:'var(--instr-muted)', margin:'0 0 10px' }}>{answer.question?.type?.replace('_',' ')} Â· {answer.question?.points} pts max</p>
             <div style={{ background:'var(--instr-bg)', borderRadius:'8px', padding:'10px 14px', marginBottom:'10px' }}>
               <p style={{ fontSize:'12px', color:'var(--instr-muted)', marginBottom:'4px' }}>Student's answer:</p>
               <p style={{ fontSize:'14px', color:'var(--instr-ink)', margin:0 }}>{answer.answer_text || '(no answer)'}</p>
             </div>
             {answer.is_correct !== null && (
               <p style={{ fontSize:'12px', fontWeight:600, color: answer.is_correct ? '#15803d' : '#dc2626', marginBottom:'10px' }}>
-                Auto-graded: {answer.is_correct ? '✓ Correct' : '✗ Incorrect'}
+                Auto-graded: {answer.is_correct ? 'âœ“ Correct' : 'âœ— Incorrect'}
               </p>
             )}
             <EssayGradingDetails answer={answer} grade={grades[answer.question_id]} onChange={patch => setGrades(prev => ({ ...prev, [answer.question_id]: { ...prev[answer.question_id], ...patch } }))} />
