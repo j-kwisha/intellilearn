@@ -224,9 +224,11 @@ export default function LoginPage() {
           --violet-end: #5B5BE6;
         }
         .ll-page{
-          --ambient-feature-a:rgba(59,130,246,.11);
-          --ambient-feature-b:rgba(91,151,232,.09);
-          --ambient-form:rgba(78,139,231,.10);
+          --ambient-feature-a:rgba(59,130,246,.17);
+          --ambient-feature-b:rgba(14,165,233,.12);
+          --ambient-form:rgba(78,139,231,.13);
+          --ambient-ring:rgba(37,99,235,.15);
+          --ambient-dot:rgba(37,99,235,.24);
           --auth-blob-one:rgba(191,219,254,.55);
           --auth-blob-two:rgba(219,234,254,.6);
           --auth-blob-three:rgba(147,197,253,.35);
@@ -263,15 +265,24 @@ export default function LoginPage() {
         .ll-features-header,.ll-features-slide .feat-grid,.ll-journey{flex-shrink:0}
         .ll-features-header,.ll-features-slide .feat-grid,.ll-journey{position:relative;z-index:1}
         .ll-ambient-orb{position:absolute;z-index:0;pointer-events:none;border-radius:50%;will-change:transform}
-        .ll-ambient-orb--feature-a{top:72px;right:24px;width:clamp(240px,30vw,440px);aspect-ratio:1;background:radial-gradient(circle,var(--ambient-feature-a) 0%,transparent 70%);animation:llAmbientDrift 24s ease-in-out infinite alternate}
-        .ll-ambient-orb--feature-b{bottom:28px;left:24px;width:clamp(260px,35vw,520px);aspect-ratio:1;background:radial-gradient(circle,var(--ambient-feature-b) 0%,transparent 72%);animation:llAmbientDrift 31s ease-in-out infinite alternate-reverse}
+        .ll-ambient-orb--feature-a{top:72px;right:24px;width:clamp(240px,30vw,440px);aspect-ratio:1;background:radial-gradient(circle,var(--ambient-feature-a) 0%,transparent 70%);animation:llAmbientDrift 20s ease-in-out infinite alternate}
+        .ll-ambient-orb--feature-b{bottom:28px;left:24px;width:clamp(260px,35vw,520px);aspect-ratio:1;background:radial-gradient(circle,var(--ambient-feature-b) 0%,transparent 72%);animation:llAmbientDrift 26s ease-in-out infinite alternate-reverse}
+        .ll-ambient-ring{position:absolute;z-index:0;pointer-events:none;border:1px solid var(--ambient-ring);border-radius:50%;animation:llRingDrift 28s ease-in-out infinite alternate}
+        .ll-ambient-ring--one{top:190px;left:33%;width:180px;height:180px}
+        .ll-ambient-ring--two{right:8%;bottom:120px;width:116px;height:116px;animation-duration:23s;animation-direction:alternate-reverse}
+        .ll-ambient-dot{position:absolute;z-index:0;width:7px;height:7px;border-radius:50%;background:var(--ambient-dot);box-shadow:0 0 16px var(--ambient-dot);pointer-events:none;animation:llDotDrift 12s ease-in-out infinite alternate}
+        .ll-ambient-dot--one{top:36%;left:18%}
+        .ll-ambient-dot--two{right:23%;bottom:25%;width:5px;height:5px;animation-delay:-5s}
         .ll-ambient-orb--form{bottom:-170px;left:-180px;width:480px;height:480px;background:radial-gradient(circle,var(--ambient-form) 0%,transparent 72%);animation:llAmbientDrift 28s ease-in-out infinite alternate-reverse}
-        .ll-auth-blob{will-change:transform;animation:llAmbientDrift 26s ease-in-out infinite alternate}
-        .ll-auth-blob--two{animation-duration:32s;animation-direction:alternate-reverse}
-        .ll-auth-blob--three{animation-duration:29s}
-        .ll-auth-blob--four{animation-duration:22s;animation-direction:alternate-reverse}
-        @keyframes llAmbientDrift{from{transform:translate3d(-14px,10px,0)}to{transform:translate3d(18px,-14px,0)}}
-        @media(prefers-reduced-motion:reduce){.ll-ambient-orb,.ll-auth-blob{animation:none;will-change:auto}}
+        .ll-auth-blob{will-change:transform;animation:llBlobDrift 24s ease-in-out infinite}
+        .ll-auth-blob--two{animation-duration:30s;animation-direction:reverse}
+        .ll-auth-blob--three{animation-duration:26s}
+        .ll-auth-blob--four{animation-duration:19s;animation-direction:reverse}
+        @keyframes llAmbientDrift{from{transform:translate3d(-28px,20px,0) scale(.96)}to{transform:translate3d(34px,-26px,0) scale(1.04)}}
+        @keyframes llRingDrift{from{transform:translate3d(-12px,16px,0) rotate(-8deg)}to{transform:translate3d(24px,-22px,0) rotate(12deg)}}
+        @keyframes llDotDrift{from{transform:translate3d(-5px,8px,0);opacity:.45}to{transform:translate3d(10px,-12px,0);opacity:1}}
+        @keyframes llBlobDrift{0%{transform:translate3d(-26px,16px,0) scale(.96);opacity:.78}50%{transform:translate3d(28px,-22px,0) scale(1.03);opacity:1}100%{transform:translate3d(-16px,22px,0) scale(.98);opacity:.84}}
+        @media(prefers-reduced-motion:reduce){.ll-ambient-orb,.ll-ambient-ring,.ll-ambient-dot,.ll-auth-blob{animation:none;will-change:auto}}
         .ll-features-title{font-size:clamp(38px,3.4vw,64px);font-weight:800;color:var(--navy);line-height:1.1;margin:0;letter-spacing:-.03em}
         .ll-features-intro{flex:0 0 320px;font-size:17px;color:var(--muted);line-height:1.75;margin:0;text-align:right;padding-top:16px;font-family:'DM Sans',sans-serif}
         .ll-journey{margin:auto 48px;padding:20px 0 32px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center}
@@ -470,6 +481,10 @@ export default function LoginPage() {
         <div className="ll-slide ll-features-slide" style={{ background:'var(--page-bg)',display:'flex',flexDirection:'column',paddingTop:64,boxSizing:'border-box',position:'relative',height:'100vh',overflowY:'auto',overflowX:'hidden' }}>
           <div className="ll-ambient-orb ll-ambient-orb--feature-a" aria-hidden="true" />
           <div className="ll-ambient-orb ll-ambient-orb--feature-b" aria-hidden="true" />
+          <div className="ll-ambient-ring ll-ambient-ring--one" aria-hidden="true" />
+          <div className="ll-ambient-ring ll-ambient-ring--two" aria-hidden="true" />
+          <div className="ll-ambient-dot ll-ambient-dot--one" aria-hidden="true" />
+          <div className="ll-ambient-dot ll-ambient-dot--two" aria-hidden="true" />
 
           <div className="ll-features-header">
             <h1 className={`ll-features-title ${activeSlide===1?'ll-up':''}`}>

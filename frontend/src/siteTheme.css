@@ -9,13 +9,15 @@ body[data-site-theme="dark"] .ll-page {
   --blue-600: #afbdcf;
   --muted: #c0beb8;
   --page-bg: #1b1c1e;
-  --ambient-feature-a: rgba(117, 150, 196, .10);
-  --ambient-feature-b: rgba(98, 145, 186, .07);
-  --ambient-form: rgba(117, 150, 196, .08);
-  --auth-blob-one: rgba(117, 150, 196, .13);
-  --auth-blob-two: rgba(99, 138, 181, .10);
-  --auth-blob-three: rgba(123, 158, 195, .11);
-  --auth-blob-four: rgba(137, 169, 204, .15);
+  --ambient-feature-a: rgba(130, 159, 200, .15);
+  --ambient-feature-b: rgba(110, 155, 190, .11);
+  --ambient-form: rgba(117, 150, 196, .12);
+  --ambient-ring: rgba(174, 188, 207, .16);
+  --ambient-dot: rgba(174, 188, 207, .28);
+  --auth-blob-one: rgba(117, 150, 196, .17);
+  --auth-blob-two: rgba(99, 138, 181, .14);
+  --auth-blob-three: rgba(123, 158, 195, .15);
+  --auth-blob-four: rgba(137, 169, 204, .18);
   color: #e3e1dc;
 }
 body[data-site-theme="dark"] .ll-navbar { background: #242629 !important; border-color: #414347 !important; }
