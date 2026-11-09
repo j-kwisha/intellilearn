@@ -46,12 +46,11 @@ body[data-site-theme="dark"] .adm-app * {
 }
 body[data-site-theme="dark"] .instr-app,
 body[data-site-theme="dark"] .instr-app * {
-  --instr-forest-900: #202220; --instr-forest-800: #292b29; --instr-forest-700: #333633;
-  --instr-green-600: #59645b; --instr-green-500: #626d64; --instr-green-glow: #7a857c;
-  --instr-mint: #c6cdc4; --instr-mint-soft: #353a35;
+  --instr-forest-900: #091b13; --instr-forest-800: #102b1d; --instr-forest-700: #1b402d;
+  --instr-green-600: #236247; --instr-green-500: #317557; --instr-green-glow: #39866a;
+  --instr-mint: #b8f2d1; --instr-mint-soft: #2e4035;
   --instr-ink: #e4e4df; --instr-ink-soft: #c9ccc4; --instr-muted: #b8bcb3;
   --instr-line: #444845; --instr-bg: #1b1d1b; --instr-panel: #292c29;
-  --instr-mint-soft: #343c36;
 }
 body[data-site-theme="dark"] :is(.adm-app, .instr-app) { color-scheme: dark; }
 body[data-site-theme="dark"] .adm-main { background: var(--adm-bg); }
