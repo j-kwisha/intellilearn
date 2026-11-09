@@ -1,5 +1,7 @@
 # IntelliLearn - Technical Architecture
 
+> **Defense note:** Use `DEFENSE_TRAINING_GUIDE.md` as the current teaching map. This architecture document contains deeper reference material and may include details from an earlier implementation stage.
+
 ## System Architecture Overview
 
 ```

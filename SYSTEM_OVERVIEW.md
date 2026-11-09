@@ -1,5 +1,7 @@
 # IntelliLearn LMS - Complete System Overview
 
+> **Defense note:** This file is a broad historical overview and may describe earlier versions of some features. For the current title-defense curriculum and verified code paths, use `DEFENSE_TRAINING_GUIDE.md`, `DEFENSE_CHEAT_SHEET.md`, and `MOCK_DEFENSE_QA.md` first.
+
 ## 📋 Table of Contents
 1. [System Introduction](#system-introduction)
 2. [Technology Stack](#technology-stack)
