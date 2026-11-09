@@ -114,6 +114,15 @@ body[data-site-theme="dark"] .adm-role-badge--admin { background: #352953; color
 body[data-site-theme="dark"] .instr-status--active { background: #214a3d; color: #b6f3d3; }
 body[data-site-theme="dark"] :is(.instr-view-all-link, .instr-link-action, .instr-joincode-value) { color: #a0e5c1; }
 body[data-site-theme="dark"] .instr-risk-avatar { color: #b6f3d3; }
+/* Assessment and lesson badges need their own surface/text pairs. The base
+   badge keeps a pale background, while --instr-ink-soft becomes light here. */
+body[data-site-theme="dark"] .instr-tag-pill {
+  background: #3b403b;
+  color: #e7e9e3;
+}
+body[data-site-theme="dark"] .instr-item-icon--blue { background: #303e53; color: #c6d9f5; }
+body[data-site-theme="dark"] .instr-item-icon--amber { background: #493e2e; color: #f3d7a8; }
+body[data-site-theme="dark"] .instr-item-icon--purple { background: #3f3750; color: #d9c7f4; }
 body[data-site-theme="dark"] .instr-tag-pill--published { color: #b6f3d3; }
 body[data-site-theme="dark"] .instr-status--active i { background: #b6f3d3; }
 body[data-site-theme="dark"] .instr-sub-badge--reviewed { background: #214a3d; color: #b6f3d3; border-color: #4a8a6e; }
